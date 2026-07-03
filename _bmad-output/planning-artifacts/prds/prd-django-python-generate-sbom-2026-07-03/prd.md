@@ -141,7 +141,7 @@ Phases 4–7 run in parallel; the pipeline waits for all four to complete before
 - **Unknown**: packages with no declared license or a non-SPDX license identifier — legally equivalent to "all rights reserved" until confirmed otherwise
 - **Permissive**: all other SPDX identifiers (MIT, Apache-2.0, BSD-*, ISC, etc.) — no action required
 
-**FR-5.3 Dependency Graph** — The service builds a directed acyclic graph (DAG) of all resolved packages and their `depends-on` relationships using NetworkX. The graph is rendered as an interactive HTML visualization (PyVis) embedded inline in the results UI, and as a static SVG artifact available for download.
+**FR-5.3 Dependency Graph** — The service builds a directed acyclic graph (DAG) of all resolved packages and their `depends-on` relationships using NetworkX. Phase 6 of the pipeline produces two outputs: structured `{nodes, edges}` JSON (for the interactive React view) and a static Graphviz SVG artifact available for download.
 
 **FR-5.4 Version Currency Report** — For each resolved package, the service fetches the latest stable version from the PyPI JSON API and classifies the installed version by release series distance: `current` (same release series as latest, e.g. 5.2.1 vs 5.2.3), `behind-1` (one release series behind, e.g. 5.1.x when 5.2.x is latest), `behind-2+` (two or more release series behind, e.g. 4.x when 5.2.x is latest, including major-version gaps), or `unknown` (version data unavailable). High-priority packages with documented LTS versions (Django, Python) use an LTS-aware classification. The set of LTS-tracked packages and their known LTS versions is configurable via an environment variable (`SBOM_LTS_REGISTRY`) that accepts a JSON mapping of package name to LTS version string, allowing operators to extend or override the built-in defaults.
 
@@ -159,7 +159,7 @@ Phases 4–7 run in parallel; the pipeline waits for all four to complete before
 
 **FR-6.4 Licenses tab** — Packages grouped into four tiers: Strong Copyleft (Attention Required), Weak Copyleft (Review Recommended), Unknown, Permissive — displayed in that order. Each package links to its PyPI page. Tiers with zero packages are collapsed by default.
 
-**FR-6.5 Dependency Graph tab** — Interactive PyVis graph rendered inline in the browser. Supports zoom, pan, node drag, and hover-to-highlight. A "Download SVG" button exports the static Graphviz artifact.
+**FR-6.5 Dependency Graph tab** — Interactive dependency graph rendered inline using Cytoscape.js with a hierarchical dagre layout. Supports zoom, pan, node drag, and hover-to-highlight. A "Download SVG" button exports the static Graphviz artifact.
 
 **FR-6.6 Version Currency tab** — Table of all packages with installed version, latest version, and currency status badge (Current / Behind / Unknown). Sortable by status. Packages classified `behind-2+` displayed first by default.
 

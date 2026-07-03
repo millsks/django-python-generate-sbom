@@ -6,7 +6,7 @@
 authors = ["Kevin Mills <millsks@gmail.com>"]
 channels = ["conda-forge"]
 name = "django-python-generate-sbom"
-platforms = ["osx-arm64", "linux-64"]
+platforms = ["osx-arm64", "linux-64", "linux-aarch64"]
 version = "0.1.0"
 
 # Version floors relaxed to what conda-forge actually serves today; the

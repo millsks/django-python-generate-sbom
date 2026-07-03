@@ -84,6 +84,12 @@ STORAGES = {
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
 }
 
+# Built React SPA (frontend/dist/ at the project root, AD-5). Included only when
+# present so `check` / collectstatic don't warn before the frontend is built.
+FRONTEND_DIST = BASE_DIR.parent / "frontend" / "dist"
+STATICFILES_DIRS = [FRONTEND_DIST] if FRONTEND_DIST.exists() else []
+SPA_INDEX_FILE = FRONTEND_DIST / "index.html"
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # --- Redis / Celery (AD-4, AD-6) ---

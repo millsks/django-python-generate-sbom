@@ -87,7 +87,21 @@ cmd = "pre-commit run --all-files"
 [tasks.act]
 cmd = "act --container-architecture linux/amd64"
 
-# Unified CI gate. Frontend lint/build steps are appended in Story 1.4 once
-# frontend/ exists (fe-lint, fe-build joining depends-on).
+# --- Frontend (Node) tasks — run from ./frontend; pixi provides the Node runtime ---
+[tasks.fe-install]
+cmd = "npm install"
+cwd = "frontend"
+
+[tasks.fe-lint]
+cmd = "npm run lint"
+cwd = "frontend"
+depends-on = ["fe-install"]
+
+[tasks.fe-build]
+cmd = "npm run build"
+cwd = "frontend"
+depends-on = ["fe-install"]
+
+# Unified CI gate across both backend and frontend (AD-13 pixi umbrella).
 [tasks.ci]
-depends-on = ["precommit", "build", "check", "lint", "cov"]
+depends-on = ["precommit", "build", "check", "lint", "cov", "fe-lint", "fe-build"]

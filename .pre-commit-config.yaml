@@ -1,0 +1,32 @@
+# Vendored tooling and generated planning artifacts are not ours to reformat.
+exclude: '^(_bmad/|_bmad-output/|\.claude/|\.agents/)'
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: debug-statements
+      - id: mixed-line-ending
+  - repo: https://github.com/millsks/conventional-commit-hook
+    rev: v0.1.1
+    hooks:
+      - id: conventional-commit-hook
+        stages: [commit-msg]
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^backend/
+      - id: ruff-format
+        files: ^backend/
+# mypy is not run here: the isolated pre-commit env cannot resolve Django + the
+# django-stubs plugin + our package. Type checking runs in the full pixi env via
+# `pixi run check` (ci step 3).

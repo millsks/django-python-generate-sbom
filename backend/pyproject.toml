@@ -29,13 +29,16 @@ src = ["generate_sbom", "config", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "RUF", "D"]
-ignore = ["E501"]
+# D104: empty package __init__.py files need no docstring.
+# D106: Django model Meta inner classes need no docstring.
+ignore = ["E501", "D104", "D106"]
 
 [tool.ruff.lint.per-file-ignores]
 "config/settings/*" = ["D", "F403", "F405"]
 "config/*" = ["D"]
 "manage.py" = ["D"]
 "tests/*" = ["D"]
+"*/migrations/*" = ["D", "RUF012"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -55,6 +58,7 @@ django_settings_module = "config.settings.local"
 
 [tool.coverage.run]
 source = ["generate_sbom"]
+omit = ["*/migrations/*"]
 
 [tool.git-cliff.changelog]
 header = "# Changelog\n\n"

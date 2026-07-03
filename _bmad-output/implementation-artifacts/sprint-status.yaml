@@ -9,9 +9,9 @@ last_updated: 2026-07-03
 
 development_status:
   epic-1: in-progress
-  1-1-backend-scaffold-and-developer-toolchain: review
+  1-1-backend-scaffold-and-developer-toolchain: done
   1-2-docker-compose-full-stack: ready-for-dev
-  1-3-core-shared-abstractions-and-django-configuration: ready-for-dev
+  1-3-core-shared-abstractions-and-django-configuration: review
   1-4-react-spa-foundation: ready-for-dev
 
   epic-2: ready-for-dev

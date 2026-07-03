@@ -1,0 +1,17 @@
+# Keep the build context small and reproducible.
+.git/
+.github/
+.pixi/
+.agents/
+.claude/
+_bmad/
+_bmad-output/
+**/node_modules/
+**/dist/
+**/__pycache__/
+**/*.pyc
+backend/staticfiles/
+backend/db.sqlite3
+.env
+.env.*
+*.md

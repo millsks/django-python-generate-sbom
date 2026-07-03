@@ -81,7 +81,9 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+    # Non-manifest: Vite already content-hashes SPA assets, so Django's manifest
+    # hashing would rewrite names the built index.html doesn't reference.
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
 }
 
 # Built React SPA (frontend/dist/ at the project root, AD-5). Included only when

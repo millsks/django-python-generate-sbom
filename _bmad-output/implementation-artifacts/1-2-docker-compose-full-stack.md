@@ -1,8 +1,16 @@
 # Story 1.2: Docker Compose Full Stack
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
+
+## Build-Time Amendment (2026-07-03) — pixi umbrella Docker topology
+
+AD-13 was amended to make pixi the whole-project umbrella (see memory pixi-umbrella-toolchain). This re-shapes the Docker topology; where the tasks/ACs below reference a separate `frontend-build` service, a `frontend-dist` volume, or `build.context: ./backend` and `./frontend`, THIS WINS:
+
+- **Single root `Dockerfile`** (build context `.`) installs the pixi env (Python + Node), builds the SPA into the image via `pixi run fe-build`, and runs `collectstatic`. The SPA is baked into the image — no separate frontend-build service, no shared `frontend-dist` volume.
+- **7 services** (not 8): `web`, `worker-pipeline`, `worker-analysis`, `beat`, `postgres`, `redis`, `minio`. Each Django/Celery service runs from the one image via `pixi run <task>` (`web`, `worker-pipeline`, `worker-analysis`, `beat`).
+- AC #4 (`build.context` per service) and AC #5 (`frontend-dist` volume) are superseded by the single-image approach. AC #1's service count becomes 7. AC #2 (`/health/`), #3 (healthcheck), #6 (no hardcoded secrets), #7 (`.env.example`) are unchanged.
 
 ## Story
 

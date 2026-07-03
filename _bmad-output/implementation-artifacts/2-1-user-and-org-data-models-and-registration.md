@@ -1,6 +1,6 @@
 # Story 2.1: User & Org Data Models + Registration
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

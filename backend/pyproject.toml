@@ -38,7 +38,7 @@ ignore = ["E501", "D104", "D106"]
 "config/*" = ["D"]
 "manage.py" = ["D"]
 "tests/*" = ["D"]
-"*/migrations/*" = ["D", "RUF012"]
+"*/migrations/*" = ["D", "RUF012", "I001"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

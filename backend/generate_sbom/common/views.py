@@ -3,8 +3,17 @@
 from pathlib import Path
 
 from django.conf import settings
-from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
+from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, JsonResponse
 from django.views import View
+
+
+def health(request: HttpRequest) -> JsonResponse:
+    """Unauthenticated liveness check used by the Docker Compose healthcheck.
+
+    Deliberately does not touch the database so it reports healthy independent of
+    migration/DB-boot timing; it exists only to gate ``depends_on`` ordering.
+    """
+    return JsonResponse({"status": "ok"})
 
 
 class SpaView(View):

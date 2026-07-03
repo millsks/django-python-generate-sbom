@@ -25,6 +25,7 @@ django-environ = ">=0.11"
 psycopg = ">=3.1"
 gunicorn = ">=22"
 whitenoise = ">=6.6"
+curl = ">=8"
 
 [pypi-dependencies]
 generate-sbom = { path = "./backend", editable = true }
@@ -72,6 +73,31 @@ cwd = "backend"
 
 [tasks.build]
 cmd = "python -m build --no-isolation --wheel"
+cwd = "backend"
+
+# --- Server / ops tasks — also the Docker service commands ---
+[tasks.migrate]
+cmd = "python manage.py migrate"
+cwd = "backend"
+
+[tasks.collectstatic]
+cmd = "python manage.py collectstatic --noinput"
+cwd = "backend"
+
+[tasks.web]
+cmd = "gunicorn config.wsgi --bind 0.0.0.0:8000 --workers 4"
+cwd = "backend"
+
+[tasks.worker-pipeline]
+cmd = "celery -A config.celery_app worker -Q pipeline -c 4"
+cwd = "backend"
+
+[tasks.worker-analysis]
+cmd = "celery -A config.celery_app worker -Q analysis -c 4"
+cwd = "backend"
+
+[tasks.beat]
+cmd = "celery -A config.celery_app beat -s /tmp/celerybeat-schedule"
 cwd = "backend"
 
 # --- Project-wide tasks — run from the root ---

@@ -26,3 +26,10 @@ class RegistrationSerializer(serializers.Serializer[User]):
             email=validated_data["email"],
             password=validated_data["password"],
         )
+
+
+class LoginSerializer(serializers.Serializer[User]):
+    """Validates the shape of a login request."""
+
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)

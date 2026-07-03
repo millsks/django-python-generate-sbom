@@ -24,7 +24,7 @@ The system runs as a single Docker Compose stack. One Django/Gunicorn process se
 | Service layer accepts and returns plain Python objects only | AD-3 |
 | Two Celery queues: `pipeline` and `analysis` | AD-4 |
 | React SPA communicates only through the REST API | AD-5 |
-| `backend/` and `frontend/` are project-root peers; Django scaffold lives entirely under `backend/` | AD-13 |
+| Pixi is the project-wide umbrella: one root `pixi.toml` installs Python + Node and orchestrates both `backend/` and `frontend/` tasks | AD-13 |
 | Artifacts in S3; blobs never in PostgreSQL or Redis | AD-6 |
 | Per-org concurrency gate checked before enqueue | AD-7 |
 | API keys via `AbstractAPIKey` subclass (`djangorestframework-api-key`) | AD-8 |
@@ -38,8 +38,10 @@ The system runs as a single Docker Compose stack. One Django/Gunicorn process se
 ## 2. Repository Layout
 
 ```
-django-python-generate-sbom/               ← project root
-  backend/                                 ← Django application (pixi environment)
+django-python-generate-sbom/               ← project root (pixi umbrella)
+  pixi.toml                                ← umbrella: Python env + Node runtime + all tasks
+  pixi.lock
+  backend/                                 ← Django + Celery Python code
     config/
       settings/
         base.py          # shared settings — all apps, middleware, DRF, Celery
@@ -80,8 +82,7 @@ django-python-generate-sbom/               ← project root
         test_analysis.py
         test_api.py
     manage.py
-    pixi.toml
-    pyproject.toml
+    pyproject.toml   # Python tool config + package metadata (pixi.toml is at the root)
     .env.example
 
   frontend/                                ← React 19 + MUI 9 + Vite 8 (project-root peer)

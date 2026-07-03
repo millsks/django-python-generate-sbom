@@ -1,0 +1,93 @@
+# Umbrella pixi manifest for the whole project (AD-13).
+# Installs the Python env (backend) AND the Node runtime (frontend), and
+# orchestrates every task. Backend tasks run with cwd = "backend"; frontend
+# tasks run with cwd = "frontend" and shell out to npm/vite.
+[workspace]
+authors = ["Kevin Mills <millsks@gmail.com>"]
+channels = ["conda-forge"]
+name = "django-python-generate-sbom"
+platforms = ["osx-arm64", "linux-64"]
+version = "0.1.0"
+
+# Version floors relaxed to what conda-forge actually serves today; the
+# ARCHITECTURE-SPINE pins (Django 6.0.6, DRF 3.17.1, Celery 5.6.3, etc.) are
+# aspirational future versions. Resolved versions are captured in pixi.lock and
+# will be tightened toward the spine pins as those land on conda-forge.
+[dependencies]
+python = "3.13.*"
+nodejs = ">=20"
+django = ">=5.1"
+djangorestframework = ">=3.15"
+celery = ">=5.3"
+redis-py = ">=5"
+structlog = ">=24"
+django-environ = ">=0.11"
+psycopg = ">=3.1"
+gunicorn = ">=22"
+whitenoise = ">=6.6"
+
+[pypi-dependencies]
+generate-sbom = { path = "./backend", editable = true }
+
+[feature.dev.dependencies]
+pytest = ">=8,<9"
+pytest-cov = ">=6,<8"
+pytest-django = ">=4.9,<5"
+mypy = ">=1.13,<2"
+ruff = ">=0.14,<0.16"
+pre-commit = ">=4,<5"
+django-stubs = ">=5.1,<6"
+djangorestframework-stubs = ">=3.15,<4"
+git-cliff = ">=2,<3"
+python-build = ">=1.2,<2"
+hatchling = ">=1.25,<2"
+
+[environments]
+default = { features = ["dev"], solve-group = "default" }
+
+# --- Backend (Python) tasks — run from ./backend ---
+[tasks.fmt]
+cmd = "ruff format ."
+cwd = "backend"
+
+[tasks.lint]
+cmd = "ruff check ."
+cwd = "backend"
+
+[tasks.check]
+cmd = "mypy generate_sbom"
+cwd = "backend"
+
+[tasks.test]
+cmd = "pytest tests/unit/"
+cwd = "backend"
+
+[tasks.test-integration]
+cmd = "pytest tests/integration/"
+cwd = "backend"
+
+[tasks.cov]
+cmd = "pytest tests/ --cov=generate_sbom --cov-report=term-missing --cov-fail-under=90"
+cwd = "backend"
+
+[tasks.build]
+cmd = "python -m build --no-isolation --wheel"
+cwd = "backend"
+
+# --- Project-wide tasks — run from the root ---
+[tasks.bootstrap]
+cmd = "pre-commit install --install-hooks --hook-type commit-msg --hook-type pre-commit"
+
+[tasks.changelog]
+cmd = "git cliff -o CHANGELOG.md"
+
+[tasks.precommit]
+cmd = "pre-commit run --all-files"
+
+[tasks.act]
+cmd = "act --container-architecture linux/amd64"
+
+# Unified CI gate. Frontend lint/build steps are appended in Story 1.4 once
+# frontend/ exists (fe-lint, fe-build joining depends-on).
+[tasks.ci]
+depends-on = ["precommit", "build", "check", "lint", "cov"]

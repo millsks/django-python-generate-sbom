@@ -18,7 +18,7 @@ so that all frontend features can be built on a consistent stack and served corr
 4. Given `backend/config/settings/base.py`, when I inspect `STATICFILES_DIRS`, then it contains `BASE_DIR.parent.parent / 'frontend' / 'dist'` (resolves to `frontend/dist/` relative to the project root, per AD-5).
 5. Given `frontend/src/api/`, when a developer needs to call a REST API endpoint, then the call is made via a function in `frontend/src/api/` — no direct `fetch` or `axios` calls appear in component files (AD-5).
 6. Given `frontend/vite.config.ts`, when `npm run build` executes, then the output directory is set to `../dist` (relative to `frontend/src`) resolving to `frontend/dist/` — matching what Django's `STATICFILES_DIRS` references.
-7. Given `pixi run ci` run from `backend/`, when the CI steps execute, then no npm or frontend build commands are invoked — frontend toolchain is independent (AD-13).
+7. Given the pixi umbrella (amended AD-13), when `pixi run ci` runs from the project root, then it invokes the frontend lint + build steps (via pixi tasks with `cwd = "frontend"` shelling to npm/vite) in addition to the backend steps — pixi provides the Node runtime; npm still manages JS dependencies. (This REVERSES the original "pixi run ci must never invoke npm" wording — pixi is now the whole-project umbrella. See memory pixi-umbrella-toolchain.)
 
 ## Tasks / Subtasks
 

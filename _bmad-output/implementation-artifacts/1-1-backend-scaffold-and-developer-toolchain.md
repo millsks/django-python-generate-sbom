@@ -1,8 +1,15 @@
 # Story 1.1: Backend Scaffold & Developer Toolchain
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
+
+## Build-Time Amendments (2026-07-03)
+
+Two decisions made at build time refine this story; where they conflict with the tasks/notes below, THESE WIN:
+
+1. **Hand-build to spine, not cookiecutter-django.** Build a clean Django project directly following spine conventions — do NOT run cookiecutter-django and strip it. Ignore Task 2's cookiecutter steps and the "Scaffold reconciliation" note; the end state (pixi + Django in `backend/`) is unchanged. Package/project slug is `generate_sbom`. See memory [[scaffold-reconciliation-decision]].
+2. **Pixi is the project-wide umbrella (AD-13 amended).** `pixi.toml` + `pixi.lock` live at the **project root**, NOT under `backend/`. Pixi installs the Python env AND the Node runtime (`nodejs` from conda-forge). Tasks run from the root with `cwd = "backend"` (Python) or `cwd = "frontend"` (npm/vite). `backend/` keeps `pyproject.toml` + `manage.py` only. The `check`/`cov` scope is `backend/generate_sbom`. Frontend steps join `pixi run ci` in Story 1.4. See memory [[pixi-umbrella-toolchain]] and the amended AD-13.
 
 ## Story
 

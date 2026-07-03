@@ -7,7 +7,7 @@ paradigm: layered-modular-monolith
 scope: full system — Django REST API + React SPA + Celery async pipeline for Python SBOM generation
 status: final
 created: 2026-07-03
-updated: 2026-07-03T14:00
+updated: 2026-07-03T15:30
 binds: [F1, F2, F3, F4, F5, F6, F7, F8]
 sources:
   - _bmad-output/planning-artifacts/prds/prd-django-python-generate-sbom-2026-07-03/prd.md
@@ -119,11 +119,11 @@ The SVG is stored in S3 and returned as a separate download via AD-11. No PyVis 
 - **Prevents:** worker reading stale database state before the dispatching transaction commits
 - **Rule:** Always use `task.delay_on_commit()` (never `.delay()` or `.apply_async()` without `using=connection`) when dispatching a Celery task from within a database transaction. Use `@shared_task` on all task definitions — no direct Celery app imports in task modules.
 
-### AD-13 — Monorepo layout: `backend/` and `frontend/` are project-root peers
+### AD-13 — Monorepo layout: `backend/` and `frontend/` are project-root peers under a pixi umbrella
 
 - **Binds:** project scaffold, Docker Compose service definitions, CI matrix, all path references in tooling
-- **Prevents:** Django scaffold generated at the project root; `pixi.toml` / `pyproject.toml` living at the project root alongside `package.json`; frontend and backend toolchains sharing a working directory
-- **Rule:** The project root contains exactly two application directories: `backend/` (Django + Celery + pixi environment) and `frontend/` (React + Vite + npm). `manage.py`, `pixi.toml`, and `pyproject.toml` live under `backend/`. `package.json` and `vite.config.ts` live under `frontend/`. `docker-compose.yml`, `README.md`, and `LICENSE` live at the project root. All `pixi run <task>` commands are run from `backend/`; all `npm run <task>` commands from `frontend/`. Docker Compose `build.context` for the Django service is `./backend`; for any frontend build stage it is `./frontend`.
+- **Prevents:** Django scaffold generated at the project root; Node left unmanaged / provisioned by a separate out-of-band installer; frontend and backend toolchains sharing a working directory or a dependency manifest
+- **Rule:** The project root contains exactly two application directories: `backend/` (Django + Celery Python code) and `frontend/` (React + Vite). **Pixi is the umbrella toolchain for the whole project.** A single `pixi.toml` at the **project root** owns the environment: it installs the Python runtime and dependencies **and** the Node runtime (`nodejs` from conda-forge, pinned in `pixi.lock`). All top-level tasks are `pixi run <task>` commands executed from the project root; backend tasks set `cwd = "backend"`, frontend tasks set `cwd = "frontend"` and shell out to `npm`/`vite`. `manage.py`, `pyproject.toml` (Python tool config + package metadata), and the Django code live under `backend/`. `package.json` and `vite.config.ts` live under `frontend/`; npm manages JavaScript **dependencies**, but pixi provides the Node runtime that runs it and orchestrates the frontend build/lint tasks. `docker-compose.yml`, `README.md`, `LICENSE`, `pixi.toml`, and `pixi.lock` live at the project root. Docker Compose `build.context` for the Django service is `./backend`; for the frontend build stage it is `./frontend`. The unified `pixi run ci` gate runs both backend (build, check, lint, cov) and, once the frontend exists (Story 1.4), frontend (lint, build) steps.
 
 ---
 
@@ -304,8 +304,10 @@ erDiagram
 ### Source tree
 
 ```text
-django-python-generate-sbom/          ← project root
-  backend/                            ← Django application (pixi environment)
+django-python-generate-sbom/          ← project root (pixi umbrella environment)
+  pixi.toml                           # umbrella: Python env + Node runtime + all tasks
+  pixi.lock                           # pins Python AND Node deps
+  backend/                            ← Django + Celery Python code
     config/
       settings/                       # base.py · local.py · production.py
       celery_app.py
@@ -322,18 +324,17 @@ django-python-generate-sbom/          ← project root
         sbom_pipeline.py              # 8-phase Celery chain (pipeline queue)
         analysis.py                   # parallel analysis group (analysis queue)
     tests/
-      unit/                           # mirrors src structure; no I/O
+      unit/                           # mirrors <project_slug> structure; no I/O
       integration/                    # real DB · broker='memory://' · @pytest.mark.integration
     manage.py
-    pixi.toml
-    pyproject.toml
+    pyproject.toml                    # Python tool config + package metadata
   frontend/                           ← React SPA (Vite + MUI) — peer to backend/
     src/
       api/                            # REST client — all fetch calls live here
       components/                     # shared UI components
       pages/                          # route-level page components
     dist/                             # built output — referenced by Django STATICFILES_DIRS
-    package.json
+    package.json                      # npm manages JS deps; pixi provides Node + runs tasks
     vite.config.ts
   docker-compose.yml
   README.md

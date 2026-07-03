@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architecture Diagrams — django-python-generate-sbom</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2d3150;
+    --accent: #6b7af7;
+    --accent-dim: #3d4a8a;
+    --text: #e2e4f0;
+    --text-dim: #8b90b0;
+    --green: #4ade80;
+    --orange: #fb923c;
+    --red: #f87171;
+    --yellow: #fbbf24;
+  }
+
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+  }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 40px;
+  }
+
+  header h1 {
+    margin: 0 0 4px;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  header p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+  }
+
+  nav {
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    padding: 0 40px;
+    display: flex;
+    gap: 2px;
+    overflow-x: auto;
+  }
+
+  nav a {
+    display: block;
+    padding: 12px 16px;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    text-decoration: none;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+  }
+
+  nav a:hover, nav a.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 40px;
+  }
+
+  .diagram-section {
+    margin-bottom: 64px;
+  }
+
+  .diagram-section h2 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin: 0 0 6px;
+    color: var(--text);
+  }
+
+  .level-badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-left: 10px;
+    vertical-align: middle;
+    background: var(--accent-dim);
+    color: var(--accent);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .diagram-desc {
+    font-size: 0.875rem;
+    color: var(--text-dim);
+    margin: 0 0 20px;
+    max-width: 720px;
+  }
+
+  .diagram-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 32px;
+    overflow-x: auto;
+  }
+
+  .diagram-card .mermaid {
+    display: flex;
+    justify-content: center;
+  }
+
+  .legend {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+  }
+
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .ad-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+    margin-top: 20px;
+  }
+
+  .ad-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+
+  .ad-card h4 {
+    margin: 0 0 6px;
+    font-size: 0.875rem;
+    color: var(--accent);
+  }
+
+  .ad-card p {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+
+  .stack-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    margin-top: 20px;
+  }
+
+  .stack-table th {
+    text-align: left;
+    padding: 10px 14px;
+    background: var(--surface2);
+    color: var(--text-dim);
+    font-weight: 500;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .stack-table td {
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  .stack-table tr:last-child td { border-bottom: none; }
+
+  .stack-table td:last-child {
+    font-family: "SF Mono", "Cascadia Code", monospace;
+    font-size: 0.8rem;
+    color: var(--green);
+  }
+
+  .stack-table .group-header td {
+    background: var(--surface2);
+    color: var(--text-dim);
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 6px 14px;
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 0 0 64px;
+  }
+
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 24px 40px;
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Architecture Diagrams — django-python-generate-sbom</h1>
+  <p>Architecture Spine v1.0 · 2026-07-03 · Layered Modular Monolith with Async Pipeline</p>
+</header>
+
+<nav>
+  <a href="#system-context">System Context</a>
+  <a href="#containers">Containers</a>
+  <a href="#components">Components</a>
+  <a href="#pipeline">Async Pipeline</a>
+  <a href="#data-model">Data Model</a>
+  <a href="#dependency-direction">Dependency Direction</a>
+  <a href="#decisions">Arch Decisions</a>
+  <a href="#stack">Stack</a>
+</nav>
+
+<main>
+
+  <!-- ── C4 Level 1: System Context ── -->
+  <section class="diagram-section" id="system-context">
+    <h2>System Context <span class="level-badge">C4 L1</span></h2>
+    <p class="diagram-desc">
+      Who uses the system and what external systems does it depend on. The SBOM service is a self-hosted platform: all data stays on the operator's infrastructure.
+    </p>
+    <div class="diagram-card">
+      <div class="mermaid">
+graph TB
+    developer(["👤 Developer<br/><small>Uploads manifests via web UI<br/>or CI/CD script</small>"])
+    security(["👤 Security Engineer<br/><small>Reviews vulnerability and<br/>licence reports</small>"])
+    compliance(["👤 Compliance Team<br/><small>Downloads SBOMs for<br/>regulatory submissions</small>"])
+
+    sbom["🖥️ django-python-generate-sbom<br/><small>Self-hosted SBOM generation<br/>and analysis platform</small>"]
+
+    osv(["🌐 OSV API<br/><small>api.osv.dev — open-source<br/>vulnerability database</small>"])
+    pypi(["🌐 PyPI JSON API<br/><small>pypi.org — package<br/>version metadata</small>"])
+    nvd(["🌐 NVD API<br/><small>nvd.nist.gov — CWE<br/>enrichment for CVEs</small>"])
+
+    developer -->|"HTTPS · web browser"| sbom
+    developer -->|"HTTPS · REST API · CI/CD"| sbom
+    security -->|"HTTPS · web browser"| sbom
+    compliance -->|"HTTPS · download artifacts"| sbom
+
+    sbom -->|"batch vulnerability queries"| osv
+    sbom -->|"version currency checks"| pypi
+    sbom -->|"CWE classification"| nvd
+
+    style sbom fill:#3d4a8a,stroke:#6b7af7,color:#e2e4f0
+    style developer fill:#22263a,stroke:#2d3150,color:#8b90b0
+    style security fill:#22263a,stroke:#2d3150,color:#8b90b0
+    style compliance fill:#22263a,stroke:#2d3150,color:#8b90b0
+    style osv fill:#22263a,stroke:#2d3150,color:#8b90b0
+    style pypi fill:#22263a,stroke:#2d3150,color:#8b90b0
+    style nvd fill:#22263a,stroke:#2d3150,color:#8b90b0
+      </div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#6b7af7"></div> System under design</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#8b90b0"></div> External actor / system</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ── C4 Level 2: Containers ── -->
+  <section class="diagram-section" id="containers">
+    <h2>Container Diagram <span class="level-badge">C4 L2</span></h2>
+    <p class="diagram-desc">
+      The six runtime processes in a Docker Compose deployment. Each box is a separately deployed process with its own storage or compute concern.
+    </p>
+    <div class="diagram-card">
+      <div class="mermaid">
+graph TB
+    user(["User / API Client<br/>(browser or CI/CD)"])
+
+    subgraph compose["Docker Compose — self-hosted"]
+        web["Django + Gunicorn<br/><small>REST API · React SPA (static)<br/>Port 8000</small>"]
+        worker_p["Celery Worker — pipeline<br/><small>Phases 1–3, Phase 8<br/>queue: pipeline</small>"]
+        worker_a["Celery Worker — analysis<br/><small>Phases 4–7 (parallel)<br/>queue: analysis</small>"]
+        beat["Celery Beat<br/><small>Cleanup scheduler<br/>queue: pipeline</small>"]
+        redis[("Redis 8<br/><small>Task broker · result keys<br/>External API cache (TTL)</small>")]
+        postgres[("PostgreSQL 18<br/><small>Durable state<br/>Jobs · keys · reports</small>")]
+        minio[("MinIO / S3<br/><small>Artifact blobs<br/>manifest-uploads/ · sbom-results/</small>")]
+    end
+
+    osv(["OSV API"])
+    pypi_api(["PyPI JSON API"])
+    nvd(["NVD API"])
+
+    user -->|"HTTPS"| web
+    web --> postgres
+    web --> redis
+    web -->|"303 redirect to presigned URL"| minio
+    worker_p --> redis
+    worker_p --> postgres
+    worker_p --> minio
+    worker_a --> redis
+    worker_a --> postgres
+    worker_a --> minio
+    worker_a -->|"batch vuln queries"| osv
+    worker_a -->|"version metadata"| pypi_api
+    worker_a -->|"CWE enrichment"| nvd
+    beat --> postgres
+    beat --> minio
+
+    style web fill:#3d4a8a,stroke:#6b7af7,color:#e2e4f0
+    style worker_p fill:#3d4a8a,stroke:#6b7af7,color:#e2e4f0
+    style worker_a fill:#3d4a8a,stroke:#6b7af7,color:#e2e4f0
+    style beat fill:#3d4a8a,stroke:#6b7af7,color:#e2e4f0
+    style redis fill:#1a2a1a,stroke:#4ade80,color:#4ade80
+    style postgres fill:#1a2a1a,stroke:#4ade80,color:#4ade80
+    style minio fill:#1a2a1a,stroke:#4ade80,color:#4ade80
+    style user fill:#22263a,stroke:#2d3150,color:#8b90b0
+    style osv fill:#22263a,stroke:#2d3150,color:#8b90b0
+    style pypi_api fill:#22263a,stroke:#2d3150,color:#8b90b0
+    style nvd fill:#22263a,stroke:#2d3150,color:#8b90b0
+      </div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#6b7af7"></div> Django / Celery process</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#4ade80"></div> Data store</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#8b90b0"></div> External service</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ── C4 Level 3: Components ── -->
+  <section class="diagram-section" id="components">
+    <h2>Component Diagram <span class="level-badge">C4 L3</span></h2>
+    <p class="diagram-desc">
+      The four Django apps and Celery task modules inside the web container. Arrows show permitted import direction — no arrow reversal allowed (AD-1, AD-3).
+    </p>
+    <div class="diagram-card">
+      <div class="mermaid">
+graph TB
+    browser(["React SPA<br/>(browser)"])
+    api_client(["API Client<br/>(CI/CD)"])
+
+    subgraph web["Django + Gunicorn (web container)"]
+        views["DRF Views<br/><small>manifests/views.py<br/>sbom/views.py · analysis/views.py<br/>users/views.py</small>"]
+
+        subgraph apps["Django Apps"]
+            users["users/<br/><small>Org · User · OrgMembership<br/>OrgApiKey (AbstractAPIKey)</small>"]
+            manifests["manifests/<br/><small>ManifestUpload<br/>upload · format detection<br/>parsers/</small>"]
+            sbom["sbom/<br/><small>SBOMJob · generation<br/>cyclonedx-python-lib · lib4sbom</small>"]
+            analysis["analysis/<br/><small>AnalysisReport<br/>vuln · license · graph · versions<br/>services/</small>"]
+        end
+
+        tasks["tasks/<br/><small>sbom_pipeline.py (pipeline queue)<br/>analysis.py (analysis queue)</small>"]
+    end
+
+    browser -->|"/api/v1/ only"| views
+    api_client -->|"Api-Key auth"| views
+
+    views --> users
+    views --> manifests
+    views --> sbom
+    views --> analysis
+
+    tasks --> manifests
+    tasks --> sbom
+    tasks --> analysis
+
+    analysis --> sbom
+    analysis --> users
+    sbom --> manifests
+    sbom --> users
+    manifests --> users
+
+    style views fill:#2a2060,stroke:#6b7af7,color:#e2e4f0
+    style users fill:#3d4a8a,stroke:#6b7af7,color:#e2e4f0
+    style manifests fill:#3d4a8a,stroke:#6b7af7,color:#e2e4f0
+    style sbom fill:#3d4a8a,stroke:#6b7af7,color:#e2e4f0
+    style analysis fill:#3d4a8a,stroke:#6b7af7,color:#e2e4f0
+    style tasks fill:#2a3a2a,stroke:#4ade80,color:#4ade80
+    style browser fill:#22263a,stroke:#2d3150,color:#8b90b0
+    style api_client fill:#22263a,stroke:#2d3150,color:#8b90b0
+      </div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#6b7af7"></div> Django views / apps</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#4ade80"></div> Celery tasks (same service layer)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#8b90b0"></div> External client</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ── Async Pipeline ── -->
+  <section class="diagram-section" id="pipeline">
+    <h2>8-Phase Async Pipeline <span class="level-badge">Celery Canvas</span></h2>
+    <p class="diagram-desc">
+      Celery <code>chain()</code> drives phases 1–3 and 8 on the <strong>pipeline</strong> queue. A <code>group() | callback</code> chord runs phases 4–7 in parallel on the <strong>analysis</strong> queue. Progress is polled by the client every 5 seconds.
+    </p>
+    <div class="diagram-card">
+      <div class="mermaid">
+sequenceDiagram
+    participant C as Client
+    participant W as Django (web)
+    participant P as Worker — pipeline
+    participant A as Worker — analysis
+    participant S as S3 / MinIO
+    participant DB as PostgreSQL
+
+    C->>W: POST /api/v1/sbom/generate/
+    W->>DB: concurrency gate — count PENDING/PROGRESS jobs (AD-7)
+    W->>DB: create ManifestUpload + SBOMJob (status=PENDING)
+    W-->>C: 202 {task_id, status_url, estimated_seconds}
+    W->>P: delay_on_commit() → chain (AD-10)
+
+    P->>P: Phase 1 — detect & parse manifest (0–15%)
+    Note over P: pixi.lock→YAML, pyproject.toml, requirements.txt, conda
+    P->>P: Phase 2 — resolve transitive deps (15–40%)
+    Note over P: uv pip compile or lock-file parse
+    P->>P: Phase 3 — generate SBOM document (40–55%)
+    Note over P: cyclonedx-python-lib / lib4sbom
+
+    P->>A: chord group dispatch
+
+    par Phases 4–7 (parallel, analysis queue)
+        A->>A: Phase 4 — OSV vulnerability scan (55–80%)
+        A->>A: Phase 5 — licence compliance report (80–88%)
+        A->>A: Phase 6 — graph JSON + Graphviz SVG (88–93%)
+        A->>A: Phase 7 — version currency check (93–97%)
+    end
+
+    A-->>P: chord callback — aggregate {report_type, artifact_key, summary, failed}
+
+    P->>S: Phase 8 — persist all artifacts to S3/MinIO (97–100%)
+    P->>DB: update SBOMJob status=SUCCESS, set result_key, artifacts_expire_at
+
+    C->>W: GET /api/v1/sbom/status/{task_id}/  (5s poll)
+    W-->>C: 200 {status: SUCCESS, result_url}
+    C->>W: GET /api/v1/sbom/result/{task_id}/
+    W-->>C: 303 → presigned S3 URL  (AD-11)
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ── Data Model ── -->
+  <section class="diagram-section" id="data-model">
+    <h2>Core Data Model <span class="level-badge">ERD</span></h2>
+    <p class="diagram-desc">
+      PostgreSQL is the durable system of record. Redis holds transient task state only. S3/MinIO holds artifact blobs — keys (storage paths) are stored in PostgreSQL, blobs never are (AD-6).
+    </p>
+    <div class="diagram-card">
+      <div class="mermaid">
+erDiagram
+    Org {
+        uuid id PK
+        string name
+        string slug
+        datetime created_at
+    }
+    User {
+        uuid id PK
+        string email
+        string name
+    }
+    OrgMembership {
+        uuid id PK
+        uuid org_id FK
+        uuid user_id FK
+        string role "admin | member"
+    }
+    OrgApiKey {
+        uuid id PK
+        uuid org_id FK
+        string name
+        string prefix
+        string hashed_key "SHA-512"
+        datetime created_at
+        datetime last_used_at
+        datetime revoked_at
+    }
+    ManifestUpload {
+        uuid id PK
+        uuid org_id FK
+        uuid user_id FK
+        string file_key "S3 path"
+        string detected_format
+        datetime uploaded_at
+    }
+    SBOMJob {
+        uuid task_id PK
+        uuid org_id FK
+        uuid manifest_id FK
+        uuid user_id FK
+        string status "PENDING|PROGRESS|SUCCESS|FAILED"
+        string output_format "cyclonedx-json|cyclonedx-xml|spdx"
+        string result_key "S3 path — null after expiry"
+        json summary_stats
+        datetime created_at
+        datetime completed_at
+        datetime artifacts_expire_at "completed_at + 10 days"
+    }
+    AnalysisReport {
+        uuid id PK
+        uuid job_id FK
+        string report_type "vuln|license|graph|version"
+        string artifact_key "S3 path — null after expiry"
+        datetime generated_at
+        boolean failed
+        string failure_reason
+    }
+
+    Org ||--o{ OrgMembership : "has"
+    Org ||--o{ OrgApiKey : "owns"
+    Org ||--o{ ManifestUpload : "owns"
+    Org ||--o{ SBOMJob : "owns"
+    User ||--o{ OrgMembership : "belongs to"
+    User ||--o{ ManifestUpload : "uploads"
+    User ||--o{ SBOMJob : "submits"
+    ManifestUpload ||--|| SBOMJob : "drives"
+    SBOMJob ||--o{ AnalysisReport : "produces"
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ── Dependency Direction ── -->
+  <section class="diagram-section" id="dependency-direction">
+    <h2>Module Dependency Direction</h2>
+    <p class="diagram-desc">
+      Arrows point from dependent to dependency. Any import that reverses an arrow is forbidden (AD-1). <code>users/</code> is the base layer — zero imports from higher apps.
+    </p>
+    <div class="diagram-card">
+      <div class="mermaid">
+graph BT
+    frontend["frontend/ (React SPA)"] -->|"REST API only"| views
+
+    subgraph Django application
+        views["DRF Views"] --> users
+        views --> manifests
+        views --> sbom
+        views --> analysis
+
+        tasks["tasks/ (Celery)"] --> manifests
+        tasks --> sbom
+        tasks --> analysis
+
+        analysis --> sbom
+        analysis --> users
+
+        sbom --> manifests
+        sbom --> users
+
+        manifests --> users
+
+        users["users/"]
+        manifests["manifests/"]
+        sbom["sbom/"]
+        analysis["analysis/"]
+    end
+
+    style users fill:#1a2a1a,stroke:#4ade80,color:#4ade80
+    style manifests fill:#2a3050,stroke:#6b7af7,color:#e2e4f0
+    style sbom fill:#2a3050,stroke:#6b7af7,color:#e2e4f0
+    style analysis fill:#2a3050,stroke:#6b7af7,color:#e2e4f0
+    style views fill:#2a2060,stroke:#6b7af7,color:#e2e4f0
+    style tasks fill:#2a3a2a,stroke:#4ade80,color:#4ade80
+    style frontend fill:#22263a,stroke:#2d3150,color:#8b90b0
+      </div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#4ade80"></div> Base layer (no upstream imports)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#6b7af7"></div> Mid-layer app</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#8b90b0"></div> External consumer (SPA)</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ── Architecture Decisions ── -->
+  <section class="diagram-section" id="decisions">
+    <h2>Architecture Decision Summary</h2>
+    <p class="diagram-desc">
+      Twelve binding decisions. Each constrains a specific part of the codebase and prevents a named failure mode.
+    </p>
+    <div class="ad-grid">
+      <div class="ad-card">
+        <h4>AD-1 · Modular monolith</h4>
+        <p>No inter-app HTTP calls. All cross-app calls are direct Python imports from <code>services.py</code> or <code>selectors.py</code>. No localhost requests.</p>
+      </div>
+      <div class="ad-card">
+        <h4>AD-2 · OrgScopedModel</h4>
+        <p>Every org-owned model uses <code>.for_org(org)</code> queryset. API returns 404 for cross-org access (hides existence). Web UI returns 403 (better UX for shared links).</p>
+      </div>
+      <div class="ad-card">
+        <h4>AD-3 · Service layer purity</h4>
+        <p>Services accept and return plain Python objects only — no <code>HttpRequest</code>, no Celery <code>Task</code> instance. Same function callable from view and task.</p>
+      </div>
+      <div class="ad-card">
+        <h4>AD-4 · Two Celery queues</h4>
+        <p><code>pipeline</code> queue: phases 1–3, 8, Beat cleanup. <code>analysis</code> queue: phases 4–7. Prevents vulnerability scans from starving new job submissions.</p>
+      </div>
+      <div class="ad-card">
+        <h4>AD-5 · React SPA: REST API only</h4>
+        <p>SPA served as static files via WhiteNoise. All data flows through <code>/api/v1/</code>. No Django template context passes business data to React.</p>
+      </div>
+      <div class="ad-card">
+        <h4>AD-6 · Storage triad</h4>
+        <p>PostgreSQL: durable models. Redis: task state keys and TTL-cached API responses. S3/MinIO: all artifact blobs. Blobs never written to PostgreSQL or Redis.</p>
+      </div>
+      <div class="ad-card">
+        <h4>AD-7 · Per-org concurrency gate</h4>
+        <p>Count <code>PENDING|PROGRESS</code> jobs before enqueue. If ≥ <code>SBOM_MAX_CONCURRENT_JOBS_PER_ORG</code> (default 5), return 429 with <code>Retry-After</code>. Owned by <code>manifests/views.py</code>.</p>
+      </div>
+      <div class="ad-card">
+        <h4>AD-8 · AbstractAPIKey subclass</h4>
+        <p><code>OrgApiKey extends AbstractAPIKey</code> from djangorestframework-api-key. Library handles SHA-512 hashing, generation, DRF auth. ~20 lines of customisation.</p>
+      </div>
+      <div class="ad-card">
+        <h4>AD-9 · Graph JSON shape</h4>
+        <p>Graph endpoint returns Cytoscape.js-native <code>{"nodes":[{"data":{…}}], "edges":[{"data":{…}}]}</code>. No PyVis HTML. SVG download via separate presigned URL.</p>
+      </div>
+      <div class="ad-card">
+        <h4>AD-10 · delay_on_commit()</h4>
+        <p>Always <code>task.delay_on_commit()</code> from inside a DB transaction. Never plain <code>.delay()</code> from a view or signal. Prevents worker reading stale state.</p>
+      </div>
+      <div class="ad-card">
+        <h4>AD-11 · Presigned URL downloads</h4>
+        <p>Artifact downloads return <code>303 See Other</code> to a 24h presigned S3/MinIO URL. Django never reads or streams artifact bytes.</p>
+      </div>
+      <div class="ad-card">
+        <h4>AD-12 · SBOMJob.status ownership</h4>
+        <p><code>SBOMJob.status</code> written only by Celery task code via <code>sbom/services.py</code>. Views read status, never write it. Exception: initial <code>PENDING</code> at job creation.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ── Verified Stack ── -->
+  <section class="diagram-section" id="stack">
+    <h2>Verified Stack</h2>
+    <p class="diagram-desc">
+      All versions confirmed against PyPI and npm as of 2026-07-03.
+    </p>
+    <div class="diagram-card" style="padding: 0; overflow: hidden;">
+      <table class="stack-table">
+        <thead>
+          <tr><th>Package</th><th>Version</th></tr>
+        </thead>
+        <tbody>
+          <tr class="group-header"><td colspan="2">Runtime — Python</td></tr>
+          <tr><td>Python</td><td>3.14.6</td></tr>
+          <tr><td>Django</td><td>6.0.6</td></tr>
+          <tr><td>djangorestframework</td><td>3.17.1</td></tr>
+          <tr><td>djangorestframework-api-key</td><td>3.1.0</td></tr>
+          <tr><td>django-storages</td><td>1.14.6</td></tr>
+          <tr><td>django-environ</td><td>0.14.0</td></tr>
+          <tr><td>WhiteNoise</td><td>6.12.0</td></tr>
+          <tr class="group-header"><td colspan="2">Async Pipeline</td></tr>
+          <tr><td>Celery</td><td>5.6.3</td></tr>
+          <tr><td>structlog</td><td>26.1.0</td></tr>
+          <tr class="group-header"><td colspan="2">SBOM Generation</td></tr>
+          <tr><td>cyclonedx-python-lib</td><td>11.11.0</td></tr>
+          <tr><td>lib4sbom</td><td>0.10.4</td></tr>
+          <tr><td>pip-licenses</td><td>5.5.5</td></tr>
+          <tr><td>packaging</td><td>26.2</td></tr>
+          <tr class="group-header"><td colspan="2">Analysis</td></tr>
+          <tr><td>NetworkX</td><td>3.6.1</td></tr>
+          <tr><td>pygraphviz</td><td>2.0</td></tr>
+          <tr><td>requests-cache</td><td>1.3.2</td></tr>
+          <tr><td>requests-ratelimiter</td><td>0.10.0</td></tr>
+          <tr><td>tenacity</td><td>9.1.4</td></tr>
+          <tr class="group-header"><td colspan="2">Infrastructure</td></tr>
+          <tr><td>PostgreSQL</td><td>18.4</td></tr>
+          <tr><td>Redis</td><td>8.8.0</td></tr>
+          <tr class="group-header"><td colspan="2">Frontend</td></tr>
+          <tr><td>React</td><td>19.2.7</td></tr>
+          <tr><td>@mui/material</td><td>9.1.2</td></tr>
+          <tr><td>Vite</td><td>8.1.3</td></tr>
+          <tr><td>cytoscape</td><td>3.34.0</td></tr>
+          <tr><td>react-cytoscapejs</td><td>2.0.0</td></tr>
+          <tr><td>cytoscape-dagre</td><td>4.0.0</td></tr>
+          <tr><td>pixi (frontend)</td><td>0.71.0</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  django-python-generate-sbom · Architecture Diagrams · Apache 2.0 · Kevin Mills 2026
+</footer>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      darkMode: true,
+      background: '#1a1d27',
+      primaryColor: '#3d4a8a',
+      primaryTextColor: '#e2e4f0',
+      primaryBorderColor: '#6b7af7',
+      lineColor: '#6b7af7',
+      secondaryColor: '#22263a',
+      tertiaryColor: '#22263a',
+      edgeLabelBackground: '#1a1d27',
+      fontSize: '14px',
+    },
+    flowchart: {
+      curve: 'basis',
+      padding: 20,
+    },
+    sequence: {
+      actorMargin: 60,
+      messageMargin: 40,
+      mirrorActors: false,
+      useMaxWidth: true,
+    },
+    er: {
+      useMaxWidth: true,
+    }
+  });
+
+  // Highlight active nav item on scroll
+  const sections = document.querySelectorAll('.diagram-section');
+  const navLinks = document.querySelectorAll('nav a');
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navLinks.forEach(link => link.classList.remove('active'));
+        const active = document.querySelector(`nav a[href="#${entry.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { threshold: 0.3 });
+
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>

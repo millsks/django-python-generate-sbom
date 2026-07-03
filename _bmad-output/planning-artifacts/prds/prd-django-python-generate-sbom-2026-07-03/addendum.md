@@ -13,7 +13,7 @@ Technical depth captured from the research report that belongs in architecture /
 | Vulnerability scanning | OSV batch API direct | `POST https://api.osv.dev/v1/querybatch`; avoids pip-audit private modules |
 | License extraction | `pip-licenses` | Supplementary; not a full SBOM generator |
 | Graph model | NetworkX | DAG; cycle detection, centrality |
-| Interactive graph | PyVis | `Network.from_nx()`; rendered as PyVis HTML inline in UI |
+| Interactive graph | Cytoscape.js + cytoscape-dagre | `{nodes, edges}` JSON shape; React component; no PyVis HTML/iframe (AD-9) |
 | Static graph | Graphviz / pygraphviz | DOT → SVG/PNG for download artifact |
 | Version currency | PyPI JSON API + `packaging` | PEP 440 sort; LTS registry for Django/Python |
 | External API caching | `requests-cache` | Redis backend; 1h TTL for PyPI, 24h for OSV |

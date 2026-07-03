@@ -1,10 +1,14 @@
 # Root URL configuration.
 #
-# Story 1.2 adds /health/, Story 1.4 adds the /api/v1/ prefix and the SPA
-# catch-all. For now only the admin site is wired.
+# Order matters: the SPA catch-all must come last and must not shadow the API,
+# health check, static assets, or the admin site. Story 1.2 adds /health/ and
+# Epic 2+ adds the /api/v1/ prefix; the negative-lookahead already excludes them.
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, re_path
+
+from generate_sbom.common.views import SpaView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    re_path(r"^(?!api/|health/|static/|admin/).*$", SpaView.as_view()),
 ]

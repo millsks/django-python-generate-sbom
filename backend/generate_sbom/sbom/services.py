@@ -36,6 +36,7 @@ __all__ = [
     "finalize_job",
     "generate_sbom_document",
     "mark_stale_job_timed_out",
+    "record_analysis_summaries",
     "record_generation",
     "resolve_job_packages",
     "sbom_extension",
@@ -88,6 +89,29 @@ def record_generation(task_id: str, result_key: str, package_count: int) -> None
     SBOMJob.objects.filter(task_id=task_id).update(
         result_key=result_key, summary_stats={"total_packages": package_count}
     )
+
+
+def record_analysis_summaries(task_id: str, envelopes: list[dict[str, object]]) -> None:
+    """Merge the four analysis report summaries into ``summary_stats['reports']`` (Story 5.2).
+
+    Lets the Overview tab read every count from ``summary_stats`` without a per-report
+    fetch (NFR-2.2). Large fields (the graph's node/edge lists) are dropped — only
+    counts + the failed flag are kept.
+    """
+    reports: dict[str, object] = {}
+    for envelope in envelopes:
+        raw = envelope.get("summary")
+        source = raw if isinstance(raw, dict) else {}
+        summary = {k: v for k, v in source.items() if k not in ("nodes", "edges")}
+        reports[str(envelope["report_type"])] = {
+            "failed": envelope["failed"],
+            "failure_reason": envelope["failure_reason"],
+            **summary,
+        }
+    job = get_job_by_task_id(task_id)
+    stats = dict(job.summary_stats)
+    stats["reports"] = reports
+    SBOMJob.objects.filter(task_id=task_id).update(summary_stats=stats)
 
 
 def mark_stale_job_timed_out(job: SBOMJob) -> bool:

@@ -163,6 +163,7 @@ def aggregate_analysis_results(results: list[dict[str, Any]], task_id: str) -> d
     job = get_job_by_task_id(task_id)
     for envelope in results:
         write_report(job, envelope)
+    services.record_analysis_summaries(task_id, results)
     failed = [envelope["report_type"] for envelope in results if envelope.get("failed")]
     logger.info("phase_aggregate", task_id=str(task_id), report_count=len(results), failed=failed)
     return {"task_id": task_id, "analysis": results}

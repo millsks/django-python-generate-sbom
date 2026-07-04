@@ -83,7 +83,8 @@ def test_full_pipeline_sequence_succeeds(settings: pytest.FixtureRequest, tmp_pa
     job.refresh_from_db()
     assert job.status == SBOMJob.Status.SUCCESS
     assert job.progress == 100
-    assert job.summary_stats == {"total_packages": 2}
+    assert job.summary_stats["total_packages"] == 2
+    assert set(job.summary_stats["reports"]) == {"vuln", "license", "graph", "version"}
     assert job.artifacts_expire_at is not None
     assert default_storage.exists(job.result_key)
 

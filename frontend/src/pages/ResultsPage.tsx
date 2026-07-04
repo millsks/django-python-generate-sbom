@@ -6,7 +6,6 @@ import type { ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import Container from '@mui/material/Container'
 import LinearProgress from '@mui/material/LinearProgress'
@@ -15,6 +14,7 @@ import Tabs from '@mui/material/Tabs'
 import Typography from '@mui/material/Typography'
 import { ApiError } from '../api/client'
 import { getJobStatus, TERMINAL_STATUSES, type JobStatus } from '../api/jobs'
+import { OverviewTab } from '../components/OverviewTab'
 
 const TAB_LABELS = ['Overview', 'Vulnerabilities', 'Licenses', 'Dependency Graph', 'Version Currency']
 const POLL_MS = 5000
@@ -116,16 +116,7 @@ export function ResultsPage() {
       </Tabs>
 
       <TabPanel index={0} value={tab}>
-        <Typography variant="h6" gutterBottom>
-          Overview
-        </Typography>
-        {status.result_url ? (
-          <Button variant="contained" href={status.result_url}>
-            Download SBOM
-          </Button>
-        ) : (
-          <Alert severity="warning">The SBOM artifact is not available for this job.</Alert>
-        )}
+        <OverviewTab status={status} onNavigate={setTab} />
       </TabPanel>
 
       {TAB_LABELS.slice(1).map((label, i) => (

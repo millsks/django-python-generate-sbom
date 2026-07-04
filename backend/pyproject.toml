@@ -57,7 +57,15 @@ plugins = ["mypy_django_plugin.main"]
 django_settings_module = "config.settings.local"
 
 [[tool.mypy.overrides]]
-module = ["celery.*", "lib4sbom.*", "storages.*", "requests_cache.*", "requests_ratelimiter.*"]
+module = [
+    "celery.*",
+    "lib4sbom.*",
+    "storages.*",
+    "requests_cache.*",
+    "requests_ratelimiter.*",
+    "networkx.*",
+    "pygraphviz.*",
+]
 ignore_missing_imports = true
 
 [tool.coverage.run]

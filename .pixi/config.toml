@@ -1,1 +1,4 @@
 tls-root-certs = "system"
+# Run conda post-link scripts at install (graphviz registers its `dot` plugins via
+# one — without this, pygraphviz SVG rendering fails with "Format: svg not recognized").
+run-post-link-scripts = "insecure"

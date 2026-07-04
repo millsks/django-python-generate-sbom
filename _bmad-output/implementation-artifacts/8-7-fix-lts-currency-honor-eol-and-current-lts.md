@@ -1,6 +1,6 @@
 # Story 8.7: Fix LTS Currency — Resolve the Current LTS and Honor EOL Dates
 
-Status: review
+Status: done
 
 <!-- Corrective follow-up to Story 8.1. Bug found in prod: Django 4.2.x reported "On LTS (4.2)" (green) even though 4.2 reached endoflife.date EOL on 2026-04-07. Reproduced at /results/47bd317a-e7d7-4da0-b58b-bb4175da3a7b. -->
 

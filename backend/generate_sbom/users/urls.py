@@ -4,6 +4,8 @@ from django.urls import path
 
 from .views import (
     CreateOrgView,
+    KeyDetailView,
+    KeysView,
     LeaveOrgView,
     LoginView,
     LogoutView,
@@ -28,4 +30,6 @@ urlpatterns = [
     path("orgs/transfer-admin/", TransferAdminView.as_view(), name="org-transfer-admin"),
     path("orgs/members/", MembersView.as_view(), name="org-members"),
     path("orgs/members/<int:user_id>/", MemberDetailView.as_view(), name="org-member-detail"),
+    path("keys/", KeysView.as_view(), name="key-list"),
+    path("keys/<str:key_id>/", KeyDetailView.as_view(), name="key-detail"),
 ]

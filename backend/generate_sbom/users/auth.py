@@ -12,7 +12,7 @@ from typing import cast
 
 from rest_framework.request import Request
 
-from .models import Org, OrgMembership, User
+from .models import Org, OrgApiKey, OrgMembership, User
 
 SESSION_ACTIVE_ORG = "active_org_id"
 
@@ -20,9 +20,13 @@ SESSION_ACTIVE_ORG = "active_org_id"
 def get_request_org(request: Request) -> Org | None:
     """Return the org this request is acting as, or None.
 
-    Prefers the session's active org (validated against membership); falls back
-    to the user's first membership and pins it in the session.
+    Api-Key requests carry the org on ``request.auth.org``. Session requests use
+    the session's active org (validated against membership), falling back to the
+    user's first membership and pinning it in the session.
     """
+    if isinstance(request.auth, OrgApiKey):
+        return request.auth.org
+
     if not request.user.is_authenticated:
         return None
     user = request.user

@@ -4,6 +4,7 @@ import { RegisterPage } from './pages/RegisterPage'
 import { LoginPage } from './pages/LoginPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { MembersPage } from './pages/MembersPage'
+import { KeysPage } from './pages/KeysPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 
 function App() {
@@ -26,6 +27,14 @@ function App() {
           element={
             <ProtectedRoute>
               <MembersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/keys"
+          element={
+            <ProtectedRoute>
+              <KeysPage />
             </ProtectedRoute>
           }
         />

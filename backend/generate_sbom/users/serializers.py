@@ -52,3 +52,9 @@ class TransferAdminSerializer(serializers.Serializer[User]):
     """Validates the transfer-admin request."""
 
     user_id = serializers.IntegerField()
+
+
+class CreateKeySerializer(serializers.Serializer[User]):
+    """Validates the create-API-key request."""
+
+    name = serializers.CharField(max_length=100)

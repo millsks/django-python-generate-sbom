@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from django.db.models import QuerySet
 
-from .models import Org, OrgMembership, User
+from .models import Org, OrgApiKey, OrgMembership, User
 
 
 def get_user_orgs(user: User) -> QuerySet[Org]:
@@ -15,3 +15,8 @@ def get_user_orgs(user: User) -> QuerySet[Org]:
 def get_org_members(org: Org) -> QuerySet[OrgMembership]:
     """Return the memberships of ``org`` (with users), ordered by email."""
     return OrgMembership.objects.filter(org=org).select_related("user").order_by("user__email")
+
+
+def get_api_keys(org: Org) -> QuerySet[OrgApiKey]:
+    """Return the active (non-revoked) API keys of ``org``, newest first."""
+    return OrgApiKey.objects.filter(org=org, revoked_at__isnull=True).order_by("-created")

@@ -103,6 +103,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-5.2.9-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-ext-6.0.6-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-3.17.1-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-api-key-3.1.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-stubs-3.16.9-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/editables-0.6-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/exceptiongroup-1.3.1-pyhd8ed1ab_0.conda
@@ -236,6 +237,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-5.2.9-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-ext-6.0.6-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-3.17.1-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-api-key-3.1.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-stubs-3.16.9-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/editables-0.6-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/exceptiongroup-1.3.1-pyhd8ed1ab_0.conda
@@ -310,6 +312,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-5.2.9-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-ext-6.0.6-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-3.17.1-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-api-key-3.1.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-stubs-3.16.9-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/editables-0.6-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/exceptiongroup-1.3.1-pyhd8ed1ab_0.conda
@@ -2528,6 +2531,20 @@ packages:
   run_exports: {}
   size: 672196
   timestamp: 1774433697631
+- conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-api-key-3.1.0-pyhcf101f3_0.conda
+  sha256: 42191b6ef8f49e3060089cddb4b93c78af07c184d34f5db2cdb40533fd8c04e7
+  md5: a2610585f411cd1a01b568a3009c57f3
+  depends:
+  - python >=3.10
+  - packaging
+  - python
+  license: MIT
+  license_family: MIT
+  purls:
+  - pkg:pypi/djangorestframework-api-key?source=hash-mapping
+  run_exports: {}
+  size: 19782
+  timestamp: 1780936085128
 - conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-stubs-3.16.9-pyhcf101f3_0.conda
   sha256: 70327f75e810b1a88cee17f3ac9aae575e73e9905edb095b93c97d925f9fd384
   md5: eec0edc32ef04bed80353f784463a76e

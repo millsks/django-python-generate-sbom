@@ -1,6 +1,6 @@
 # Story 8.6: In-App SBOM Viewer Tab
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

@@ -2,7 +2,9 @@
 
 Fetches the latest stable version of each package from the PyPI JSON API (via
 ``http.pypi_session``) and classifies currency by release-series distance, with
-LTS-aware handling for registry-tracked packages. Returns a plain report dict.
+LTS-aware handling. Each package's LTS series comes from the explicit registry
+(built-in defaults + ``SBOM_LTS_REGISTRY``) first, then endoflife.date; packages
+with no match stay untracked. Returns a plain report dict.
 """
 
 from __future__ import annotations
@@ -22,6 +24,7 @@ from generate_sbom.sbom.parsers import PackageSpec
 from . import http
 
 PYPI_JSON_URL = "https://pypi.org/pypi"
+EOL_API_URL = "https://endoflife.date/api"
 
 CURRENT = "current"
 BEHIND_1 = "behind-1"
@@ -32,9 +35,44 @@ CURRENCY_CLASSES = [CURRENT, BEHIND_1, BEHIND_2, UNKNOWN]
 # Built-in LTS defaults; extended/overridden via SBOM_LTS_REGISTRY (FR-5.4).
 _DEFAULT_LTS = {"django": "4.2", "python": "3.12"}
 
+# normalized package name → endoflife.date product slug, for the cases where they
+# differ. Unmapped names try the normalized name directly and fall through to
+# untracked on a 404 — never a wrong match.
+_EOL_PRODUCTS = {
+    "opensearch-py": "opensearch",
+}
+
 
 def _normalize(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def _eol_version_key(cycle: str) -> Version:
+    """Sort key for endoflife.date cycle labels; unparseable cycles sort lowest."""
+    try:
+        return Version(cycle)
+    except InvalidVersion:
+        return Version("0")
+
+
+def _eol_lts_series(session: http.CachedLimiterSession, name: str) -> str | None:
+    """Return the latest LTS release series for a package from endoflife.date, or None.
+
+    endoflife.date's ``lts`` field is ``false`` (not LTS), ``true``, or the date LTS
+    began. Any truthy value marks an LTS cycle; the highest such ``cycle`` wins.
+    Network/parse errors and untracked products fall through to None (no guess).
+    """
+    product = _EOL_PRODUCTS.get(_normalize(name), _normalize(name))
+    try:
+        response = session.get(f"{EOL_API_URL}/{product}.json")
+        response.raise_for_status()
+        cycles = response.json()
+    except (requests.RequestException, ValueError):
+        return None
+    if not isinstance(cycles, list):
+        return None
+    lts_cycles = [str(c["cycle"]) for c in cycles if isinstance(c, dict) and c.get("lts") and "cycle" in c]
+    return max(lts_cycles, key=_eol_version_key) if lts_cycles else None
 
 
 def load_lts_registry() -> dict[str, str]:
@@ -107,17 +145,20 @@ def classify(
     packages: list[PackageSpec],
     *,
     session: http.CachedLimiterSession | None = None,
+    eol_session: http.CachedLimiterSession | None = None,
     lts_registry: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Classify each package's version currency and return the report dict (FR-5.4)."""
     session = session or http.pypi_session()
+    eol = eol_session or http.eol_session()
     registry = lts_registry if lts_registry is not None else load_lts_registry()
 
     entries: list[dict[str, Any]] = []
     counts: Counter[str] = Counter()
     for pkg in packages:
         latest = _latest_version(session, pkg.name)
-        lts = registry.get(_normalize(pkg.name))
+        # Explicit registry entry wins (operator override); else endoflife.date.
+        lts = registry.get(_normalize(pkg.name)) or _eol_lts_series(eol, pkg.name)
         currency = _classify_currency(pkg.version, latest, lts)
         counts[currency] += 1
         entries.append(

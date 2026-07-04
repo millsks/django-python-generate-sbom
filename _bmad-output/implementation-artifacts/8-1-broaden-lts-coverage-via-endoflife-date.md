@@ -1,6 +1,6 @@
 # Story 8.1: Broaden LTS Coverage via endoflife.date
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -76,8 +76,21 @@ endoflife.date slugs are not always the PyPI name (e.g. many map 1:1: `django`, 
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
 
 ### Completion Notes List
 
+- **HTTP session:** new `http.eol_session()` (CachedLimiterSession, 7-day cache, 2 req/s). `build_session` gained an `allowable_codes` param; the eol session caches `404`s too, so the many untracked packages don't re-hit the API every run.
+- **Lookup:** `versions._eol_lts_series(session, name)` queries `endoflife.date/api/{product}.json`, treats any truthy `lts` field (boolean `true` or a start-date string) as an LTS cycle, and returns the highest such `cycle`. Network/parse errors and untracked products fall through to `None` — never a fabricated LTS. A small `_EOL_PRODUCTS` map covers name↔slug mismatches; unmapped names try the normalized name and 404 to untracked.
+- **Precedence (AC #5):** `classify` now resolves `lts = registry.get(name) or _eol_lts_series(...)` — the explicit built-in/`SBOM_LTS_REGISTRY` entry wins; endoflife.date fills the long tail. `on_lts`/currency are unchanged, just fed a broader `lts`.
+- **Frontend:** none needed — the Versions tab (PR #42) already renders `lts`/`on_lts`; this only widens their source.
+- **Tests:** endoflife.date drives the LTS series (latest LTS cycle, boolean+date forms); registry overrides the API; API error → untracked; name→slug mapping. Existing currency tests given their own `eol_session` for isolation/speed.
+- Gate: `pixi run ci` exits 0 — backend 216 tests (94.11%), frontend 43.
+
 ### File List
+
+- backend/generate_sbom/analysis/services/http.py (eol_session + allowable_codes)
+- backend/generate_sbom/analysis/services/versions.py (_eol_lts_series, _EOL_PRODUCTS, classify precedence)
+- backend/tests/unit/test_versions_service.py (endoflife.date tests + isolation)

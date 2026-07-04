@@ -2167,10 +2167,30 @@ So that I understand what it does and where to go next.
 
 **Given** the current thin README,
 **When** rewritten,
-**Then** it is a proper project front page: name + one-line description, status/coverage
-badges, a short overview of what the tool does, a screenshot or two, a Quick Start
-(`pixi install` → run the stack), a features summary, and prominent links to the
+**Then** it is a proper project front page: name + one-line description, a status-badge
+row (see below), a short overview of what the tool does, a screenshot or two, a Quick
+Start (`pixi install` → run the stack), a features summary, and prominent links to the
 published docs site and to CONTRIBUTING (FR-DOC7).
+
+**Given** the reference badge style (millsks/conventional-commit-hook) but that this
+app is **not published to any package index** (releases only — no PyPI/conda-forge),
+**When** the badge row is authored,
+**Then** it includes at minimum: **CI** status (the Epic 9 `ci.yml` Actions badge),
+**Codecov** coverage, **latest GitHub Release** (`img.shields.io/github/v/release/...`,
+replacing the reference's PyPI/conda version badges), **supported Python versions** (a
+*static* shields badge reflecting the CI matrix — not the `pypi/pyversions` source,
+which requires publication), and **License** — and it **explicitly omits** any
+PyPI-version or conda-forge-version badge.
+
+**Given** the request to surface anything else useful to a repo visitor,
+**When** the badge row is finalized,
+**Then** it also includes the beneficial stack/health badges that fit this project,
+each linking to its target — e.g. **docs site** (GitHub Pages, once live from Story
+11.1), **SonarCloud** quality gate (Story 9.2), **pre-commit**, **Ruff** (formatter/
+linter), **Conventional Commits**, **code style / typed (mypy)**, and repo-signal
+badges such as **last commit**, **open issues**, or **PRs welcome** — the implementer
+picks the subset that reads well and avoids badge clutter (aim for a tidy one/two-row
+row, not an exhaustive wall).
 
 **Given** the other documentation,
 **When** the README is written,

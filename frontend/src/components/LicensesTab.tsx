@@ -7,7 +7,9 @@ import AccordionDetails from '@mui/material/AccordionDetails'
 import AccordionSummary from '@mui/material/AccordionSummary'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
+import Stack from '@mui/material/Stack'
 import Link from '@mui/material/Link'
 import Table from '@mui/material/Table'
 import TableBody from '@mui/material/TableBody'
@@ -30,11 +32,18 @@ export function LicensesTab({ taskId }: { taskId: string }) {
   const [report, setReport] = useState<LicenseReport | null>(null)
   const [failure, setFailure] = useState<{ reason: string | null } | null>(null)
   const [error, setError] = useState(false)
+  // Controlled expanded state: the set of tier keys currently open. Initialized
+  // to "tiers with packages expanded" once the report loads (Story 8.17).
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     let active = true
     getLicenses(taskId).then(
-      (data) => active && setReport(data),
+      (data) => {
+        if (!active) return
+        setReport(data)
+        setExpanded(new Set(data.tiers.filter((tier) => tier.packages.length > 0).map((tier) => tier.tier)))
+      },
       (err: unknown) => {
         if (!active) return
         if (err instanceof ApiError && err.code === 'report_failed') setFailure({ reason: err.failureReason ?? null })
@@ -50,10 +59,31 @@ export function LicensesTab({ taskId }: { taskId: string }) {
   if (error) return <Alert severity="error">Could not load the license report.</Alert>
   if (!report) return <CircularProgress aria-label="Loading licenses" />
 
+  const toggleTier = (key: string) => (_event: unknown, isExpanded: boolean) => {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (isExpanded) next.add(key)
+      else next.delete(key)
+      return next
+    })
+  }
+  const expandAll = () => setExpanded(new Set(report.tiers.map((tier) => tier.tier)))
+  const collapseAll = () => setExpanded(new Set())
+
   return (
     <Box>
+      {report.tiers.length > 0 && (
+        <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+          <Button size="small" onClick={expandAll}>
+            Expand all
+          </Button>
+          <Button size="small" onClick={collapseAll}>
+            Collapse all
+          </Button>
+        </Stack>
+      )}
       {report.tiers.map((tier) => (
-        <Accordion key={tier.tier} defaultExpanded={tier.packages.length > 0}>
+        <Accordion key={tier.tier} expanded={expanded.has(tier.tier)} onChange={toggleTier(tier.tier)}>
           <AccordionSummary expandIcon={<span aria-hidden>▾</span>}>
             <Typography sx={{ fontWeight: 600 }}>
               {tier.tier}

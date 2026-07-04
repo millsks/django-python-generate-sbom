@@ -79,11 +79,11 @@ development_status:
   epic-9: ready-for-dev
   9-1-comprehensive-ci-workflow: ready-for-dev
   9-2-sonarcloud-code-analysis: ready-for-dev
-  9-3-automated-release-workflow: ready-for-dev
+  9-3-automated-release-workflow: done
   9-4-repository-maintenance-workflow: ready-for-dev
-  9-5-stale-issue-and-pr-management: ready-for-dev
-  9-6-label-automation: ready-for-dev
-  9-7-adopt-beneficial-pixi-tasks: ready-for-dev
+  9-5-stale-issue-and-pr-management: done
+  9-6-label-automation: done
+  9-7-adopt-beneficial-pixi-tasks: done
 
   # Epic 10 — UI Navigation & Authenticated Routing (frontend).
   epic-10: done

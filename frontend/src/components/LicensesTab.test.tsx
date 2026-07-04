@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Mock } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { LicensesTab } from './LicensesTab'
 import { ApiError } from '../api/client'
@@ -27,8 +27,17 @@ const REPORT = {
 }
 
 describe('LicensesTab', () => {
-  it('renders the four tiers in descending-attention order', async () => {
-    mockGet.mockResolvedValue(REPORT)
+  it('orders tiers by risk and packages by name regardless of input order (Story 8.16)', async () => {
+    // Backend order shuffled: the tab must re-order tiers by risk and packages by name.
+    mockGet.mockResolvedValue({
+      tiers: [
+        { tier: 'Permissive', packages: [{ name: 'zlib-pkg', version: '1', license: 'Zlib' }, { name: 'apache-pkg', version: '2', license: 'Apache-2.0' }] },
+        { tier: 'Unknown', packages: [{ name: 'mystery', version: '3', license: 'UNKNOWN' }] },
+        { tier: 'Weak Copyleft', packages: [] },
+        { tier: 'Strong Copyleft', packages: [{ name: 'agpl-pkg', version: '4', license: 'AGPL-3.0' }] },
+      ],
+      summary: {},
+    })
     render(<LicensesTab taskId="t" />)
 
     const headers = await screen.findAllByRole('button', { name: /Copyleft|Unknown|Permissive/ })
@@ -37,6 +46,12 @@ describe('LicensesTab', () => {
     expect(order[1]).toMatch(/Weak Copyleft/)
     expect(order[2]).toMatch(/Unknown/)
     expect(order[3]).toMatch(/Permissive/)
+
+    // Packages within a tier are sorted by name (apache-pkg before zlib-pkg).
+    const permTable = screen.getByRole('table', { name: /Permissive packages/ })
+    const rows = within(permTable).getAllByRole('row').slice(1)
+    expect(within(rows[0]).getByText('apache-pkg')).toBeInTheDocument()
+    expect(within(rows[1]).getByText('zlib-pkg')).toBeInTheDocument()
   })
 
   it('collapses an empty tier and expands a populated one', async () => {

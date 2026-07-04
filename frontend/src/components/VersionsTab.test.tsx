@@ -44,13 +44,12 @@ async function dataRows() {
 }
 
 describe('VersionsTab', () => {
-  it('orders the most-outdated (behind-2+) first by default', async () => {
+  it('orders by package name (ascending) by default (Story 8.16)', async () => {
     mockGet.mockResolvedValue(REPORT)
     render(<VersionsTab taskId="t" />)
 
     const rows = await dataRows()
-    expect(within(rows[0]).getByText('bravo')).toBeInTheDocument() // behind-2+
-    expect(within(rows[0]).getByText('Behind 2+')).toBeInTheDocument()
+    expect(within(rows[0]).getByText('alpha')).toBeInTheDocument() // name-asc: alpha first
   })
 
   it('sorts by status when the Status header is clicked', async () => {
@@ -58,10 +57,10 @@ describe('VersionsTab', () => {
     render(<VersionsTab taskId="t" />)
     await screen.findByRole('table')
 
-    // Default is status/desc (behind-2+ first); clicking toggles to asc (unknown first).
+    // Default is name/asc; clicking Status sorts status/desc (most-outdated first).
     await userEvent.click(screen.getByRole('button', { name: 'Status' }))
     const rows = await dataRows()
-    expect(within(rows[0]).getByText('delta')).toBeInTheDocument() // unknown, lowest rank
+    expect(within(rows[0]).getByText('bravo')).toBeInTheDocument() // behind-2+, highest rank
   })
 
   it('shows LTS status per package: on-LTS, off-LTS target, and untracked', async () => {

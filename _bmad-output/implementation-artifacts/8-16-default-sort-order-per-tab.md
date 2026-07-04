@@ -1,6 +1,26 @@
 # Story 8.16: Default Sort Order Per Tab
 
-Status: ready-for-dev
+Status: review
+
+## Dev Agent Record
+
+### Agent Model Used
+
+claude-opus-4-8[1m]
+
+### Completion Notes List
+
+- **Version Currency** default changed from currency/desc to **name/asc** (`orderBy='name'`, `order='asc'`); column-header sorting still overrides.
+- **Licenses** tab (tier-grouped accordions): tiers now render in **risk order** via `TIER_RANK` (Strong Copyleft → Weak Copyleft → Unknown → Permissive) regardless of backend order, and packages within a tier are sorted by name.
+- **SBOM viewer** (name/asc) and **Vulnerabilities** (severity, Critical first) were already correct — confirmed and locked with tests.
+- **Tests:** Versions name-asc default (+ Status-click override now sorts status/desc); Licenses shuffled-input → risk order + within-tier name sort; SBOM name-asc default assertion; Vulns severity default already tested.
+- Gate: `pixi run ci` exits 0 — backend 262, frontend 74.
+
+### File List
+
+- frontend/src/components/VersionsTab.tsx (default orderBy/order) + VersionsTab.test.tsx
+- frontend/src/components/LicensesTab.tsx (TIER_RANK ordering + within-tier name sort) + LicensesTab.test.tsx
+- frontend/src/components/SbomTab.test.tsx (name-asc default assertion)
 
 ## Story
 

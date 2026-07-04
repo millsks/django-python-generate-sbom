@@ -80,20 +80,25 @@ Wait until the `web` service is healthy, then open:
 All SBOM data is scoped to your active organization, so every new account starts
 with its own private workspace.
 
-### 3. Generate an SBOM
+### 3. Upload a manifest
 
 Open **<http://localhost:8000/upload>** and complete the form:
 
-- **Manifest file** — a Python dependency file (`requirements.txt`,
-  `pyproject.toml`, `pixi.toml`, `pixi.lock`, or a conda `environment.yml`).
-- **Application ID**, **Component Name**, **GitHub Repository URL**, and
-  **Source Branch** — all four are **required**. They are embedded as provenance
-  metadata at the top of the generated SBOM.
-- **Output format** — CycloneDX JSON/XML or SPDX 2.3 JSON.
+- **Manifest file** — a Python dependency file (`requirements.txt` and prefixed
+  variants like `dev-requirements.txt`, `pyproject.toml`, `pixi.toml`,
+  `pixi.lock`, or a conda `environment.yml`).
+- **Application ID**, **Component Name**, **Repository URL**, and **Source
+  Branch** — all four are **required**. They are captured as provenance metadata
+  and embedded at the top of the generated SBOM.
 
-Submitting starts an async job. Track its progress on the dashboard; when it
-completes, download the SBOM — the download is a redirect to a short-lived
-presigned URL, so the file is served directly from object storage.
+Submitting uploads and validates the manifest and reports the detected format. If
+the file or a field is rejected, the page shows the server's reason.
+
+> **SBOM generation** (submit → track progress → download the CycloneDX/SPDX
+> artifact) runs through the REST API today — `POST /api/v1/sbom/generate/`, then
+> poll `GET /api/v1/sbom/status/{task_id}/`, then `GET /api/v1/sbom/result/{task_id}/`
+> (a 303 redirect to a short-lived presigned URL). Wiring that flow into the
+> upload page and dashboard lands in a later epic.
 
 ### UI routes and the API they call
 
@@ -102,8 +107,7 @@ presigned URL, so the file is served directly from object storage.
 | `/register` | Create account + personal org | `POST /api/v1/auth/register/` |
 | `/login` · `/logout` | Session sign in / out | `POST /api/v1/auth/login/` · `/logout/` |
 | `/dashboard` | Your jobs and their status | `GET /api/v1/sbom/status/{task_id}/` |
-| `/upload` | Submit a manifest for SBOM generation | `POST /api/v1/sbom/generate/` |
-| download | Fetch a finished SBOM | `GET /api/v1/sbom/result/{task_id}/` → 303 presigned URL |
+| `/upload` | Upload & validate a manifest | `POST /api/v1/manifests/upload/` |
 | `/members` | Manage org members | `GET/POST /api/v1/orgs/members/` |
 | `/keys` | Manage API keys for the REST API | `GET/POST /api/v1/keys/` |
 

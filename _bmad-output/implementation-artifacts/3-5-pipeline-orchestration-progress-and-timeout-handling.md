@@ -1,6 +1,6 @@
 # Story 3.5: Pipeline Orchestration, Progress & Timeout Handling
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

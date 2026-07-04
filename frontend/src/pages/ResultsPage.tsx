@@ -16,6 +16,7 @@ import { ApiError } from '../api/client'
 import { getJobStatus, TERMINAL_STATUSES, type JobStatus } from '../api/jobs'
 import { OverviewTab } from '../components/OverviewTab'
 import { VulnerabilitiesTab } from '../components/VulnerabilitiesTab'
+import { LicensesTab } from '../components/LicensesTab'
 
 const TAB_LABELS = ['Overview', 'Vulnerabilities', 'Licenses', 'Dependency Graph', 'Version Currency']
 const POLL_MS = 5000
@@ -122,9 +123,12 @@ export function ResultsPage() {
       <TabPanel index={1} value={tab}>
         <VulnerabilitiesTab taskId={taskId!} totalPackages={status.summary_stats?.total_packages ?? 0} />
       </TabPanel>
+      <TabPanel index={2} value={tab}>
+        <LicensesTab taskId={taskId!} />
+      </TabPanel>
 
-      {TAB_LABELS.slice(2).map((label, i) => (
-        <TabPanel key={label} index={i + 2} value={tab}>
+      {TAB_LABELS.slice(3).map((label, i) => (
+        <TabPanel key={label} index={i + 3} value={tab}>
           <Typography color="text.secondary">The {label} report will appear here.</Typography>
         </TabPanel>
       ))}

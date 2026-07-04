@@ -18,6 +18,7 @@ import { OverviewTab } from '../components/OverviewTab'
 import { VulnerabilitiesTab } from '../components/VulnerabilitiesTab'
 import { LicensesTab } from '../components/LicensesTab'
 import { DepGraph } from '../components/DepGraph'
+import { VersionsTab } from '../components/VersionsTab'
 
 const TAB_LABELS = ['Overview', 'Vulnerabilities', 'Licenses', 'Dependency Graph', 'Version Currency']
 const POLL_MS = 5000
@@ -130,12 +131,9 @@ export function ResultsPage() {
       <TabPanel index={3} value={tab}>
         <DepGraph taskId={taskId!} />
       </TabPanel>
-
-      {TAB_LABELS.slice(4).map((label, i) => (
-        <TabPanel key={label} index={i + 4} value={tab}>
-          <Typography color="text.secondary">The {label} report will appear here.</Typography>
-        </TabPanel>
-      ))}
+      <TabPanel index={4} value={tab}>
+        <VersionsTab taskId={taskId!} />
+      </TabPanel>
     </Container>
   )
 }

@@ -1,0 +1,301 @@
+name: Release
+
+# Scheduled + on-demand releases. Ported from idp-app's release workflow and adapted
+# to this repo's pixi umbrella toolchain (git-cliff via `pixi run changelog`, the
+# `pixi run ci` gate, a backend wheel + a frontend bundle — no conda/PyPI publishing).
+#
+# Operator prerequisite: releases push a tag/commit to `main` under branch protection,
+# so the default GITHUB_TOKEN is not enough. Create a GitHub App with `contents: write`
+# (and `pull-requests: write`), install it on this repo, and expose its credentials as
+# two repository secrets:
+#   - APP_ID           the GitHub App's numeric App ID
+#   - APP_PRIVATE_KEY  the App's private key (PEM contents)
+# The App token is minted per-run by actions/create-github-app-token below.
+
+on:
+  schedule:
+    - cron: "0 0 7,21 * *" # 00:00 UTC on the 7th and 21st of each month
+
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 1.0.0); leave blank to auto-increment the patch"
+        required: false
+        type: string
+      prerelease:
+        description: "Mark as pre-release"
+        required: false
+        type: boolean
+        default: false
+      force_recreate:
+        description: "Remove an existing tag/release before recreating it"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    # Scheduled runs only release from main; manual dispatch is allowed from any ref.
+    if: |
+      (github.event_name == 'schedule' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch')
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      # -----------------------------------------------------------------------
+      # Auth & checkout — App token so pushes bypass branch protection.
+      # -----------------------------------------------------------------------
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      # -----------------------------------------------------------------------
+      # Version calculation
+      # -----------------------------------------------------------------------
+      - name: Get latest tag
+        id: get_tag
+        run: |
+          git fetch --tags
+          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo no_tag_found)
+          echo "tag=${latest_tag}" >> "$GITHUB_OUTPUT"
+          if [ "$latest_tag" != "no_tag_found" ]; then
+            echo "has_tags=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_tags=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Compute next tag
+        id: next_tag
+        run: |
+          if [ "${{ steps.get_tag.outputs.has_tags }}" = "true" ]; then
+            base_tag="${{ steps.get_tag.outputs.tag }}"
+            base_tag="${base_tag#v}"
+            IFS='.' read -r major minor patch << EOF
+          ${base_tag}
+          EOF
+            patch=$((patch + 1))
+            next_tag="${major}.${minor}.${patch}"
+          else
+            next_tag="0.1.0"
+          fi
+          echo "next_tag=${next_tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Check for changes since last tag
+        id: check_changes
+        run: |
+          if [ "${{ steps.get_tag.outputs.has_tags }}" = "false" ]; then
+            echo "No previous tags found — proceeding with first release"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          elif git diff --quiet ${{ steps.get_tag.outputs.tag }} HEAD; then
+            echo "::notice::No changes since last tag ${{ steps.get_tag.outputs.tag }} — skipping"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Changes detected since last tag ${{ steps.get_tag.outputs.tag }}"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Decide whether to skip
+        id: should_skip
+        run: |
+          if [ "${{ steps.check_changes.outputs.changed }}" = "false" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # -----------------------------------------------------------------------
+      # Pixi environment
+      # -----------------------------------------------------------------------
+      - name: Set up pixi
+        if: steps.should_skip.outputs.skip != 'true'
+        uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          pixi-version: latest
+
+      # -----------------------------------------------------------------------
+      # Resolve, validate & guard the release tag
+      # -----------------------------------------------------------------------
+      - name: Resolve release tag
+        id: set_release_tag
+        if: steps.should_skip.outputs.skip != 'true'
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            new_tag="${{ inputs.version }}"
+          else
+            new_tag="${{ steps.next_tag.outputs.next_tag }}"
+          fi
+          echo "NEW_TAG=${new_tag}" >> "$GITHUB_ENV"
+
+      - name: Validate version format
+        if: steps.should_skip.outputs.skip != 'true'
+        run: |
+          if ! echo "${{ env.NEW_TAG }}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$'; then
+            echo "Invalid version. Use semantic versioning, e.g. 1.0.0 or 1.0.0-beta.1"
+            exit 1
+          fi
+          echo "Version format valid: ${{ env.NEW_TAG }}"
+
+      - name: Check the version does not already exist
+        if: steps.should_skip.outputs.skip != 'true'
+        run: |
+          if git tag | grep -q "^v${{ env.NEW_TAG }}$"; then
+            if [ "${{ inputs.force_recreate }}" = "true" ]; then
+              echo "v${{ env.NEW_TAG }} exists — force_recreate enabled"
+            else
+              echo "v${{ env.NEW_TAG }} already exists. Use force_recreate to overwrite."
+              exit 1
+            fi
+          else
+            echo "Version is new"
+          fi
+
+      - name: Remove existing tag and release (force_recreate)
+        if: steps.should_skip.outputs.skip != 'true' && inputs.force_recreate == true
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          VERSION="v${{ env.NEW_TAG }}"
+          if git tag | grep -q "^${VERSION}$"; then
+            git push origin --delete "${VERSION}" || true
+            git tag -d "${VERSION}" || true
+            echo "Tag ${VERSION} removed"
+          fi
+          if gh release view "${VERSION}" >/dev/null 2>&1; then
+            gh release delete "${VERSION}" --yes
+            echo "Release ${VERSION} removed"
+          fi
+
+      # -----------------------------------------------------------------------
+      # Quality gate — the authoritative local gate, run in CI before releasing.
+      # -----------------------------------------------------------------------
+      - name: Run the full CI gate
+        if: steps.should_skip.outputs.skip != 'true'
+        run: pixi run ci
+
+      # -----------------------------------------------------------------------
+      # Changelog & tag (git-cliff via cliff.toml)
+      # -----------------------------------------------------------------------
+      - name: Create temporary tag for changelog generation
+        if: steps.should_skip.outputs.skip != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${{ env.NEW_TAG }}" -m "Release v${{ env.NEW_TAG }}"
+
+      - name: Generate CHANGELOG.md with git-cliff
+        if: steps.should_skip.outputs.skip != 'true'
+        run: |
+          pixi run changelog
+          echo "CHANGELOG.md updated for v${{ env.NEW_TAG }}"
+
+      - name: Commit changelog and recreate the tag
+        if: steps.should_skip.outputs.skip != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -d "v${{ env.NEW_TAG }}"
+          git add CHANGELOG.md
+          if git diff --staged --quiet; then
+            echo "No changelog changes to commit"
+          else
+            git commit -m "chore(release): update CHANGELOG.md for v${{ env.NEW_TAG }}"
+          fi
+          git tag -a "v${{ env.NEW_TAG }}" -m "Release v${{ env.NEW_TAG }}"
+          git push origin HEAD:main --tags
+
+      # -----------------------------------------------------------------------
+      # Build release artifacts: backend wheel + frontend bundle tarball.
+      # -----------------------------------------------------------------------
+      - name: Build backend wheel
+        if: steps.should_skip.outputs.skip != 'true'
+        run: |
+          pixi run build
+          echo "Backend wheel built"
+          ls -lh backend/dist/
+
+      - name: Build and archive the frontend bundle
+        if: steps.should_skip.outputs.skip != 'true'
+        run: |
+          pixi run fe-build
+          mkdir -p dist
+          ARCHIVE="dist/${{ github.event.repository.name }}-frontend-${{ env.NEW_TAG }}.tar.gz"
+          tar -czf "${ARCHIVE}" -C frontend dist
+          echo "Frontend archive created: ${ARCHIVE}"
+          ls -lh "${ARCHIVE}"
+
+      # -----------------------------------------------------------------------
+      # Release notes (extract this version's section from CHANGELOG.md)
+      # -----------------------------------------------------------------------
+      - name: Generate release notes
+        if: steps.should_skip.outputs.skip != 'true'
+        id: release_notes
+        run: |
+          VERSION="${{ env.NEW_TAG }}"
+          if [ -f CHANGELOG.md ]; then
+            CHANGELOG_SECTION=$(awk "/^## \\[${VERSION}\\]/{flag=1; next} /^## \\[/{flag=0} flag" CHANGELOG.md)
+            if [ -n "$CHANGELOG_SECTION" ]; then
+              {
+                echo "notes<<RELEASE_NOTES"
+                echo "## [${VERSION}] - $(date +%Y-%m-%d)"
+                echo ""
+                echo "${CHANGELOG_SECTION}"
+                echo ""
+                echo "---"
+                echo ""
+                echo "## Release Artifacts"
+                echo ""
+                echo "| Artifact | Description |"
+                echo "|---|---|"
+                echo "| \`*-frontend-*.tar.gz\` | Vite production bundle (serve with any static host or Nginx) |"
+                echo "| \`generate_sbom-*.whl\` | Backend Python wheel (install via \`pip\`) |"
+                echo ""
+                echo "Full changelog: [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)"
+                echo "RELEASE_NOTES"
+              } >> "$GITHUB_OUTPUT"
+            else
+              echo "notes=Release v${{ env.NEW_TAG }}" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "notes=Release v${{ env.NEW_TAG }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # -----------------------------------------------------------------------
+      # Publish the GitHub Release and upload artifacts
+      # -----------------------------------------------------------------------
+      - name: Create GitHub Release
+        if: steps.should_skip.outputs.skip != 'true'
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.NEW_TAG }}
+          name: Release v${{ env.NEW_TAG }}
+          body: ${{ steps.release_notes.outputs.notes }}
+          draft: false
+          prerelease: ${{ github.event.inputs.prerelease }}
+          files: |
+            backend/dist/*.whl
+            dist/${{ github.event.repository.name }}-frontend-${{ env.NEW_TAG }}.tar.gz
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Release summary
+        if: steps.should_skip.outputs.skip != 'true'
+        run: |
+          echo "Release created: ${{ steps.create_release.outputs.url }}"
+          ls -lh backend/dist/ dist/*-frontend-*.tar.gz 2>/dev/null || true

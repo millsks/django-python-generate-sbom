@@ -1847,3 +1847,96 @@ So that quality/security/Docker/release ergonomics match and the CI workflows ha
 **Given** stack differences,
 **When** adapting,
 **Then** Prettier-based tasks are omitted (we use oxlint) and Alembic tasks are replaced by our Django `migrate`. Complements Story 9.1 (CI calls `fmt-check`/`security`/`fe-typecheck`).
+
+---
+
+## Epic 10: UI Navigation & Authenticated Routing
+
+Today the SPA has routes but **no navigation UI** — users type `/register`, `/login`,
+`/upload`, etc. into the address bar. And while a `ProtectedRoute` redirects
+unauthenticated users to `/login`, it **loses the intended destination**, and the
+login page doesn't return the user there. This epic adds a persistent, auth-aware
+navigation shell and fixes the login round-trip. Frontend-only; reuses the existing
+`OrgSwitcher` (Story 2.2), `ThemeModeProvider` (Story 5.7), and `api/auth.ts`/`api/orgs.ts`.
+
+- FR-N1: A persistent navigation shell (top app bar) lets users reach every page
+  without typing URLs, with the active route indicated.
+- FR-N2: The nav is auth-aware (logged out → Login/Register; logged in → app links +
+  org switcher + theme toggle + a user menu with Logout) and role-aware (admin-only
+  links such as Members).
+- FR-N3: Unauthenticated access to a protected page redirects to Login while
+  preserving the intended destination.
+- FR-N4: After a successful login the user is returned to the originally requested
+  page (falling back to a sensible default).
+
+### Story 10.1: App Shell & Auth-Aware Navigation
+
+As a user,
+I want persistent navigation in the UI,
+So that I can move between pages by clicking instead of typing URLs.
+
+**Acceptance Criteria:**
+
+**Given** any page,
+**When** it renders,
+**Then** a persistent top app bar (shell layout wrapping the routes) shows the app
+name/home link and the navigation for the current auth state, with the active route
+visually indicated (FR-N1).
+
+**Given** I am logged out,
+**When** the nav renders,
+**Then** it shows **Login** and **Register** (and no protected links).
+
+**Given** I am logged in,
+**When** the nav renders,
+**Then** it shows the primary app links (Upload / New job, History, API Keys), the
+**org switcher**, the **theme toggle**, and a user menu with **Logout**; **Members**
+(and any other admin-only links) appear only for org admins (FR-N2).
+
+**Given** shared auth state is needed by both the nav and route protection,
+**When** implemented,
+**Then** a single source of truth (e.g. an auth context/provider or hook) exposes
+`authed` / current user / active org / `logout`, so the nav and `ProtectedRoute`
+don't each re-derive it independently.
+
+**Given** Logout,
+**When** I click it,
+**Then** the session ends (`api/auth.logout`) and I land on a public page (Home/Login)
+with the nav updated to the logged-out state.
+
+**Given** the shell,
+**When** it wraps the routes,
+**Then** `App.tsx` is refactored to render the pages inside the layout (nav +
+`<Outlet/>`), without changing the existing route paths.
+
+### Story 10.2: Redirect to Login and Back
+
+As a user,
+I want protected pages to send me to login and then back,
+So that I return to where I was headed after signing in.
+
+**Acceptance Criteria:**
+
+**Given** I am not authenticated,
+**When** I open a protected route (e.g. `/upload`, `/history`, `/results/:taskId`),
+**Then** I am redirected to `/login`, and the **intended destination is preserved**
+(router location state or a `?next=` param) (FR-N3).
+
+**Given** I then log in successfully,
+**When** the login completes,
+**Then** I am redirected to the **originally requested page** — not a fixed default
+(FR-N4).
+
+**Given** I navigate to `/login` directly (no intended destination),
+**When** I log in,
+**Then** I land on a sensible default (e.g. dashboard/upload).
+
+**Given** the redirect preserves state,
+**When** implemented,
+**Then** `ProtectedRoute` captures `location` on redirect and `LoginPage` reads it on
+success; the round-trip is covered by a test.
+
+**Given** I am already authenticated,
+**When** I visit `/login`,
+**Then** I am sent to the default authenticated page rather than shown the form again
+(optional but recommended).

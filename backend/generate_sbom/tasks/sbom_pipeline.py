@@ -1,14 +1,13 @@
-"""Celery SBOM pipeline: the orchestrated eight-phase chain (Story 3.5).
+"""Celery SBOM pipeline: the orchestrated eight-phase chain (Stories 3.5, 4.6).
 
 Canvas (solution-design.md §4.1): ``detect → resolve → generate → chord(group of
-four analysis tasks, aggregate) → persist``. The analysis group is stubbed here
-(no-op envelopes); Epic 4 replaces the four bodies without changing the shape.
+the four real analysis tasks, aggregate) → persist``. The analysis tasks live in
+``tasks/analysis.py`` and run on the ``analysis`` queue; Phases 1-3, aggregate, and
+8 run on ``pipeline`` (AD-4).
 
 ``task_id`` threads the whole chain — only keys/counts flow through the result
-backend, never blobs (AD-6). Phases 1-3, aggregate, and 8 run on the ``pipeline``
-queue; the analysis group runs on ``analysis`` (AD-4). All tasks are
-``@shared_task`` — no Celery app import (AD-10). Status is written only via
-``sbom/services.py`` (AD-12).
+backend, never blobs (AD-6). All tasks are ``@shared_task`` — no Celery app import
+(AD-10). Status is written only via ``sbom/services.py`` (AD-12).
 """
 
 from __future__ import annotations
@@ -24,23 +23,25 @@ from celery.exceptions import SoftTimeLimitExceeded
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 
+from generate_sbom.analysis.services.reports import write_report
 from generate_sbom.sbom import services
 from generate_sbom.sbom.models import SBOMJob
 from generate_sbom.sbom.parsers import PackageSpec
 from generate_sbom.sbom.selectors import get_job_by_task_id
+from generate_sbom.tasks.analysis import (
+    build_dependency_graph,
+    check_version_currency,
+    classify_licenses,
+    scan_vulnerabilities,
+)
 
 logger = structlog.get_logger()
 
 
-def _report(task: Any, task_id: str, progress: int, step: str, *, mirror: bool) -> None:
-    """Report progress via Celery state, and (for sequential phases) mirror it to the job.
-
-    Only sequential phases mirror to ``SBOMJob`` so the polled DB progress stays
-    monotonic; the parallel analysis stubs report Celery state only (``mirror=False``).
-    """
+def _report(task: Any, task_id: str, progress: int, step: str) -> None:
+    """Report progress via Celery state and mirror it to the job (keeps polled progress monotonic)."""
     task.update_state(state="PROGRESS", meta={"progress": progress, "current_step": step})
-    if mirror:
-        services.update_job_status(task_id, SBOMJob.Status.PROGRESS, progress=progress, current_step=step)
+    services.update_job_status(task_id, SBOMJob.Status.PROGRESS, progress=progress, current_step=step)
 
 
 @contextmanager
@@ -66,10 +67,10 @@ def _phase_guard(task_id: str, *, detected_format: str = "") -> Iterator[None]:
 
 
 def build_pipeline(task_id: str) -> chain:
-    """Assemble the eight-phase canvas for ``task_id`` (analysis group stubbed, AC #1/#2)."""
+    """Assemble the eight-phase canvas for ``task_id`` (real analysis group, Story 4.6)."""
     analysis_group = group(
         scan_vulnerabilities.s(),
-        analyze_licenses.s(),
+        classify_licenses.s(),
         build_dependency_graph.s(),
         check_version_currency.s(),
     )
@@ -96,7 +97,7 @@ def run_sbom_pipeline(task_id: str) -> None:
 def detect_and_parse_manifest(self: Any, task_id: str) -> dict[str, Any]:
     """Phase 1 (0-15%): confirm the job's manifest and detected format."""
     with _phase_guard(task_id):
-        _report(self, task_id, 5, "detect & parse manifest", mirror=True)
+        _report(self, task_id, 5, "detect & parse manifest")
         job = get_job_by_task_id(task_id)
         logger.info(
             "phase_detect_parse", task_id=str(task_id), org_id=job.org_id, detected_format=job.manifest.detected_format
@@ -109,7 +110,7 @@ def resolve_transitive_deps(self: Any, prev: dict[str, Any]) -> dict[str, Any]:
     """Phase 2 (15-40%): resolve the full transitive package list."""
     task_id = prev["task_id"]
     with _phase_guard(task_id, detected_format=prev.get("detected_format", "")):
-        _report(self, task_id, 20, "resolve dependencies", mirror=True)
+        _report(self, task_id, 20, "resolve dependencies")
         packages = services.resolve_job_packages(task_id)
         logger.info("phase_resolve", task_id=str(task_id), package_count=len(packages))
         return {"task_id": task_id, "packages": [asdict(pkg) for pkg in packages]}
@@ -126,7 +127,7 @@ def generate_sbom_document(self: Any, prev: dict[str, Any]) -> dict[str, Any]:
     task_id = prev["task_id"]
     job = get_job_by_task_id(task_id)
     with _phase_guard(task_id, detected_format=job.manifest.detected_format):
-        _report(self, task_id, 45, "generate SBOM document", mirror=True)
+        _report(self, task_id, 45, "generate SBOM document")
         packages = [PackageSpec(**spec) for spec in prev["packages"]]
         provenance = services.build_provenance(job.manifest)
         try:
@@ -152,14 +153,17 @@ def generate_sbom_document(self: Any, prev: dict[str, Any]) -> dict[str, Any]:
 
 @shared_task(queue="pipeline")  # type: ignore[untyped-decorator]
 def aggregate_analysis_results(results: list[dict[str, Any]], task_id: str) -> dict[str, Any]:
-    """Chord callback (pipeline queue): collect analysis envelopes and proceed to persist.
+    """Chord callback (pipeline queue): persist the four analysis reports, then proceed to persist.
 
-    Epic 4 merges the report summaries into ``summary_stats`` here; the stub just
-    records that the analysis block completed. Analysis-task failures never abort
-    the chord — each task always returns an envelope.
+    Writes/updates one ``AnalysisReport`` per envelope (failed reports included, with
+    their reason). Analysis-task failures never abort the chord — each task always
+    returns an envelope (FR-4.5).
     """
     services.update_job_status(task_id, SBOMJob.Status.PROGRESS, progress=95, current_step="aggregate analysis")
-    failed = [r["report_type"] for r in results if r.get("failed")]
+    job = get_job_by_task_id(task_id)
+    for envelope in results:
+        write_report(job, envelope)
+    failed = [envelope["report_type"] for envelope in results if envelope.get("failed")]
     logger.info("phase_aggregate", task_id=str(task_id), report_count=len(results), failed=failed)
     return {"task_id": task_id, "analysis": results}
 
@@ -168,7 +172,7 @@ def aggregate_analysis_results(results: list[dict[str, Any]], task_id: str) -> d
 def persist_artifacts(self: Any, task_id: str) -> dict[str, Any]:
     """Phase 8 (97-100%): finalize the job record — key, expiry, stats, SUCCESS (AD-6/12)."""
     with _phase_guard(task_id):
-        _report(self, task_id, 97, "persist artifacts", mirror=True)
+        _report(self, task_id, 97, "persist artifacts")
         job = get_job_by_task_id(task_id)
         if job.result_key is None:  # Phase 3 always records it; guard the invariant.
             services.update_job_status(task_id, SBOMJob.Status.FAILED, failure_reason="missing_artifact")
@@ -176,47 +180,3 @@ def persist_artifacts(self: Any, task_id: str) -> dict[str, Any]:
         services.finalize_job(task_id, job.result_key, job.summary_stats)
         logger.info("phase_persist", task_id=str(task_id), result_key=job.result_key)
         return {"task_id": task_id, "result_key": job.result_key}
-
-
-# --- Analysis group (analysis queue) — STUBS; Epic 4 replaces the bodies -------------
-
-_EMPTY_SUMMARY: dict[str, Any] = {}
-
-
-def _stub_envelope(report_type: str) -> dict[str, Any]:
-    """The standard analysis envelope with empty/false values (spine contract, AC #2)."""
-    return {
-        "report_type": report_type,
-        "artifact_key": None,
-        "summary": _EMPTY_SUMMARY,
-        "failed": False,
-        "failure_reason": None,
-    }
-
-
-@shared_task(bind=True, queue="analysis")  # type: ignore[untyped-decorator]
-def scan_vulnerabilities(self: Any, ctx: dict[str, Any]) -> dict[str, Any]:
-    """Phase 4 (55-80%) stub — Epic 4 scans the resolved packages for CVEs."""
-    _report(self, ctx["task_id"], 55, "vulnerability scan", mirror=False)
-    return _stub_envelope("vulnerability")
-
-
-@shared_task(bind=True, queue="analysis")  # type: ignore[untyped-decorator]
-def analyze_licenses(self: Any, ctx: dict[str, Any]) -> dict[str, Any]:
-    """Phase 5 (80-88%) stub — Epic 4 resolves license obligations."""
-    _report(self, ctx["task_id"], 80, "license analysis", mirror=False)
-    return _stub_envelope("license")
-
-
-@shared_task(bind=True, queue="analysis")  # type: ignore[untyped-decorator]
-def build_dependency_graph(self: Any, ctx: dict[str, Any]) -> dict[str, Any]:
-    """Phase 6 (88-93%) stub — Epic 4 builds the dependency graph."""
-    _report(self, ctx["task_id"], 88, "dependency graph", mirror=False)
-    return _stub_envelope("dependency_graph")
-
-
-@shared_task(bind=True, queue="analysis")  # type: ignore[untyped-decorator]
-def check_version_currency(self: Any, ctx: dict[str, Any]) -> dict[str, Any]:
-    """Phase 7 (93-97%) stub — Epic 4 checks how current each dependency is."""
-    _report(self, ctx["task_id"], 93, "version currency", mirror=False)
-    return _stub_envelope("version_currency")

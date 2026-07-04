@@ -1,6 +1,6 @@
 # Story 4.6: Analysis Group Integration & Partial-Failure Handling
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -105,8 +105,23 @@ Phases 4–7 tasks → `analysis` queue. `aggregate_analysis_results` and Phase 
 
 ### Agent Model Used
 
-### Debug Log References
+claude-opus-4-8[1m]
 
 ### Completion Notes List
 
+- **Real analysis group (AC #1/#2):** `build_pipeline` in `tasks/sbom_pipeline.py` now assembles `group(scan_vulnerabilities, classify_licenses, build_dependency_graph, check_version_currency) | aggregate_analysis_results` from the real tasks in `tasks/analysis.py`. The Epic 3 no-op stubs + `_stub_envelope` were removed; the canvas shape is unchanged (verified in the shape test).
+- **`report_type` reconciled:** real envelopes use `vuln`/`license`/`graph`/`version` (matching `AnalysisReport.ReportType`); the old stub names (`vulnerability`, `dependency_graph`, `version_currency`) are gone.
+- **Chord callback (AC #3):** `aggregate_analysis_results(results, task_id)` upserts one `AnalysisReport` per envelope via `write_report` (changed from `create` to `update_or_create`, keyed on `(job, report_type)`, so a chord re-run overwrites rather than hitting the unique constraint), then the chain proceeds to Phase 8 on the `pipeline` queue.
+- **Partial failure (AC #4/#5):** analysis task failures return a `failed` envelope (never raise), so the job still reaches SUCCESS with a downloadable SBOM; failed reports carry `failed=True` + `failure_reason`, successful ones stay intact.
+- **Failed-report endpoints (AC #6):** the report endpoints now distinguish a *failed* report (404, `code=report_failed`, `failure_reason` in the body) from a *missing* one (404, `code=not_ready`) — via a shared `_unavailable` helper.
+- **Integration (AC #7):** full-pipeline all-success (four valid reports + downloadable SBOM) and mixed-failure (vuln fails → SBOM still downloadable, other three intact, failed endpoint conveys the reason) — driven as a manual phase sequence (the eager chord needs a live result backend; analysis *services* patched so no network).
+- **Epic 4 complete:** the pipeline now runs end to end with all four real analysis reports.
+- Gate: `pixi run ci` exits 0 — 177 tests, 95.36% coverage.
+
 ### File List
+
+- backend/generate_sbom/tasks/sbom_pipeline.py (real analysis group; report-persisting callback; stubs removed)
+- backend/generate_sbom/analysis/services/reports.py (write_report → update_or_create)
+- backend/generate_sbom/analysis/views.py (_unavailable helper; failed-report reason)
+- backend/tests/unit/test_pipeline_orchestration.py, test_analysis_reports.py (updated)
+- backend/tests/integration/test_analysis_integration.py (new), test_pipeline_orchestration.py (updated)

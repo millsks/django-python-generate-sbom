@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 import structlog
+from django.conf import settings
 from django.utils import timezone
 
 from generate_sbom.manifests.models import ManifestUpload
@@ -34,6 +35,8 @@ __all__ = [
     "estimate_seconds",
     "finalize_job",
     "generate_sbom_document",
+    "mark_stale_job_timed_out",
+    "record_generation",
     "resolve_job_packages",
     "sbom_extension",
     "update_job_status",
@@ -74,6 +77,33 @@ def update_job_status(
     SBOMJob.objects.filter(task_id=task_id).update(
         status=status, progress=progress, current_step=current_step, failure_reason=failure_reason
     )
+
+
+def record_generation(task_id: str, result_key: str, package_count: int) -> None:
+    """Store the generated artifact key + package count on the job (Phase 3, pre-SUCCESS).
+
+    Not a status write: the blob is keyed here so Phase 8 finalizes by ``task_id``
+    alone (only the key threads through the chain, never the blob — AD-6).
+    """
+    SBOMJob.objects.filter(task_id=task_id).update(
+        result_key=result_key, summary_stats={"total_packages": package_count}
+    )
+
+
+def mark_stale_job_timed_out(job: SBOMJob) -> bool:
+    """Mark a still-running job FAILED (hard_timeout) if it outlived the hard limit (FR-4.6).
+
+    A hard timeout force-kills the worker, so the task cannot mark itself; a status
+    poll or cleanup sweep detects the stale PENDING/PROGRESS job instead.
+    """
+    if job.status not in (SBOMJob.Status.PENDING, SBOMJob.Status.PROGRESS):
+        return False
+    hard_limit = timedelta(seconds=settings.CELERY_TASK_TIME_LIMIT)
+    if timezone.now() - job.created_at <= hard_limit:
+        return False
+    update_job_status(str(job.task_id), SBOMJob.Status.FAILED, failure_reason="hard_timeout")
+    logger.warning("job_hard_timeout", task_id=str(job.task_id), org_id=job.org_id)
+    return True
 
 
 def finalize_job(task_id: str, result_key: str, summary_stats: dict[str, object]) -> None:

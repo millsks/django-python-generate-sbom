@@ -1,6 +1,6 @@
 # Story 3.5: Pipeline Orchestration, Progress & Timeout Handling
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -122,8 +122,29 @@ Progress via `task.update_state(state='PROGRESS', meta={'progress': N, 'current_
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
+
+- Eager chords (`task_always_eager`) still reach the configured result backend (Redis) to synchronize the chord counter — an in-process end-to-end chord run isn't available without live infra. The canvas is validated **structurally** (shape test on `build_pipeline`) and **behaviorally** (a full phase-by-phase sequence run in the integration test); Celery owns chord-execution correctness.
 
 ### Completion Notes List
 
+- **Canvas** (`build_pipeline`): `chain(detect.si(task_id) → resolve.s → generate.s → chord(group(4 analysis stubs), aggregate.s(task_id)) → persist.si(task_id))`. Celery folds `persist` into the chord body (`aggregate | persist`) — verified in the shape test. `task_id` threads the whole chain; only keys/counts flow through the result backend, never blobs (AD-6, see [[phase3-writes-blob-not-phase8]]).
+- **Analysis group stubbed** (AC #2): four no-op tasks on the `analysis` queue, each returning the standard envelope `{report_type, artifact_key, summary, failed, failure_reason}` with empty/false values. `aggregate_analysis_results` collects them and proceeds. Epic 4 replaces the four bodies without changing the shape.
+- **Progress** (AC #3): sequential phases mirror progress to `SBOMJob` (monotonic 5→20→45→95→97→100); the parallel stubs report Celery state only (55/80/88/93) so concurrent updates can't make the polled DB progress regress.
+- **Soft timeout** (AC #4/#6): `_phase_guard` context manager catches `SoftTimeLimitExceeded` → `FAILED` reason `soft_timeout`, no partial SBOM. `celery.exceptions` import is not a Celery app import (AD-10 ok).
+- **Hard timeout** (AC #5/#6): a force-killed worker can't mark itself, so `mark_stale_job_timed_out` (run on status poll) fails a still-PENDING/PROGRESS job older than `CELERY_TASK_TIME_LIMIT` with reason `hard_timeout`. Both reasons are surfaced via a new `failure_reason` field in the status response.
+- **Failure logging** (AC #7): `_phase_guard` logs the full traceback + manifest format on any phase failure.
+- **Refinement of Story 3.4 tasks:** Phase 3 now records the artifact key + package count on the job (`services.record_generation`), and Phase 8 (`persist_artifacts`) finalizes by `task_id` alone (reads the DB) rather than receiving a `prev` dict — so the group in the middle of the chain doesn't have to forward generation context. Updated the two affected Story 3.4 tests.
+- Gate: `pixi run ci` exits 0 — 128 tests, 95.54% coverage (`sbom_pipeline.py` 99%).
+
 ### File List
+
+- backend/generate_sbom/tasks/sbom_pipeline.py (chain assembly, phases, stubs, timeout guard)
+- backend/generate_sbom/sbom/services.py (record_generation, mark_stale_job_timed_out)
+- backend/generate_sbom/sbom/views.py (hard-timeout sweep + failure_reason in status)
+- backend/tests/unit/test_pipeline_orchestration.py (new)
+- backend/tests/integration/test_pipeline_orchestration.py (new)
+- backend/tests/unit/test_sbom_generation.py (persist now keyed by task_id)
+- backend/tests/integration/test_sbom_storage.py (persist now keyed by task_id)

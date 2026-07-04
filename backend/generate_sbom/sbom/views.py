@@ -28,7 +28,7 @@ from generate_sbom.users.auth import get_request_org
 from .models import SBOMJob
 from .selectors import get_job
 from .serializers import GenerateJobSerializer
-from .services import OUTPUT_FORMAT_MAP, create_job, estimate_seconds
+from .services import OUTPUT_FORMAT_MAP, create_job, estimate_seconds, mark_stale_job_timed_out
 
 _NO_ACTIVE_ORG = {"error": "No active org.", "code": "no_active_org"}
 _ACTIVE_STATUSES = [SBOMJob.Status.PENDING, SBOMJob.Status.PROGRESS]
@@ -116,6 +116,9 @@ class StatusJobView(APIView):
                 {"error": "Job not found.", "code": "not_found"},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        # A hard timeout force-kills the worker, so the poll detects the stale job (FR-4.6).
+        if mark_stale_job_timed_out(job):
+            job = get_job(org, task_id)
         result_url = f"/api/v1/sbom/result/{job.task_id}/" if job.status == SBOMJob.Status.SUCCESS else None
         return Response(
             {
@@ -123,6 +126,7 @@ class StatusJobView(APIView):
                 "status": job.status,
                 "progress": job.progress,
                 "current_phase": job.current_step,
+                "failure_reason": job.failure_reason,
                 "result_url": result_url,
                 "created_at": job.created_at.isoformat(),
                 "completed_at": job.completed_at.isoformat() if job.completed_at else None,

@@ -1,6 +1,6 @@
 # Story 3.4: SBOM Document Generation & Persistence (Phases 3 & 8)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

@@ -24,7 +24,7 @@ development_status:
   3-1-manifest-upload-and-format-detection: done
   3-2-job-submission-concurrency-gate-and-status-api: done
   3-3-manifest-parsers-and-transitive-resolution: done
-  3-4-sbom-document-generation-and-persistence: review
+  3-4-sbom-document-generation-and-persistence: done
   3-5-pipeline-orchestration-progress-and-timeout-handling: ready-for-dev
 
   epic-4: ready-for-dev

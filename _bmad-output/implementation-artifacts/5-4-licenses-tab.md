@@ -1,6 +1,6 @@
 # Story 5.4: Licenses Tab
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -74,8 +74,19 @@ Depends on Story 5.1 (shell + api layer) and consumes the Epic 4 Story 4.3 licen
 
 ### Agent Model Used
 
-### Debug Log References
+claude-opus-4-8[1m]
 
 ### Completion Notes List
 
+- **Frontend-only:** the license endpoint already serves inline JSON (Story 5.3). `LicensesTab` fetches `getLicenses` and renders the backend's ordered `tiers` (Strong Copyleft → Weak Copyleft → Unknown → Permissive) as MUI accordions, each labeled with its attention signal (Attention required / Review recommended / Legal review needed / Use freely) and package count.
+- **Collapse (AC #3):** each accordion `defaultExpanded={packages.length > 0}` — empty tiers start collapsed, populated ones expanded.
+- **PyPI links (AC #2):** each package name links to `https://pypi.org/project/{name}/` (new tab). Used a unicode `▾` expand icon to avoid adding `@mui/icons-material`.
+- **Failure notice (AC #4):** shared `TabFailureNotice` on `report_failed`.
+- Wired into `ResultsPage` (tab index 2). Lazy-mounted via the shell.
+- **Tests:** tier order, empty-collapsed / populated-expanded, PyPI links, failure notice.
+- Gate: `pixi run ci` exits 0 — backend 177 tests, frontend 16 tests.
+
 ### File List
+
+- frontend/src/components/LicensesTab.tsx (new) + LicensesTab.test.tsx (new)
+- frontend/src/pages/ResultsPage.tsx (wires the Licenses tab)

@@ -1,6 +1,6 @@
 # Story 9.7: Adopt Beneficial Pixi Tasks from idp-app
 
-Status: ready-for-dev
+Status: review
 
 <!-- Sources idp-app/pixi.toml [tasks]; adopt the useful ones adapted to this repo's stack. -->
 
@@ -43,6 +43,20 @@ Source: `idp-app/pixi.toml` `[tasks]`. **Skip** what doesn't fit our stack: idp-
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Completion Notes List
 
+- Added to `pixi.toml`: `fmt-check` (ruff format --check), `lint-fix` (ruff check --fix), `security` (bandit, medium+), `cov-html` (HTML coverage), `fe-typecheck` (local `tsc -b`, no registry access), `fe-security` (`npm audit --audit-level=high`), `flower` (Celery Flower on :5555), `hooks-update` (pre-commit autoupdate), `changelog-unreleased` (git cliff --unreleased --prepend), and docker convenience wrappers (`docker-build/up/down/down-v/logs/ps/migrate/shell`) adapted to this repo's `web` service + `manage.py migrate`.
+- New dev dependencies (flagged): **bandit** and **flower** under `[feature.dev.dependencies]` (both conda-forge).
+- **Skipped** idp-app's Prettier `format-check` (we use oxlint) and its Alembic `docker-migrate` (we use Django `migrate`).
+- `security` gates on medium+ (`-ll`) and reads `[tool.bandit]` from `pyproject.toml`, which `skips = ["B314"]`: the two `ElementTree.fromstring` calls in `sbom/document.py` parse the tool's OWN generated CycloneDX XML (trusted, not user input — documented in-line), so the XXE warning is a false positive. Revisit if untrusted XML parsing is added.
+- `fe-security` gates on high/critical so the two pre-existing moderate exceljs→uuid advisories (client-only xlsx generator) don't fail the task; they are still listed.
+- Did **not** wire `security`/`fmt-check`/`fe-typecheck` into the `ci` umbrella — that coordination is Story 9.1's. `pixi run ci` unchanged and green.
+- Verified runnable tasks exit 0: `security`, `fmt-check`, `fe-typecheck`, `fe-security`, `cov-html`; `flower` importable (`celery -A config.celery_app flower`); `git cliff`/`pre-commit`/`docker compose` wrappers are thin pass-throughs (not executed here).
+
 ### File List
+
+- `pixi.toml` (new tasks + bandit/flower dev deps)
+- `pixi.lock` (regenerated)
+- `backend/pyproject.toml` (`[tool.bandit]` skip B314)

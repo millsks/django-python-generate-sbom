@@ -1516,3 +1516,82 @@ So that I can inspect it without downloading and opening a file.
 **Given** a cross-org or unknown job,
 **When** the SBOM content endpoint is called,
 **Then** it returns `404` (AD-2).
+
+---
+
+### Epic 8 addendum — Package ecosystem & registry links
+
+Follow-on to the version-currency work: surface whether each package comes from
+**PyPI** or **Conda**, and link it to the right registry. The source is per-package
+(pixi and conda manifests mix both), so it is captured at resolution time on
+`PackageSpec` — the same shape as the direct/transitive flag (Story 8.3).
+
+- FR-E6: Resolution captures each package's ecosystem (`pypi` | `conda`), and the
+  version-currency report exposes it per package.
+- FR-E7: The Version Currency tab marks each package PyPI/Conda and links its name
+  to the registry detail page — pypi.org for PyPI, prefix.dev's conda-forge channel
+  explorer for Conda.
+
+Product decisions (from the requirements session): Conda `latest`/currency stays
+PyPI-derived for now (flag + link only, no new Conda data source); Conda links
+default to the **conda-forge** channel.
+
+### Story 8.8: Capture Package Ecosystem (PyPI/Conda) During Resolution
+
+As a user,
+I want each resolved package flagged as PyPI or Conda,
+So that the version-currency report can link it to the correct registry.
+
+**Acceptance Criteria:**
+
+**Given** the resolved `PackageSpec`,
+**When** a manifest is resolved,
+**Then** each spec carries an `ecosystem` field with value `pypi` or `conda` (default `pypi`) (FR-E6).
+
+**Given** `requirements.txt` or `pyproject.toml`,
+**When** resolved,
+**Then** every package is tagged `pypi`.
+
+**Given** `pixi.lock`,
+**When** resolved,
+**Then** each package is tagged from the lock's own conda-vs-pypi kind (conda packages `conda`, pypi packages `pypi`) — the clean per-package case.
+
+**Given** `conda environment.yml`,
+**When** resolved,
+**Then** solver-resolved packages are tagged `conda` and any declared `pip:` entries `pypi` (best-effort).
+
+**Given** `pixi.toml`,
+**When** resolved,
+**Then** packages declared under `[dependencies]` are tagged `conda` and `[pypi-dependencies]` plus transitive packages `pypi` (documented best-effort, since resolution flattens via `uv`).
+
+**Given** the resolved list threads through the Celery chain,
+**When** it passes between phases,
+**Then** `ecosystem` travels with it (AD-6) and the version-currency report entry includes it.
+
+### Story 8.9: Link Packages to PyPI / prefix.dev in the Version Currency Tab
+
+As a user,
+I want each package in the version-currency report marked PyPI/Conda and linked to its registry page,
+So that I can jump straight to the package details.
+
+**Acceptance Criteria:**
+
+**Given** the Version Currency tab,
+**When** it renders a package,
+**Then** its ecosystem (`pypi`/`conda`) is shown as a small source indicator (FR-E7).
+
+**Given** a PyPI package,
+**When** its row renders,
+**Then** the package name links to `https://pypi.org/project/{name}/{version}/`, opening in a new tab safely (`rel="noopener"`).
+
+**Given** a Conda package,
+**When** its row renders,
+**Then** the package name links to `https://prefix.dev/channels/conda-forge/packages/{name}`, opening in a new tab safely.
+
+**Given** a package with a missing/unexpected ecosystem,
+**When** its row renders,
+**Then** it degrades gracefully — the name is plain text, no broken link.
+
+**Given** the link targets,
+**When** they are built,
+**Then** the URL is constructed from the report's `ecosystem` + name/version (no new network call; AD-5).

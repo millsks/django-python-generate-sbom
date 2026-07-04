@@ -64,6 +64,20 @@ def _latest_version(session: http.CachedLimiterSession, name: str) -> str | None
     return version
 
 
+def _is_on_lts(installed: str, lts: str | None) -> bool | None:
+    """Whether ``installed`` is on the tracked LTS release series.
+
+    Returns ``None`` when no LTS is tracked for the package (untracked, not "no"),
+    ``True`` when the installed major.minor matches the LTS series, else ``False``.
+    """
+    if not lts:
+        return None
+    try:
+        return Version(installed).release[:2] == Version(lts).release[:2]
+    except InvalidVersion:
+        return None
+
+
 def _classify_currency(installed: str, latest: str | None, lts: str | None) -> str:
     """Classify currency into current / behind-1 / behind-2+ / unknown (FR-5.4)."""
     if latest is None:
@@ -106,6 +120,15 @@ def classify(
         lts = registry.get(_normalize(pkg.name))
         currency = _classify_currency(pkg.version, latest, lts)
         counts[currency] += 1
-        entries.append({"name": pkg.name, "installed": pkg.version, "latest": latest, "currency": currency, "lts": lts})
+        entries.append(
+            {
+                "name": pkg.name,
+                "installed": pkg.version,
+                "latest": latest,
+                "currency": currency,
+                "lts": lts,
+                "on_lts": _is_on_lts(pkg.version, lts),
+            }
+        )
 
     return {"packages": entries, "summary": {klass: counts.get(klass, 0) for klass in CURRENCY_CLASSES}}

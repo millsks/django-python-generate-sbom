@@ -70,6 +70,31 @@ def test_lts_series_counts_as_current() -> None:
     entry = report["packages"][0]
     assert entry["currency"] == "current"
     assert entry["lts"] == "4.2"
+    assert entry["on_lts"] is True
+
+
+@responses.activate
+def test_on_lts_flag_reflects_installed_series() -> None:
+    # Same package, tracked LTS 4.2: on the LTS series → True; off it → False.
+    _mock_latest("django", "5.2.0")
+    report = versions_service.classify(
+        [PackageSpec(name="django", version="5.1.0")],
+        session=_session(),
+        lts_registry={"django": "4.2"},
+    )
+    entry = report["packages"][0]
+    assert entry["lts"] == "4.2"
+    assert entry["on_lts"] is False
+
+
+@responses.activate
+def test_on_lts_is_none_when_untracked() -> None:
+    # No LTS tracked for the package → on_lts is None (untracked, not a "no").
+    _mock_latest("pkg", "1.0.0")
+    report = versions_service.classify([PackageSpec(name="pkg", version="1.0.0")], session=_session(), lts_registry={})
+    entry = report["packages"][0]
+    assert entry["lts"] is None
+    assert entry["on_lts"] is None
 
 
 @responses.activate

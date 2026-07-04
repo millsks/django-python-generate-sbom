@@ -1147,6 +1147,24 @@ So that I can see which dependencies are outdated and by how much.
 **When** I view the tab,
 **Then** a failure notice with the reason is shown (FR-6.7).
 
+### Story 5.7: Light/Dark Theme Toggle (app-wide)
+
+As a user,
+I want to switch the interface between light and dark themes,
+So that I can read the UI comfortably.
+
+Added 2026-07-03 (Kevin): the SPA has no MUI ThemeProvider, so the UI is stuck on a hard-to-read default. App-wide; can be pulled forward ahead of the rest of Epic 5 since it affects pages already built in Epics 2–3.
+
+**Acceptance Criteria:**
+
+**Given** the app loads with no stored preference,
+**When** it renders,
+**Then** it follows the OS `prefers-color-scheme` via a MUI `ThemeProvider` + `CssBaseline`, and all fields/text are legible in both modes.
+
+**Given** a theme toggle in the app chrome,
+**When** I switch light↔dark,
+**Then** the whole UI updates immediately and my choice persists (localStorage) across reloads with no wrong-theme flash on load.
+
 ---
 
 ## Epic 6: Job History Dashboard

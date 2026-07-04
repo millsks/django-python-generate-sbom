@@ -75,6 +75,12 @@ export function getGraph(taskId: string): Promise<GraphReport> {
   return apiRequest<GraphReport>(`${base(taskId)}/graph/`)
 }
 
+// The graph SVG is a genuine file download (303 → presigned URL); the browser
+// follows the redirect when navigated to this path.
+export function graphSvgDownloadUrl(taskId: string): string {
+  return `/api/v1${base(taskId)}/graph/download/`
+}
+
 export function getVersions(taskId: string): Promise<VersionReport> {
   return apiRequest<VersionReport>(`${base(taskId)}/versions/`)
 }

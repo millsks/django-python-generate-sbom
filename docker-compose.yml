@@ -17,6 +17,8 @@ services:
         condition: service_started
       minio:
         condition: service_started
+      createbuckets:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "pixi", "run", "curl", "-f", "http://localhost:8000/health/"]
       interval: 30s
@@ -34,6 +36,8 @@ services:
         condition: service_started
       minio:
         condition: service_started
+      createbuckets:
+        condition: service_completed_successfully
 
   worker-analysis:
     build: .
@@ -46,6 +50,8 @@ services:
         condition: service_started
       minio:
         condition: service_started
+      createbuckets:
+        condition: service_completed_successfully
 
   beat:
     build: .
@@ -89,6 +95,22 @@ services:
       - "9001:9001"
     volumes:
       - minio-data:/data
+
+  # One-shot: create the artifact bucket so the first manifest/artifact write
+  # doesn't fail with NoSuchBucket. Waits for MinIO, then exits 0 (idempotent).
+  createbuckets:
+    image: minio/mc
+    env_file: .env
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 \"$$MINIO_ROOT_USER\" \"$$MINIO_ROOT_PASSWORD\"; do
+        echo 'waiting for minio...'; sleep 1;
+      done;
+      mc mb --ignore-existing local/\"$$AWS_STORAGE_BUCKET_NAME\";
+      "
 
 volumes:
   postgres-data:

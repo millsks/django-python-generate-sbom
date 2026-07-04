@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import Link from '@mui/material/Link'
 import MenuItem from '@mui/material/MenuItem'
@@ -19,6 +20,8 @@ import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { ApiError } from '../api/client'
 import { getVulnerabilities, type VulnerabilityReport } from '../api/reports'
+import { buildWorkbook, downloadWorkbook } from '../excelExport'
+import { vulnerabilitiesSheet } from '../reportSheets'
 import { TabFailureNotice } from './TabFailureNotice'
 
 const SEVERITY_RANK: Record<string, number> = { Critical: 4, High: 3, Medium: 2, Low: 1, Unknown: 0 }
@@ -107,23 +110,31 @@ export function VulnerabilitiesTab({ taskId, totalPackages }: { taskId: string; 
     return <Alert severity="success">No vulnerabilities found in {totalPackages} packages.</Alert>
   }
 
+  // Export covers the FULL report (all severities), independent of the active filter.
+  const exportExcel = () => downloadWorkbook(buildWorkbook([vulnerabilitiesSheet(report)]), 'vulnerabilities.xlsx')
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <TextField
-        select
-        size="small"
-        label="Severity"
-        value={severity}
-        onChange={(e) => setSeverity(e.target.value)}
-        sx={{ maxWidth: 200 }}
-      >
-        <MenuItem value="All">All</MenuItem>
-        {SEVERITIES.map((s) => (
-          <MenuItem key={s} value={s}>
-            {s}
-          </MenuItem>
-        ))}
-      </TextField>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+        <TextField
+          select
+          size="small"
+          label="Severity"
+          value={severity}
+          onChange={(e) => setSeverity(e.target.value)}
+          sx={{ maxWidth: 200 }}
+        >
+          <MenuItem value="All">All</MenuItem>
+          {SEVERITIES.map((s) => (
+            <MenuItem key={s} value={s}>
+              {s}
+            </MenuItem>
+          ))}
+        </TextField>
+        <Button size="small" variant="outlined" onClick={exportExcel}>
+          Export to Excel
+        </Button>
+      </Box>
 
       <TableContainer>
         <Table size="small" aria-label="vulnerabilities">

@@ -1,4 +1,4 @@
-# cliff.toml — git-cliff changelog configuration for the IDP App monorepo.
+# cliff.toml — git-cliff changelog configuration for django-python-generate-sbom.
 # Run: pixi run changelog
 # Docs: https://git-cliff.org/docs/configuration
 
@@ -31,7 +31,7 @@ footer = """
 trim = true
 postprocessors = [
   # Uncomment to linkify issue numbers:
-  # { pattern = '\\((\\w+\\s)?#([0-9]+)\\)', replace = "([#${2}](https://github.com/millsks/idp-app/issues/${2}))" },
+  # { pattern = '\\((\\w+\\s)?#([0-9]+)\\)', replace = "([#${2}](https://github.com/millsks/django-python-generate-sbom/issues/${2}))" },
 ]
 
 [git]

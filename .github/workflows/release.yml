@@ -1,7 +1,7 @@
 name: Release
 
-# Scheduled + on-demand releases. Ported from idp-app's release workflow and adapted
-# to this repo's pixi umbrella toolchain (git-cliff via `pixi run changelog`, the
+# Scheduled + on-demand releases, built on this repo's pixi umbrella toolchain
+# (git-cliff via `pixi run changelog`, the
 # `pixi run ci` gate, a backend wheel + a frontend bundle — no conda/PyPI publishing).
 #
 # Operator prerequisite: releases push a tag/commit to `main` under branch protection,

@@ -14,12 +14,21 @@ const mockGet = getVersions as Mock
 
 const REPORT = {
   packages: [
-    { name: 'alpha', installed: '1.0', latest: '1.1', currency: 'current', lts: null },
-    { name: 'bravo', installed: '2.0', latest: '5.0', currency: 'behind-2+', lts: null },
-    { name: 'charlie', installed: '3.0', latest: '3.1', currency: 'behind-1', lts: null },
-    { name: 'delta', installed: '4.0', latest: null, currency: 'unknown', lts: null },
+    { name: 'alpha', installed: '1.0', latest: '1.1', currency: 'current', lts: null, on_lts: null },
+    { name: 'bravo', installed: '2.0', latest: '5.0', currency: 'behind-2+', lts: null, on_lts: null },
+    { name: 'charlie', installed: '3.0', latest: '3.1', currency: 'behind-1', lts: null, on_lts: null },
+    { name: 'delta', installed: '4.0', latest: null, currency: 'unknown', lts: null, on_lts: null },
   ],
   summary: { current: 1, 'behind-1': 1, 'behind-2+': 1, unknown: 1 },
+}
+
+const LTS_REPORT = {
+  packages: [
+    { name: 'django', installed: '4.2.1', latest: '5.2.0', currency: 'current', lts: '4.2', on_lts: true },
+    { name: 'flask', installed: '5.1.0', latest: '5.2.0', currency: 'behind-1', lts: '4.2', on_lts: false },
+    { name: 'requests', installed: '2.0', latest: '2.1', currency: 'current', lts: null, on_lts: null },
+  ],
+  summary: { current: 2, 'behind-1': 1, 'behind-2+': 0, unknown: 0 },
 }
 
 async function dataRows() {
@@ -47,6 +56,22 @@ describe('VersionsTab', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Status' }))
     const rows = await dataRows()
     expect(within(rows[0]).getByText('delta')).toBeInTheDocument() // unknown, lowest rank
+  })
+
+  it('shows LTS status per package: on-LTS, off-LTS target, and untracked', async () => {
+    mockGet.mockResolvedValue(LTS_REPORT)
+    render(<VersionsTab taskId="t" />)
+
+    const table = await screen.findByRole('table')
+    const rowFor = (name: string) =>
+      within(table)
+        .getAllByRole('row')
+        .find((r) => within(r).queryByText(name))!
+
+    expect(within(rowFor('django')).getByText('On LTS (4.2)')).toBeInTheDocument()
+    expect(within(rowFor('flask')).getByText('LTS 4.2 (target)')).toBeInTheDocument()
+    // Untracked package shows a dash, not an LTS chip.
+    expect(within(rowFor('requests')).queryByText(/LTS/)).not.toBeInTheDocument()
   })
 
   it('renders the failure notice when the report failed', async () => {

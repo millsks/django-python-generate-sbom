@@ -34,6 +34,18 @@ function badge(currency: string): { label: string; color: 'success' | 'warning' 
   return { label: currency === 'behind-2+' ? 'Behind 2+' : 'Behind 1', color: 'warning' }
 }
 
+// The LTS cell shows the tracked LTS series and whether the installed version is on
+// it: green "On LTS (x.y)" when it is, an outlined "LTS x.y (target)" when it isn't,
+// and a dash when no LTS is tracked for the package.
+function LtsCell({ lts, onLts }: { lts: string | null; onLts: boolean | null }) {
+  if (!lts) return <>—</>
+  return onLts ? (
+    <Chip size="small" label={`On LTS (${lts})`} color="success" />
+  ) : (
+    <Chip size="small" variant="outlined" color="info" label={`LTS ${lts} (target)`} />
+  )
+}
+
 function compare(a: VersionEntry, b: VersionEntry, orderBy: Column): number {
   if (orderBy === 'currency') return (CURRENCY_RANK[a.currency] ?? 0) - (CURRENCY_RANK[b.currency] ?? 0)
   return String(a[orderBy] ?? '').localeCompare(String(b[orderBy] ?? ''))
@@ -97,6 +109,7 @@ export function VersionsTab({ taskId }: { taskId: string }) {
                   </TableSortLabel>
                 </TableCell>
               ))}
+              <TableCell>LTS</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -109,6 +122,9 @@ export function VersionsTab({ taskId }: { taskId: string }) {
                   <TableCell>{row.latest ?? '—'}</TableCell>
                   <TableCell>
                     <Chip size="small" label={b.label} color={b.color} />
+                  </TableCell>
+                  <TableCell>
+                    <LtsCell lts={row.lts} onLts={row.on_lts} />
                   </TableCell>
                 </TableRow>
               )

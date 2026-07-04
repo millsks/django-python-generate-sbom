@@ -55,7 +55,8 @@ export interface VersionEntry {
   installed: string
   latest: string | null
   currency: string
-  lts: string | null
+  lts: string | null // the tracked LTS series for this package, or null if untracked
+  on_lts: boolean | null // whether the installed version is on that LTS series; null if untracked
 }
 
 export interface VersionReport {

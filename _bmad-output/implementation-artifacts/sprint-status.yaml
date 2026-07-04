@@ -84,3 +84,8 @@ development_status:
   9-5-stale-issue-and-pr-management: ready-for-dev
   9-6-label-automation: ready-for-dev
   9-7-adopt-beneficial-pixi-tasks: ready-for-dev
+
+  # Epic 10 — UI Navigation & Authenticated Routing (frontend).
+  epic-10: ready-for-dev
+  10-1-app-shell-and-auth-aware-navigation: ready-for-dev
+  10-2-redirect-to-login-and-back: ready-for-dev

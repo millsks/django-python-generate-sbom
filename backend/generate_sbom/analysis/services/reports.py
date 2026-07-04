@@ -33,12 +33,19 @@ def make_envelope(
 
 
 def write_report(job: SBOMJob, envelope: dict[str, Any]) -> AnalysisReport:
-    """Persist an ``AnalysisReport`` row from a chord envelope (used by the 4.6 callback)."""
-    return AnalysisReport.objects.create(
+    """Upsert an ``AnalysisReport`` row from a chord envelope (used by the 4.6 callback).
+
+    Keyed on (job, report_type) so a chord re-run overwrites rather than conflicting
+    with the unique constraint.
+    """
+    report, _ = AnalysisReport.objects.update_or_create(
         job=job,
         report_type=envelope["report_type"],
-        artifact_key=envelope["artifact_key"],
-        summary=envelope["summary"],
-        failed=envelope["failed"],
-        failure_reason=envelope["failure_reason"],
+        defaults={
+            "artifact_key": envelope["artifact_key"],
+            "summary": envelope["summary"],
+            "failed": envelope["failed"],
+            "failure_reason": envelope["failure_reason"],
+        },
     )
+    return report

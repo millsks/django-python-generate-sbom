@@ -25,7 +25,7 @@ PIXI_LOCK = (
 )
 ANALYSIS_TASKS = (
     pipeline.scan_vulnerabilities,
-    pipeline.analyze_licenses,
+    pipeline.classify_licenses,
     pipeline.build_dependency_graph,
     pipeline.check_version_currency,
 )
@@ -63,7 +63,15 @@ def test_full_pipeline_sequence_succeeds(settings: pytest.FixtureRequest, tmp_pa
         real_update(task_id, status, **kwargs)  # type: ignore[arg-type]
 
     started = time.perf_counter()
-    with patch(_NO_UPDATE), patch.object(services, "update_job_status", side_effect=_record):
+    with (
+        patch(_NO_UPDATE),
+        patch.object(services, "update_job_status", side_effect=_record),
+        # Patch the analysis services so no network is needed (behavior covered in 4.6).
+        patch("generate_sbom.analysis.services.vulnerability.scan", return_value={"summary": {}}),
+        patch("generate_sbom.analysis.services.license.classify", return_value={"summary": {}}),
+        patch("generate_sbom.analysis.services.graph.build", return_value=({"nodes": [], "edges": []}, b"<svg/>")),
+        patch("generate_sbom.analysis.services.versions.classify", return_value={"summary": {}}),
+    ):
         detected = pipeline.detect_and_parse_manifest.apply(args=(str(job.task_id),)).get()
         resolved = pipeline.resolve_transitive_deps.apply(args=(detected,)).get()
         generated = pipeline.generate_sbom_document.apply(args=(resolved,)).get()
@@ -79,8 +87,8 @@ def test_full_pipeline_sequence_succeeds(settings: pytest.FixtureRequest, tmp_pa
     assert job.artifacts_expire_at is not None
     assert default_storage.exists(job.result_key)
 
-    # Analysis stubs return empty, non-failed envelopes (AC #2).
-    assert all(env["failed"] is False and env["summary"] == {} for env in envelopes)
+    # All analysis phases succeed and produce non-failed envelopes.
+    assert all(env["failed"] is False for env in envelopes)
     # Mirrored progress is monotonically increasing (AC #3).
     assert seen == sorted(seen)
     # <50-package fixture completes well within the NFR-2.1 target (AC #9).

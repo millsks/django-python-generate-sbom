@@ -51,6 +51,18 @@ def _report_for(job: SBOMJob, report_type: str) -> AnalysisReport | None:
     return AnalysisReport.objects.filter(job=job, report_type=report_type).first()
 
 
+def _unavailable(report: AnalysisReport | None) -> Response | None:
+    """Return a 404 for a missing or failed report (conveying the reason), else None."""
+    if report is None:
+        return Response({"error": "Report not available.", "code": "not_ready"}, status=status.HTTP_404_NOT_FOUND)
+    if report.failed:
+        return Response(
+            {"error": "Report generation failed.", "code": "report_failed", "failure_reason": report.failure_reason},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    return None
+
+
 class _ReportView(APIView):
     """Base: 303-redirect to a presigned analysis-report artifact for the active org."""
 
@@ -62,7 +74,11 @@ class _ReportView(APIView):
         if error is not None:
             return error
         report = _report_for(cast(SBOMJob, job), self.report_type)
-        if report is None or report.failed or not report.artifact_key:
+        unavailable = _unavailable(report)
+        if unavailable is not None:
+            return unavailable
+        report = cast(AnalysisReport, report)
+        if not report.artifact_key:
             return Response({"error": "Report not available.", "code": "not_ready"}, status=status.HTTP_404_NOT_FOUND)
         return Response(status=status.HTTP_303_SEE_OTHER, headers={"Location": _presigned(report.artifact_key)})
 
@@ -100,7 +116,8 @@ class GraphReportView(APIView):
         if error is not None:
             return error
         report = _report_for(cast(SBOMJob, job), AnalysisReport.ReportType.GRAPH)
-        if report is None or report.failed:
-            return Response({"error": "Report not available.", "code": "not_ready"}, status=status.HTTP_404_NOT_FOUND)
-        summary = report.summary
+        unavailable = _unavailable(report)
+        if unavailable is not None:
+            return unavailable
+        summary = cast(AnalysisReport, report).summary
         return Response({"nodes": summary.get("nodes", []), "edges": summary.get("edges", [])})

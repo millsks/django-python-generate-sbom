@@ -77,10 +77,15 @@ def test_write_failed_report() -> None:
 
 
 @pytest.mark.django_db
-def test_report_type_unique_per_job() -> None:
-    from django.db import IntegrityError
-
+def test_write_report_upserts_per_job_report_type() -> None:
     job = _make_job()
-    write_report(job, make_envelope("vuln"))
-    with pytest.raises(IntegrityError):
-        write_report(job, make_envelope("vuln"))
+    first = write_report(job, make_envelope("vuln", failed=True, failure_reason="osv down"))
+    # A chord re-run overwrites the same (job, report_type) row rather than conflicting.
+    second = write_report(job, make_envelope("vuln", artifact_key="k", summary={"total": 2}))
+
+    assert second.pk == first.pk
+    assert AnalysisReport.objects.filter(job=job, report_type="vuln").count() == 1
+    second.refresh_from_db()
+    assert second.failed is False
+    assert second.artifact_key == "k"
+    assert second.summary == {"total": 2}

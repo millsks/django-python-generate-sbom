@@ -25,11 +25,10 @@ PIXI_LOCK = (
 PKGS = [PackageSpec(name="numpy", version="1.26.0"), PackageSpec(name="requests", version="2.32.3")]
 ANALYSIS_TASKS = (
     pipeline.scan_vulnerabilities,
-    pipeline.analyze_licenses,
+    pipeline.classify_licenses,
     pipeline.build_dependency_graph,
     pipeline.check_version_currency,
 )
-ENVELOPE_KEYS = {"report_type", "artifact_key", "summary", "failed", "failure_reason"}
 
 
 @pytest.fixture(autouse=True)
@@ -73,10 +72,10 @@ def test_pipeline_canvas_shape() -> None:
     ]
     chord_el = canvas.tasks[3]
     assert chord_el["subtask_type"] == "chord"
-    # Four analysis slots — Epic 4 swaps the bodies without changing the shape (AC #2).
+    # The four real analysis tasks (Story 4.6 replaced the Epic 3 stubs; shape unchanged).
     assert [t.name.split(".")[-1] for t in chord_el.tasks] == [
         "scan_vulnerabilities",
-        "analyze_licenses",
+        "classify_licenses",
         "build_dependency_graph",
         "check_version_currency",
     ]
@@ -106,38 +105,28 @@ def test_run_sbom_pipeline_dispatches_chain() -> None:
     build.return_value.delay.assert_called_once_with()
 
 
-# --- Analysis stubs & aggregation (AC #2) --------------------------------------------
-
-
-@pytest.mark.parametrize(
-    ("task", "report_type"),
-    [
-        (pipeline.scan_vulnerabilities, "vulnerability"),
-        (pipeline.analyze_licenses, "license"),
-        (pipeline.build_dependency_graph, "dependency_graph"),
-        (pipeline.check_version_currency, "version_currency"),
-    ],
-)
-def test_analysis_stub_returns_empty_envelope(task: object, report_type: str) -> None:
-    with patch(_NO_UPDATE):
-        envelope = task.apply(args=({"task_id": "t"},)).get()  # type: ignore[attr-defined]
-    assert set(envelope) == ENVELOPE_KEYS
-    assert envelope["report_type"] == report_type
-    assert envelope["failed"] is False
-    assert envelope["artifact_key"] is None
-    assert envelope["summary"] == {}
+# --- Chord callback: report persistence (Story 4.6) ----------------------------------
 
 
 @pytest.mark.django_db
-def test_aggregate_proceeds_with_empty_analysis() -> None:
+def test_aggregate_writes_reports_and_proceeds() -> None:
+    from generate_sbom.analysis.models import AnalysisReport
+
     job = _make_job()
     envelopes = [
-        {"report_type": "vulnerability", "artifact_key": None, "summary": {}, "failed": False, "failure_reason": None}
+        {"report_type": "vuln", "artifact_key": "k", "summary": {"total": 1}, "failed": False, "failure_reason": None},
+        {"report_type": "license", "artifact_key": None, "summary": {}, "failed": True, "failure_reason": "pypi down"},
     ]
     out = pipeline.aggregate_analysis_results.apply(args=(envelopes, str(job.task_id))).get()
+
     assert out == {"task_id": str(job.task_id), "analysis": envelopes}
     job.refresh_from_db()
     assert job.progress == 95
+    reports = {r.report_type: r for r in AnalysisReport.objects.filter(job=job)}
+    assert reports["vuln"].failed is False
+    assert reports["vuln"].artifact_key == "k"
+    assert reports["license"].failed is True
+    assert reports["license"].failure_reason == "pypi down"
 
 
 # --- Timeout handling (AC #4, #5, #6) ------------------------------------------------

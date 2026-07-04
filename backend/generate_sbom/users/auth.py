@@ -49,3 +49,17 @@ def set_active_org_by_slug(request: Request, slug: str) -> Org | None:
         return None
     request.session[SESSION_ACTIVE_ORG] = membership.org_id
     return membership.org
+
+
+def get_admin_org(request: Request) -> Org | None:
+    """Return the active org if the caller is an admin of it, else None (AD-2).
+
+    Server-side authorization for admin-only membership actions; UI hiding is not
+    a substitute for this check.
+    """
+    org = get_request_org(request)
+    if org is None:
+        return None
+    user = cast(User, request.user)
+    is_admin = OrgMembership.objects.filter(org=org, user=user, role=OrgMembership.Role.ADMIN).exists()
+    return org if is_admin else None

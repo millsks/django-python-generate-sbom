@@ -5,12 +5,16 @@ import userEvent from '@testing-library/user-event'
 import { VersionsTab } from './VersionsTab'
 import { ApiError } from '../api/client'
 import { getVersions } from '../api/reports'
+import { downloadWorkbook } from '../excelExport'
 
 vi.mock('../api/reports', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/reports')>()
   return { ...actual, getVersions: vi.fn() }
 })
 const mockGet = getVersions as Mock
+
+vi.mock('../excelExport', () => ({ buildWorkbook: vi.fn(() => ({})), downloadWorkbook: vi.fn() }))
+const mockDownload = downloadWorkbook as Mock
 
 const REPORT = {
   packages: [
@@ -102,6 +106,16 @@ describe('VersionsTab', () => {
     // Source badges.
     expect(within(table).getByText('PyPI')).toBeInTheDocument()
     expect(within(table).getByText('Conda')).toBeInTheDocument()
+  })
+
+  it('exports the version-currency report to an .xlsx on demand (Story 8.12)', async () => {
+    mockGet.mockResolvedValue(REPORT)
+    render(<VersionsTab taskId="t" />)
+    await screen.findByRole('table')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Export to Excel' }))
+
+    expect(mockDownload).toHaveBeenCalledWith(expect.anything(), 'version-currency.xlsx')
   })
 
   it('renders the failure notice when the report failed', async () => {

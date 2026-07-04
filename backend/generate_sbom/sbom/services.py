@@ -15,9 +15,29 @@ from django.utils import timezone
 from generate_sbom.manifests.models import ManifestUpload
 from generate_sbom.users.models import Org, User
 
+from .generation import (
+    Provenance,
+    SBOMGenerationError,
+    generate_sbom_document,
+    sbom_extension,
+)
 from .models import SBOMJob
 from .parsers import PackageSpec, resolve_packages
 from .selectors import get_job_by_task_id
+
+__all__ = [
+    "OUTPUT_FORMAT_MAP",
+    "Provenance",
+    "SBOMGenerationError",
+    "build_provenance",
+    "create_job",
+    "estimate_seconds",
+    "finalize_job",
+    "generate_sbom_document",
+    "resolve_job_packages",
+    "sbom_extension",
+    "update_job_status",
+]
 
 logger = structlog.get_logger()
 
@@ -66,6 +86,16 @@ def finalize_job(task_id: str, result_key: str, summary_stats: dict[str, object]
         summary_stats=summary_stats,
         completed_at=now,
         artifacts_expire_at=now + timedelta(days=ARTIFACT_TTL_DAYS),
+    )
+
+
+def build_provenance(manifest: ManifestUpload) -> Provenance:
+    """Lift the four provenance fields off a manifest for SBOM metadata (FR-3.8)."""
+    return Provenance(
+        application_id=manifest.application_id,
+        component_name=manifest.component_name,
+        repository_url=manifest.repository_url,
+        source_branch=manifest.source_branch,
     )
 
 

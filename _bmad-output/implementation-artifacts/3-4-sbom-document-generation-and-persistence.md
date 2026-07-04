@@ -1,6 +1,6 @@
 # Story 3.4: SBOM Document Generation & Persistence (Phases 3 & 8)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -110,8 +110,31 @@ Phases 3 and 8 run on the `pipeline` queue (like Phases 1–2). Only Phases 4–
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
+
+- CycloneDX 1.6 emits an incomplete-dependency-graph `UserWarning` unless the root component's dependencies are registered; resolved via `bom.register_dependency(root, components)`.
+- CycloneDX XML carries no literal "CycloneDX" string — identity is the `cyclonedx.org/schema/bom/1.6` namespace URI (test asserts the namespace).
+- `lib4sbom` is untyped; added `lib4sbom.*` to the mypy `ignore_missing_imports` override.
 
 ### Completion Notes List
 
+- **AD-6 reinterpretation of the Phase 3/8 split.** AC #5 attributes the blob upload to Phase 8, but in the Story 3.5 chain the analysis group sits between generate and persist, so passing SBOM bytes Phase 3 → Phase 8 would route the blob through the Celery result backend (Redis), violating AD-6. Implemented AD-6-compliant: **Phase 3 (`generate_sbom_document` task) generates + writes the blob to its final `result_key`**; only the key string flows onward. **Phase 8 (`persist_artifacts`) `finalize_job`s** the DB record (result_key, +10d expiry, summary_stats, SUCCESS). The pure `generation.generate_sbom_document(packages, output_format, provenance) -> (bytes, media_type)` service stays I/O-free and independently testable (AC #3).
+- Pure serializers live in `sbom/generation.py` (re-exported via `sbom/services.py` per the story's placement note).
+- Provenance (FR-3.8): CycloneDX → `metadata.component` (name, type=application) + VCS externalReference + `application:id`/`vcs:branch` properties. SPDX 2.3 → document name + a root application package carrying the VCS externalRef and an `application:id; vcs:branch` comment (best-effort).
+- Presigned download tolerates both backends: `default_storage.url(key, expire=…)` for S3/MinIO, falling back to `url(key)` for FileSystemStorage (dev/tests) which does not presign.
+- New runtime deps (conda-forge): `cyclonedx-python-lib` 11.11.0, `lib4sbom` 0.10.4.
+- Gate: `pixi run ci` exits 0 — 103 tests, 95.18% coverage (generation.py 100%).
+
 ### File List
+
+- backend/generate_sbom/sbom/generation.py (new)
+- backend/generate_sbom/sbom/services.py (build_provenance + generation re-exports)
+- backend/generate_sbom/sbom/views.py (ResultJobView)
+- backend/generate_sbom/sbom/urls.py (sbom-result route)
+- backend/generate_sbom/tasks/sbom_pipeline.py (Phase 3 + Phase 8 tasks)
+- backend/pyproject.toml (lib4sbom mypy override)
+- backend/tests/unit/test_sbom_generation.py (new)
+- backend/tests/integration/test_sbom_storage.py (new)
+- pixi.toml / pixi.lock (cyclonedx-python-lib, lib4sbom)

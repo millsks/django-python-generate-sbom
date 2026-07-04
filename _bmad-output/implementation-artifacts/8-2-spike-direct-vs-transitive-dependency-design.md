@@ -1,6 +1,6 @@
 # Story 8.2: [Spike] Direct vs Transitive Dependency Design
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -70,8 +70,22 @@ A concise decision note (not code) that 8.3 (capture), 8.4 (SBOM encoding), and 
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
 
 ### Completion Notes List
 
+- **Deliverable:** `_bmad-output/planning-artifacts/research/direct-vs-transitive-design.md` (candidate AD-14), cited by 8.3–8.5.
+- **Key finding:** 4 of 5 resolvers (`requirements`, `pyproject`, `pixi.toml`, `conda`) already parse the declared/direct set before resolving — it's just discarded. Only `pixi.lock` lacks it (full solved env, no requested marker).
+- **Decision 1 (identify direct):** declared-set intersection by canonicalized name (`packaging.utils.canonicalize_name`) — reuses existing parse, needs no `uv`/`conda` invocation change. `uv pip compile` annotation parsing (`# via -r infile` = direct; verified with a PoC) noted as a future enhancement that would also yield real edges, not adopted now.
+- **Decision 2 (model):** add `PackageSpec.relationship: str = "unknown"` (`direct`|`transitive`|`unknown`) — string tri-state, default keeps the single `asdict`→`PackageSpec(**spec)` chain hop backward-compatible (packages are transient, never persisted; no migration).
+- **Decision 3 (SBOM):** CycloneDX — register only direct components as root dependencies + a `sbom:relationship` component property; SPDX — root `DEPENDS_ON` each direct package. Both stay schema-valid.
+- **Decision 4 (fallback):** unmatched / `pixi.lock` → tag `unknown`, never guess.
+- **Outcome:** 8.3, 8.4, 8.5 contexted into full story files with finalized ACs and flipped `backlog → ready-for-dev`.
+
 ### File List
+
+- _bmad-output/planning-artifacts/research/direct-vs-transitive-design.md (new — design decision / candidate AD-14)
+- _bmad-output/implementation-artifacts/8-3-…, 8-4-…, 8-5-… (new story files, contexted)
+- _bmad-output/implementation-artifacts/sprint-status.yaml (8-3/8-4/8-5 → ready-for-dev)

@@ -1338,3 +1338,181 @@ So that I understand why downloads are unavailable while still seeing the job's 
 **Given** the UI distinguishes an expired job from a failed job,
 **When** both appear,
 **Then** each shows its own distinct indication (expired-artifacts notice vs. failure reason) (FR-8.3, FR-7.3).
+
+---
+
+## Epic 8: SBOM Enrichment & In-App Viewing
+
+Post-v1 enhancement epic driven by user feedback after the Epic 1–6 build and the
+version-currency LTS fix. Three threads: (A) broaden LTS coverage using an external
+end-of-life data source; (B) capture and surface the direct-vs-transitive dependency
+distinction, which the current flat resolution discards; (C) let users read the SBOM
+in the UI instead of only downloading it. Thread B leads with a design spike because
+the mechanism differs per manifest format and per SBOM standard.
+
+These extend the PRD's F4 (SBOM Generation), F5 (Analysis Reports), and F6 (Results
+Web UI). New capability tags are prefixed `FR-E` (enhancement) to keep them distinct
+from the v1 FR inventory above.
+
+- FR-E1: The version-currency report derives each package's LTS series from the
+  endoflife.date API (cached/rate-limited), falling back to the static registry;
+  packages with no end-of-life data remain untracked (no false LTS claim).
+- FR-E2: Resolution captures whether each resolved package is a direct (declared)
+  dependency or a transitive one, per supported manifest format.
+- FR-E3: The generated SBOM document encodes the direct/transitive relationship using
+  the target standard's native mechanism (CycloneDX `dependencies`/scope; SPDX
+  relationships).
+- FR-E4: The dependency-graph tab visually distinguishes direct from transitive
+  packages.
+- FR-E5: A user can read the SBOM in the web UI — a component table and the raw
+  document — without downloading it.
+
+### Story 8.1: Broaden LTS Coverage via endoflife.date
+
+As a user,
+I want the version-currency report's LTS data to cover far more than Django and Python,
+So that the "on LTS / LTS target" signal is useful across my real dependency set.
+
+**Acceptance Criteria:**
+
+**Given** a resolved package whose project is tracked on endoflife.date,
+**When** the version-currency phase runs,
+**Then** its LTS series is derived from the endoflife.date API (the latest cycle whose `lts` field is truthy), and `lts` / `on_lts` reflect that (FR-E1, extends FR-5.4).
+
+**Given** the endoflife.date lookups,
+**When** they are performed,
+**Then** they go through the shared cached, rate-limited, retrying HTTP session (same pattern as OSV/PyPI/NVD) so repeated runs and shared packages don't re-hit the API (AD, NFR performance).
+
+**Given** a package with no endoflife.date entry (or the API is unreachable),
+**When** LTS is determined,
+**Then** it falls back to the static `SBOM_LTS_REGISTRY` + built-in defaults, and if neither has it the package is reported untracked (`lts: null`, `on_lts: null`) — never a fabricated LTS.
+
+**Given** a package name that differs from its endoflife.date product slug,
+**When** the lookup is attempted,
+**Then** a name→product mapping resolves the common cases and unmapped names simply fall through to untracked (no crash, no wrong match).
+
+**Given** the endoflife.date integration,
+**When** the LTS registry override or built-in default names a series for a package,
+**Then** the explicit registry entry wins over the API-derived value (operator override is authoritative).
+
+---
+
+### Story 8.2: [Spike] Direct vs Transitive Dependency Design
+
+As the team,
+I want a short design decision on how to capture and represent direct-vs-transitive dependencies,
+So that the implementation stories (8.3–8.5) build on one agreed mechanism instead of guessing.
+
+**Acceptance Criteria:**
+
+**Given** each supported manifest format (`requirements.txt`, `pyproject.toml`, `pixi.toml`, `pixi.lock`, `conda environment.yml`),
+**When** the spike completes,
+**Then** it documents how the *direct* (declared) set is identified for that format — e.g. `uv pip compile` annotations / `--no-annotate`, the declared lines pre-compile, `[project.dependencies]`, lock-file top-level requests — and the confidence/limitations of each.
+
+**Given** the resolved data model,
+**When** the spike completes,
+**Then** it specifies how `PackageSpec` (and any threaded pipeline payload) carries the relationship (e.g. a `direct: bool` / `relationship` field) without breaking the existing chain contract (AD-6: keys/counts, not blobs).
+
+**Given** the two SBOM standards in scope (CycloneDX, SPDX),
+**When** the spike completes,
+**Then** it documents the native representation of the direct/transitive relationship in each (CycloneDX `dependencies` graph + component `scope`; SPDX `DEPENDS_ON` / `DESCRIBES` relationships) and what our serializers must emit.
+
+**Given** the spike's conclusions,
+**When** it is written up,
+**Then** it lands as a short design note (candidate architecture decision) in the planning artifacts and is cited by Stories 8.3–8.5, which are only then contexted into full story files.
+
+---
+
+### Story 8.3: Capture Direct/Transitive Relationships During Resolution
+
+As a user,
+I want the pipeline to know which packages I declared vs. which were pulled in transitively,
+So that downstream (SBOM document, graph, viewer) can show the distinction.
+
+**Acceptance Criteria (provisional — finalized by the 8.2 spike):**
+
+**Given** a manifest in each supported format,
+**When** transitive resolution runs,
+**Then** every resolved `PackageSpec` is tagged direct or transitive per the mechanism chosen in 8.2 (FR-E2, extends FR-4.3).
+
+**Given** the resolved list threads through the Celery chain,
+**When** it is passed between phases,
+**Then** the relationship tag travels with it within the existing contract (AD-6) and is unit-tested per format.
+
+**Given** a format where the direct set cannot be determined reliably,
+**When** resolution runs,
+**Then** the behavior agreed in the 8.2 spike is applied (e.g. mark all as unknown/transitive) rather than a wrong guess, and is covered by a test.
+
+---
+
+### Story 8.4: Encode Direct/Transitive in the SBOM Document
+
+As a user,
+I want the downloaded/served SBOM to carry the direct/transitive relationship,
+So that any consumer of the SBOM — not just this app — can tell them apart.
+
+**Acceptance Criteria (provisional — finalized by the 8.2 spike):**
+
+**Given** a CycloneDX (JSON/XML) output,
+**When** the SBOM is generated,
+**Then** the direct/transitive relationship is encoded via CycloneDX's native mechanism (dependencies graph and/or component scope) per the 8.2 decision (FR-E3, extends FR-4.4).
+
+**Given** an SPDX output,
+**When** the SBOM is generated,
+**Then** the relationship is encoded via SPDX relationships per the 8.2 decision.
+
+**Given** a generated SBOM,
+**When** it is validated against its standard's schema,
+**Then** it remains valid (the relationship encoding does not break conformance), covered by a test per format.
+
+---
+
+### Story 8.5: Direct/Transitive Visualization in the Dependency Graph Tab
+
+As a user,
+I want direct dependencies visually distinct from transitive ones in the graph,
+So that I can see my declared surface at a glance.
+
+**Acceptance Criteria (provisional — finalized by the 8.2 spike):**
+
+**Given** the dependency-graph tab,
+**When** it renders a job that carries the direct/transitive tag,
+**Then** direct packages are visually distinguished from transitive ones (e.g. rooted/highlighted vs. faded) with a legend (FR-E4, extends FR-6.5).
+
+**Given** an older job generated before this feature,
+**When** its graph renders,
+**Then** it degrades gracefully (no crash; renders without the distinction) rather than erroring.
+
+---
+
+### Story 8.6: In-App SBOM Viewer Tab
+
+As a user,
+I want to read the SBOM in the UI in a tab next to Overview,
+So that I can inspect it without downloading and opening a file.
+
+**Acceptance Criteria:**
+
+**Given** a completed job,
+**When** the results page loads,
+**Then** an "SBOM" tab appears immediately to the right of Overview (FR-E5, extends FR-6.1).
+
+**Given** the SBOM tab,
+**When** it opens,
+**Then** it shows a structured component table (at minimum name, version, type, license, and — once 8.3/8.4 land — direct/transitive) parsed from the stored SBOM, regardless of output format (cdx-json, cdx-xml, spdx) (FR-E5).
+
+**Given** the SBOM tab,
+**When** I toggle to the raw view,
+**Then** it shows the exact SBOM document, pretty-printed and readable (syntax-highlighted / collapsible for JSON), matching what the download would produce (FR-E5).
+
+**Given** the SBOM content is served to the SPA,
+**When** the tab fetches it,
+**Then** it comes from an inline content endpoint (JSON payload with a normalized component list + the raw text) via `src/api/` — not the `303`-presigned download flow — mirroring the inline report-endpoint pattern (AD-5, AD-11).
+
+**Given** a job whose artifacts were never produced or have expired/been deleted,
+**When** the SBOM tab renders,
+**Then** it shows an appropriate unavailable/failure notice rather than erroring (FR-6.7, aligns with Epic 7).
+
+**Given** a cross-org or unknown job,
+**When** the SBOM content endpoint is called,
+**Then** it returns `404` (AD-2).

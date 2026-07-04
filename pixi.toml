@@ -142,6 +142,11 @@ cmd = "npm run build"
 cwd = "frontend"
 depends-on = ["fe-install"]
 
+[tasks.fe-test]
+cmd = "npm run test"
+cwd = "frontend"
+depends-on = ["fe-install"]
+
 # Unified CI gate across both backend and frontend (AD-13 pixi umbrella).
 [tasks.ci]
-depends-on = ["precommit", "build", "check", "lint", "cov", "fe-lint", "fe-build"]
+depends-on = ["precommit", "build", "check", "lint", "cov", "fe-lint", "fe-test", "fe-build"]

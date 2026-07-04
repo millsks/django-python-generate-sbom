@@ -1,6 +1,6 @@
 # Story 4.6: Analysis Group Integration & Partial-Failure Handling
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

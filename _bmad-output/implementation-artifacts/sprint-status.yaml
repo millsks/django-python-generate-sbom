@@ -27,16 +27,16 @@ development_status:
   3-4-sbom-document-generation-and-persistence: done
   3-5-pipeline-orchestration-progress-and-timeout-handling: done
 
-  epic-4: in-progress
+  epic-4: done
   4-1-external-api-caching-rate-limiting-and-analysisreport-model: done
   4-2-vulnerability-report-phase-4: done
   4-3-license-compliance-report-phase-5: done
   4-4-dependency-graph-phase-6: done
   4-5-version-currency-report-phase-7: done
-  4-6-analysis-group-integration-and-partial-failure-handling: review
+  4-6-analysis-group-integration-and-partial-failure-handling: done
 
-  epic-5: ready-for-dev
-  5-1-results-page-shell-tab-navigation-and-access-control: ready-for-dev
+  epic-5: in-progress
+  5-1-results-page-shell-tab-navigation-and-access-control: review
   5-2-overview-tab: ready-for-dev
   5-3-vulnerabilities-tab: ready-for-dev
   5-4-licenses-tab: ready-for-dev

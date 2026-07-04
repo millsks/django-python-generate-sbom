@@ -11,12 +11,14 @@ const SAFE_METHODS = ['GET', 'HEAD', 'OPTIONS']
 export class ApiError extends Error {
   status: number
   code?: string
+  failureReason?: string
 
-  constructor(message: string, status: number, code?: string) {
+  constructor(message: string, status: number, code?: string, failureReason?: string) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.code = code
+    this.failureReason = failureReason
   }
 }
 
@@ -24,14 +26,21 @@ export class ApiError extends Error {
 async function toApiError(response: Response): Promise<ApiError> {
   let message = `Request failed with status ${response.status}`
   let code: string | undefined
+  let failureReason: string | undefined
   try {
-    const body = (await response.json()) as { error?: string; detail?: string; code?: string }
+    const body = (await response.json()) as {
+      error?: string
+      detail?: string
+      code?: string
+      failure_reason?: string
+    }
     message = body.error ?? body.detail ?? message
     code = body.code
+    failureReason = body.failure_reason
   } catch {
     // Non-JSON error body (e.g. an HTML error page); keep the status message.
   }
-  return new ApiError(message, response.status, code)
+  return new ApiError(message, response.status, code, failureReason)
 }
 
 export interface RequestOptions {

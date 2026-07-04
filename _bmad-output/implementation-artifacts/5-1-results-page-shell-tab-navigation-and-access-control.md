@@ -1,6 +1,6 @@
 # Story 5.1: Results Page Shell, Tab Navigation & Access Control
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -93,8 +93,28 @@ If any analysis phase failed, the job may still have a downloadable SBOM. Each r
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
+
+- Endpoint name: the story lists `/reports/vuln/`, but Epic 4 built `/reports/vulnerabilities/` — used the real path.
+- Vitest config had to live in a **separate `vitest.config.ts`** (not `vite.config.ts`): rolldown-vite 8 and the vite bundled inside vitest 3 have incompatible plugin types, so putting the `test` block in `vite.config.ts` broke the production `tsc -b` build.
 
 ### Completion Notes List
 
+- **Frontend test stack (new):** vitest 3 + `@testing-library/react` + `@testing-library/jest-dom` + `jsdom`. Config in `vitest.config.ts` (jsdom env, `src/test/setup.ts` registers jest-dom); `test`/`test:watch` npm scripts; **`fe-test` pixi task added to the `ci` gate**. Tests use explicit `vitest` imports (no globals) so oxlint/tsc stay happy.
+- **`ResultsPage` shell:** `/results/:taskId` route (protected), stable/shareable URL. Polls `getJobStatus` every 5s until `SUCCESS`/`FAILED` (minimal poller — refactors onto the shared `useJobStatus` hook in Epic 6), showing a processing state meanwhile. On completion renders MUI `Tabs` with the five tabs in fixed order, **Overview active by default**; Overview has the SBOM download. Tabs 2–5 are placeholders for 5.2–5.6.
+- **Access control (AC #3):** a cross-org (or unknown) job surfaces as **404** from the status API (AD-2 no-existence-leak rule — the backend does not return 403); `ResultsPage` maps 403/404 to an access-denied state. A literal 403 would require a backend change that contradicts the no-leak design, so both map to the same "not available" UX.
+- **`TabFailureNotice`** shared component (FR-4.5) renders a report's `failure_reason`; `ApiError` now carries `failureReason` so failed-report responses (`code=report_failed`) can surface it in the tabs (5.2–5.6).
+- **API layer (AD-5):** `api/reports.ts` gains typed interfaces + four fetchers (`getVulnerabilities`/`getLicenses`/`getGraph`/`getVersions`); `api/jobs.ts` `JobStatus` aligned to the backend shape + `TERMINAL_STATUSES`. No `fetch` in components.
+- **Flag for 5.2:** the vuln/license/version report endpoints 303-redirect to a presigned S3 URL for the JSON; the SPA reading that JSON cross-origin will need bucket CORS (or those endpoints serving JSON inline like the graph endpoint). To resolve when the tab bodies consume the data.
+- Gate: `pixi run ci` exits 0 — backend 177 tests (95.36%), frontend 4 tests, build passes.
+
 ### File List
+
+- frontend/package.json, vitest.config.ts (new), src/test/setup.ts (new) — test stack
+- frontend/src/pages/ResultsPage.tsx (new) + ResultsPage.test.tsx (new)
+- frontend/src/components/TabFailureNotice.tsx (new) + TabFailureNotice.test.tsx (new)
+- frontend/src/api/reports.ts (typed fetchers), jobs.ts (JobStatus), client.ts (ApiError.failureReason)
+- frontend/src/App.tsx (/results/:taskId route)
+- pixi.toml (fe-test task + ci depends-on)

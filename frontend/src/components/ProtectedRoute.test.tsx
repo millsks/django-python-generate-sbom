@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { ProtectedRoute } from './ProtectedRoute'
 import { useAuth } from '../auth/AuthProvider'
 
@@ -45,5 +45,30 @@ describe('ProtectedRoute', () => {
     renderProtected()
     expect(screen.queryByText('secret content')).not.toBeInTheDocument()
     expect(screen.queryByText('login page')).not.toBeInTheDocument()
+  })
+
+  it('carries the attempted location to /login on redirect (Story 10.2)', () => {
+    mockUseAuth.mockReturnValue({ status: 'anon' })
+    function LoginProbe() {
+      const location = useLocation()
+      const from = (location.state as { from?: { pathname?: string } } | null)?.from
+      return <div>from: {from?.pathname ?? 'none'}</div>
+    }
+    render(
+      <MemoryRouter initialEntries={['/secret']}>
+        <Routes>
+          <Route
+            path="/secret"
+            element={
+              <ProtectedRoute>
+                <div>secret content</div>
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/login" element={<LoginProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    expect(screen.getByText('from: /secret')).toBeInTheDocument()
   })
 })

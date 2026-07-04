@@ -102,6 +102,27 @@ def test_prefixed_requirements_upload_succeeds() -> None:
 
 
 @pytest.mark.django_db
+def test_upload_manifest_allows_no_user() -> None:
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from generate_sbom.manifests.services import upload_manifest
+
+    user = register_user(email="alice@example.com", password="pw12345678")
+    org = user.org_memberships.select_related("org").get().org
+    upload = upload_manifest(
+        org,
+        None,  # API-key upload: no user
+        file_obj=SimpleUploadedFile("pixi.lock", b"version: 5\npackages: []\n"),
+        application_id="A",
+        component_name="c",
+        repository_url="https://github.com/a/b",
+        source_branch="main",
+    )
+    assert upload.user is None
+    assert upload.detected_format == "pixi_lock"
+
+
+@pytest.mark.django_db
 def test_unsupported_format_rejected() -> None:
     response = _upload(_login(), "Pipfile", b"[packages]\n")
     assert response.status_code == 400

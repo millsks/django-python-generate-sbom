@@ -6,7 +6,7 @@ from django.core.files.storage import default_storage
 from rest_framework.test import APIClient
 
 from generate_sbom.manifests.models import ManifestUpload
-from generate_sbom.sbom.document import normalize_components
+from generate_sbom.sbom.document import normalize_components, parse_metadata
 from generate_sbom.sbom.generation import Provenance, generate_sbom_document
 from generate_sbom.sbom.models import SBOMJob
 from generate_sbom.sbom.parsers import PackageSpec
@@ -70,6 +70,59 @@ def test_all_unknown_packages_are_not_forced_into_a_split(output_format: str) ->
     assert rels <= {"unknown", None}
 
 
+# --- document metadata block (Story 8.11) --------------------------------------------
+
+
+@pytest.mark.parametrize("output_format", ["cyclonedx-json", "cyclonedx-xml", "spdx-json"])
+def test_parse_metadata_reads_provenance_and_document_info(output_format: str) -> None:
+    # Story 8.11: the provenance embedded at generation is read back into a metadata dict.
+    raw, _ = generate_sbom_document(PKGS, output_format, PROV)
+
+    metadata = parse_metadata(raw, output_format)
+
+    assert metadata["component_name"] == "web"
+    assert metadata["application_id"] == "APP-1"
+    assert metadata["repository_url"] == "https://github.com/acme/web"
+    assert metadata["source_branch"] == "main"
+    assert metadata["format"] in {"CycloneDX", "SPDX"}
+    assert metadata["spec_version"]  # e.g. "1.6" (CycloneDX) or "2.3" (SPDX)
+    assert metadata["generated"]  # a serialized timestamp
+
+
+@pytest.mark.parametrize("output_format", ["cyclonedx-json", "cyclonedx-xml", "spdx-json"])
+def test_parse_metadata_omits_absent_provenance_fields(output_format: str) -> None:
+    # Story 8.11 AC #5: partial provenance yields no blank keys (empty strings dropped).
+    partial = Provenance(application_id="", component_name="web", repository_url="", source_branch="")
+    raw, _ = generate_sbom_document(PKGS, output_format, partial)
+
+    metadata = parse_metadata(raw, output_format)
+
+    assert metadata["component_name"] == "web"
+    assert "application_id" not in metadata
+    assert "repository_url" not in metadata
+    assert "source_branch" not in metadata
+
+
+def test_parse_metadata_unknown_format_is_empty() -> None:
+    assert parse_metadata(b"{}", "totally-made-up") == {}
+
+
+@pytest.mark.parametrize(
+    ("output_format", "meta_marker", "components_marker"),
+    [
+        ("cyclonedx-json", '"metadata"', '"components"'),
+        ("cyclonedx-xml", "<metadata>", "<components>"),
+        ("spdx-json", '"creationInfo"', '"packages"'),
+    ],
+)
+def test_metadata_precedes_components_in_document(output_format: str, meta_marker: str, components_marker: str) -> None:
+    # Story 8.11 AC #2: the serialized document leads with metadata before the component data.
+    raw, _ = generate_sbom_document(PKGS, output_format, PROV)
+    text = raw.decode("utf-8")
+
+    assert text.index(meta_marker) < text.index(components_marker)
+
+
 # --- inline content endpoint ---------------------------------------------------------
 
 
@@ -114,6 +167,8 @@ def test_document_endpoint_returns_components_and_raw() -> None:
 
     assert response.status_code == 200
     assert response.data["format"] == "cyclonedx-json"
+    assert response.data["metadata"]["component_name"] == "web"  # parsed provenance (Story 8.11)
+    assert response.data["metadata"]["repository_url"] == "https://github.com/acme/web"
     assert {c["name"] for c in response.data["components"]} == {"django", "asgiref"}
     assert '"bomFormat": "CycloneDX"' in response.data["raw"]  # raw is the exact document text
 

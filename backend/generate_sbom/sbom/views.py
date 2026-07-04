@@ -27,7 +27,7 @@ from generate_sbom.manifests.services import upload_manifest
 from generate_sbom.tasks.sbom_pipeline import run_sbom_pipeline
 from generate_sbom.users.auth import get_request_org
 
-from .document import normalize_components
+from .document import normalize_components, parse_metadata
 from .models import SBOMJob
 from .selectors import get_job, get_jobs
 from .serializers import GenerateJobSerializer, JobListSerializer
@@ -203,7 +203,7 @@ class SbomDocumentView(APIView):
     """
 
     def get(self, request: Request, task_id: str) -> Response:
-        """Return {format, components, raw}, or 404 for unknown/cross-org/not-ready/expired."""
+        """Return {format, metadata, components, raw}, or 404 for unknown/cross-org/not-ready/expired."""
         org = get_request_org(request)
         if org is None:
             return Response(_NO_ACTIVE_ORG, status=status.HTTP_404_NOT_FOUND)
@@ -222,6 +222,7 @@ class SbomDocumentView(APIView):
         return Response(
             {
                 "format": job.output_format,
+                "metadata": parse_metadata(raw, job.output_format),
                 "components": normalize_components(raw, job.output_format),
                 "raw": raw.decode("utf-8"),
             }

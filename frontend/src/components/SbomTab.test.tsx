@@ -67,6 +67,54 @@ describe('SbomTab', () => {
     expect(within(table).getByText('transitive')).toBeInTheDocument()
   })
 
+  it('renders the metadata block with provenance and document info (Story 8.11)', async () => {
+    mockGet.mockResolvedValue({
+      ...DOC,
+      metadata: {
+        component_name: 'web',
+        application_id: 'APP-1',
+        repository_url: 'https://github.com/acme/web',
+        source_branch: 'main',
+        format: 'CycloneDX',
+        spec_version: '1.6',
+        generated: '2026-07-04T20:00:00Z',
+      },
+    })
+    render(<SbomTab taskId="t" />)
+    await screen.findByRole('table')
+
+    const meta = screen.getByLabelText('SBOM metadata')
+    expect(within(meta).getByText('web')).toBeInTheDocument()
+    expect(within(meta).getByText('APP-1')).toBeInTheDocument()
+    expect(within(meta).getByText('https://github.com/acme/web')).toBeInTheDocument()
+    expect(within(meta).getByText('main')).toBeInTheDocument()
+    expect(within(meta).getByText('CycloneDX 1.6')).toBeInTheDocument()
+  })
+
+  it('omits absent metadata fields (Story 8.11)', async () => {
+    mockGet.mockResolvedValue({
+      ...DOC,
+      metadata: { component_name: 'web', format: 'SPDX', spec_version: '2.3' },
+    })
+    render(<SbomTab taskId="t" />)
+    await screen.findByRole('table')
+
+    const meta = screen.getByLabelText('SBOM metadata')
+    expect(within(meta).getByText('web')).toBeInTheDocument()
+    expect(within(meta).getByText('SPDX 2.3')).toBeInTheDocument()
+    expect(within(meta).queryByText('Repository')).not.toBeInTheDocument()
+    expect(within(meta).queryByText('Branch')).not.toBeInTheDocument()
+    expect(within(meta).queryByText('Application ID')).not.toBeInTheDocument()
+  })
+
+  it('renders no metadata block when metadata is absent', async () => {
+    mockGet.mockResolvedValue(DOC)
+    render(<SbomTab taskId="t" />)
+    await screen.findByRole('table')
+
+    expect(screen.queryByLabelText('SBOM metadata')).not.toBeInTheDocument()
+  })
+
   it('shows an unavailable notice on a 404 (never produced or expired)', async () => {
     mockGet.mockRejectedValue(new ApiError('SBOM not available.', 404, 'not_ready'))
     render(<SbomTab taskId="t" />)

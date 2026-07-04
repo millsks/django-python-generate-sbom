@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from typing import Any
 
 from .parsers import DIRECT, PackageSpec
 
@@ -111,7 +112,26 @@ def _generate_cyclonedx(packages: list[PackageSpec], provenance: Provenance, out
 
     schema_format = OutputFormat.JSON if output_format == CYCLONEDX_JSON else OutputFormat.XML
     outputter = make_outputter(bom, schema_format, SchemaVersion.V1_6)
-    return outputter.output_as_string(indent=2)
+    text = outputter.output_as_string(indent=2)
+    if output_format == CYCLONEDX_JSON:
+        # The JSON serializer emits ``metadata`` after ``components``; lead with it (Story 8.11, AC #2).
+        text = _order_metadata_before_components(text)
+    return text
+
+
+def _order_metadata_before_components(text: str) -> str:
+    """Reorder a CycloneDX JSON document so ``metadata`` precedes ``components`` (Story 8.11, AC #2)."""
+    doc = json.loads(text)
+    if "metadata" not in doc or "components" not in doc:
+        return text
+    ordered: dict[str, Any] = {}
+    for key, value in doc.items():
+        if key == "metadata":
+            continue
+        if key == "components" and "metadata" not in ordered:
+            ordered["metadata"] = doc["metadata"]
+        ordered[key] = value
+    return json.dumps(ordered, indent=2)
 
 
 def _generate_spdx(packages: list[PackageSpec], provenance: Provenance) -> str:

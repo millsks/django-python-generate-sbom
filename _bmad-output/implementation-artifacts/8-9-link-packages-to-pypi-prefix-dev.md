@@ -1,6 +1,6 @@
 # Story 8.9: Link Packages to PyPI / prefix.dev in the Version Currency Tab
 
-Status: ready-for-dev
+Status: review
 
 <!-- Depends on Story 8.8 (PackageSpec.ecosystem in the version-currency report). -->
 
@@ -66,8 +66,20 @@ Requires `ecosystem` in the report entry (Story 8.8). Until 8.8 lands, entries h
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
 
 ### Completion Notes List
 
+- **Helper:** `src/registryLinks.ts::registryUrl({name, version, ecosystem})` — PyPI → `https://pypi.org/project/{name}/{version}/` (version-specific, falls back to the project page when no version), Conda → `https://prefix.dev/channels/conda-forge/packages/{name}`, `null` for a missing/unexpected ecosystem. Names URL-encoded. `ecosystemLabel` gives the `PyPI`/`Conda` chip text.
+- **VersionsTab:** package name renders as a MUI `Link` (`target="_blank"`, `rel="noopener noreferrer"`) when a URL is available, plain text otherwise (graceful — AC #4); new **Source** column with an outlined `PyPI`/`Conda` chip (`—` when unknown). `ecosystem` added to `VersionEntry` (populated by 8.8).
+- No new network call — the URL is derived from the report's `ecosystem` (AD-5).
+- **Tests:** `registryLinks.test.ts` (pypi/conda URLs, version fallback, null for unknown, encoding); VersionsTab renders the two links + badges and leaves an unknown-ecosystem name as plain text.
+- Gate: `pixi run ci` exits 0 — backend 242, frontend 53 (12 files).
+
 ### File List
+
+- frontend/src/registryLinks.ts (new) + registryLinks.test.ts (new)
+- frontend/src/api/reports.ts (VersionEntry.ecosystem)
+- frontend/src/components/VersionsTab.tsx (linked name + Source column) + VersionsTab.test.tsx

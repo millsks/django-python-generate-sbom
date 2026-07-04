@@ -60,11 +60,11 @@ development_status:
   8-2-spike-direct-vs-transitive-dependency-design: done
   8-3-capture-direct-transitive-relationships-during-resolution: done
   8-4-encode-direct-transitive-in-the-sbom-document: done
-  8-5-direct-transitive-visualization-in-the-dependency-graph-tab: review
+  8-5-direct-transitive-visualization-in-the-dependency-graph-tab: done
   8-6-in-app-sbom-viewer-tab: done
   8-7-fix-lts-currency-honor-eol-and-current-lts: done
   8-8-capture-package-ecosystem-pypi-conda: done
-  8-9-link-packages-to-pypi-prefix-dev: ready-for-dev
+  8-9-link-packages-to-pypi-prefix-dev: review
   8-10-conda-forge-latest-and-divergence: ready-for-dev
   8-11-sbom-metadata-block-and-viewer: ready-for-dev
   8-12-export-version-currency-to-excel: ready-for-dev

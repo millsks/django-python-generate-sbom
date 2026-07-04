@@ -57,6 +57,7 @@ export interface VersionEntry {
   currency: string
   lts: string | null // the tracked LTS series for this package, or null if untracked
   on_lts: boolean | null // whether the installed version is on that LTS series; null if untracked
+  ecosystem?: string // "pypi" | "conda" — the package's source registry (Story 8.8)
 }
 
 export interface VersionReport {

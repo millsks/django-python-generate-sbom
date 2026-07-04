@@ -36,7 +36,7 @@ postprocessors = [
 
 [git]
 conventional_commits  = true
-filter_unconventional = true
+filter_unconventional = false
 split_commits         = false
 commit_preprocessors  = []
 commit_parsers = [
@@ -55,7 +55,8 @@ commit_parsers = [
   { message = "^chore|^ci",                 group = "⚙️ Miscellaneous Tasks" },
   { body    = ".*security",                 group = "🔒 Security" },
   { message = "^revert",                    group = "◀️ Revert" },
-  { message = "^Merge branch",              skip = true },
+  { message = "^Merge",                     skip = true },
+  { message = "^Initial commit",            skip = true },
   { message = "^Release v",                 skip = true },
 ]
 protect_breaking_commits = false

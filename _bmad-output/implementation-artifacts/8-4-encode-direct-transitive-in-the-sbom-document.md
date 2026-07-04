@@ -1,6 +1,6 @@
 # Story 8.4: Encode Direct/Transitive in the SBOM Document
 
-Status: ready-for-dev
+Status: review
 
 <!-- Contexted from the 8.2 spike: planning-artifacts/research/direct-vs-transitive-design.md -->
 
@@ -72,8 +72,22 @@ Requires `PackageSpec.relationship` (Story 8.3). Until 8.3 lands, all packages a
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
 
 ### Completion Notes List
 
+- **CycloneDX (JSON + XML):** each component now carries a `sbom:relationship` property (`direct`/`transitive`/`unknown`), and the root metadata component's dependency graph is registered against **only the direct** components — falling back to all components when none are direct (all-unknown, e.g. pixi.lock) so no false split is asserted (AC #3).
+- **SPDX:** the root package gets a `DEPENDS_ON` relationship per **direct** package (lib4sbom `SBOMRelationship`); transitive/unknown get none.
+- **Viewer read-back (`document.py`):** `normalize_components` populates `relationship` — CycloneDX from the `sbom:relationship` property (JSON + XML), SPDX by marking packages that are `DEPENDS_ON` targets `direct` and the rest `transitive` (the NOASSERTION root package is skipped; when there are no edges at all, relationship is left unset so all-unknown SPDX isn't mislabeled).
+- **Verified** the full generate→normalize round-trip for all three formats (a REPL check + parametrized tests). The SBOM viewer's Relationship column (built conditionally in 8.6) now lights up automatically — no frontend code change, just a test.
+- **Tests:** direct/transitive round-trip per format; all-unknown not forced into a split; frontend — Relationship column shows with data. Updated the 8.6 test that asserted `relationship is None`.
+- Gate: `pixi run ci` exits 0 — backend 241 (93.95%), frontend 44.
+
 ### File List
+
+- backend/generate_sbom/sbom/generation.py (CycloneDX property + direct-only deps; SPDX DEPENDS_ON)
+- backend/generate_sbom/sbom/document.py (read relationship back for all three formats)
+- backend/tests/unit/test_sbom_document.py (round-trip + all-unknown tests)
+- frontend/src/components/SbomTab.test.tsx (relationship column shows with data)

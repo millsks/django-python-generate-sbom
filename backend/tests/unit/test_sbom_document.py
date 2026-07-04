@@ -37,12 +37,37 @@ def test_normalize_extracts_components(output_format: str) -> None:
     # Both dependencies are present with their versions, regardless of format.
     assert by_name["django"]["version"] == "5.2.1"
     assert by_name["asgiref"]["version"] == "3.8.1"
-    # relationship is not populated yet (Stories 8.3/8.4).
-    assert all(c["relationship"] is None for c in components)
 
 
 def test_normalize_unknown_format_is_empty() -> None:
     assert normalize_components(b"{}", "totally-made-up") == []
+
+
+@pytest.mark.parametrize("output_format", ["cyclonedx-json", "cyclonedx-xml", "spdx-json"])
+def test_direct_transitive_round_trips_through_the_document(output_format: str) -> None:
+    # Story 8.4: the direct/transitive relationship is encoded in the SBOM and read back.
+    pkgs = [
+        PackageSpec(name="django", version="5.2.1", relationship="direct"),
+        PackageSpec(name="asgiref", version="3.8.1", relationship="transitive"),
+    ]
+    raw, _ = generate_sbom_document(pkgs, output_format, PROV)
+
+    by_name = {c["name"]: c["relationship"] for c in normalize_components(raw, output_format)}
+
+    assert by_name["django"] == "direct"
+    assert by_name["asgiref"] == "transitive"
+
+
+@pytest.mark.parametrize("output_format", ["cyclonedx-json", "cyclonedx-xml", "spdx-json"])
+def test_all_unknown_packages_are_not_forced_into_a_split(output_format: str) -> None:
+    # Story 8.4 AC #3: unknown-relationship packages (e.g. from pixi.lock) are never
+    # falsely labeled direct/transitive; the document still generates and parses.
+    pkgs = [PackageSpec(name="numpy", version="1.26.0"), PackageSpec(name="requests", version="2.32.3")]
+    raw, _ = generate_sbom_document(pkgs, output_format, PROV)
+
+    rels = {c["relationship"] for c in normalize_components(raw, output_format) if c["name"] in {"numpy", "requests"}}
+
+    assert rels <= {"unknown", None}
 
 
 # --- inline content endpoint ---------------------------------------------------------

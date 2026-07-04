@@ -51,6 +51,22 @@ describe('SbomTab', () => {
     expect(screen.queryByRole('columnheader', { name: 'Relationship' })).not.toBeInTheDocument()
   })
 
+  it('shows the relationship column when components carry one (Story 8.4)', async () => {
+    mockGet.mockResolvedValue({
+      ...DOC,
+      components: [
+        { ...DOC.components[0], relationship: 'direct' },
+        { ...DOC.components[1], relationship: 'transitive' },
+      ],
+    })
+    render(<SbomTab taskId="t" />)
+
+    const table = await screen.findByRole('table')
+    expect(screen.getByRole('columnheader', { name: 'Relationship' })).toBeInTheDocument()
+    expect(within(table).getByText('direct')).toBeInTheDocument()
+    expect(within(table).getByText('transitive')).toBeInTheDocument()
+  })
+
   it('shows an unavailable notice on a 404 (never produced or expired)', async () => {
     mockGet.mockRejectedValue(new ApiError('SBOM not available.', 404, 'not_ready'))
     render(<SbomTab taskId="t" />)

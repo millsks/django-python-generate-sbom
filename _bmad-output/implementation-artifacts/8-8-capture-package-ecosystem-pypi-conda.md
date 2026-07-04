@@ -1,6 +1,6 @@
 # Story 8.8: Capture Package Ecosystem (PyPI/Conda) During Resolution
 
-Status: review
+Status: done
 
 <!-- Follow-on to the version-currency work; sibling of 8.3 (both add a PackageSpec field at resolution). -->
 

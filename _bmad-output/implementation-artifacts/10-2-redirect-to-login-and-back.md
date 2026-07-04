@@ -1,6 +1,6 @@
 # Story 10.2: Redirect to Login and Back
 
-Status: review
+Status: done
 
 ## Story
 

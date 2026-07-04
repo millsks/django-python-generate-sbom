@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from .parsers import PackageSpec
+from .parsers import DIRECT, PackageSpec
 
 # Internal serializer ids (OUTPUT_FORMAT_MAP values).
 CYCLONEDX_JSON = "cyclonedx-json"
@@ -92,6 +92,7 @@ def _generate_cyclonedx(packages: list[PackageSpec], provenance: Provenance, out
     bom.metadata.component = root
 
     components = []
+    direct_components = []
     for pkg in packages:
         component = Component(
             name=pkg.name,
@@ -99,9 +100,14 @@ def _generate_cyclonedx(packages: list[PackageSpec], provenance: Provenance, out
             type=ComponentType.LIBRARY,
             bom_ref=f"{pkg.name}@{pkg.version}",
         )
+        component.properties.add(Property(name="sbom:relationship", value=pkg.relationship))
         bom.components.add(component)
         components.append(component)
-    bom.register_dependency(root, components)
+        if pkg.relationship == DIRECT:
+            direct_components.append(component)
+    # Root depends on its direct deps; when none are identified (all unknown, e.g.
+    # pixi.lock) fall back to all components rather than assert a false split (Story 8.4).
+    bom.register_dependency(root, direct_components or components)
 
     schema_format = OutputFormat.JSON if output_format == CYCLONEDX_JSON else OutputFormat.XML
     outputter = make_outputter(bom, schema_format, SchemaVersion.V1_6)
@@ -112,6 +118,7 @@ def _generate_spdx(packages: list[PackageSpec], provenance: Provenance) -> str:
     """Build an SPDX 2.3 JSON document; embed provenance best-effort (FR-3.8)."""
     from lib4sbom.data.document import SBOMDocument
     from lib4sbom.data.package import SBOMPackage
+    from lib4sbom.data.relationship import SBOMRelationship
     from lib4sbom.generator import SBOMGenerator
     from lib4sbom.sbom import SBOM
 
@@ -129,6 +136,7 @@ def _generate_spdx(packages: list[PackageSpec], provenance: Provenance) -> str:
     root.set_comment(f"application:id={provenance.application_id}; vcs:branch={provenance.source_branch}")
     packages_dict[(provenance.component_name, "NOASSERTION")] = root.get_package()
 
+    relationships = []
     for pkg in packages:
         entry = SBOMPackage()
         entry.initialise()
@@ -137,11 +145,18 @@ def _generate_spdx(packages: list[PackageSpec], provenance: Provenance) -> str:
         entry.set_type("library")
         entry.set_purl(f"pkg:pypi/{pkg.name}@{pkg.version}")
         packages_dict[(pkg.name, pkg.version)] = entry.get_package()
+        if pkg.relationship == DIRECT:  # root DEPENDS_ON each direct package (Story 8.4)
+            rel = SBOMRelationship()
+            rel.initialise()
+            rel.set_relationship(provenance.component_name, "DEPENDS_ON", pkg.name)
+            relationships.append(rel.get_relationship())
 
     sbom = SBOM()
     sbom.set_type("spdx")
     sbom.add_document(document.get_document())
     sbom.add_packages(packages_dict)
+    if relationships:
+        sbom.add_relationships(relationships)
 
     generator = SBOMGenerator(sbom_type="spdx", format="json")
     generator.generate(project_name=provenance.component_name, sbom_data=sbom.get_sbom(), send_to_output=False)

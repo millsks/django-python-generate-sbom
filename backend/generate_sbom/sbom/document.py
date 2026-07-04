@@ -27,14 +27,21 @@ def normalize_components(raw: bytes, output_format: str) -> list[dict[str, Any]]
     return []
 
 
-def _component(name: str, version: str, type_: str | None, purl: str | None, license_: str | None) -> dict[str, Any]:
+def _component(
+    name: str,
+    version: str,
+    type_: str | None,
+    purl: str | None,
+    license_: str | None,
+    relationship: str | None = None,
+) -> dict[str, Any]:
     return {
         "name": name,
         "version": version,
         "type": (type_ or "").lower() or None,
         "purl": purl or None,
         "license": license_ or None,
-        "relationship": None,  # populated by Stories 8.3/8.4
+        "relationship": relationship or None,  # direct | transitive | unknown (Story 8.4)
     }
 
 
@@ -49,9 +56,20 @@ def _from_cyclonedx_json(text: str) -> list[dict[str, Any]]:
                 type_=comp.get("type"),
                 purl=comp.get("purl"),
                 license_=_cyclonedx_license(comp.get("licenses")),
+                relationship=_cyclonedx_relationship(comp.get("properties")),
             )
         )
     return components
+
+
+def _cyclonedx_relationship(properties: Any) -> str | None:
+    """Read the ``sbom:relationship`` property value from a CycloneDX component (Story 8.4)."""
+    if not isinstance(properties, list):
+        return None
+    for prop in properties:
+        if isinstance(prop, dict) and prop.get("name") == "sbom:relationship":
+            return str(prop.get("value")) or None
+    return None
 
 
 def _cyclonedx_license(licenses: Any) -> str | None:
@@ -87,6 +105,7 @@ def _from_cyclonedx_xml(text: str) -> list[dict[str, Any]]:
         fields: dict[str, str] = {}
         purl: str | None = None
         license_parts: list[str] = []
+        relationship: str | None = None
         for child in element:
             local = _local(child.tag)
             if local in ("name", "version") and child.text:
@@ -95,6 +114,8 @@ def _from_cyclonedx_xml(text: str) -> list[dict[str, Any]]:
                 purl = child.text.strip()
             elif local == "licenses":
                 license_parts.extend(_cyclonedx_xml_licenses(child))
+            elif local == "properties":
+                relationship = _cyclonedx_xml_relationship(child) or relationship
         components.append(
             _component(
                 name=fields.get("name", ""),
@@ -102,9 +123,18 @@ def _from_cyclonedx_xml(text: str) -> list[dict[str, Any]]:
                 type_=element.get("type"),
                 purl=purl,
                 license_=", ".join(license_parts) or None,
+                relationship=relationship,
             )
         )
     return components
+
+
+def _cyclonedx_xml_relationship(properties_el: ElementTree.Element) -> str | None:
+    """Read the ``sbom:relationship`` property value from a CycloneDX XML component (Story 8.4)."""
+    for node in properties_el.iter():
+        if _local(node.tag) == "property" and node.get("name") == "sbom:relationship" and node.text:
+            return node.text.strip()
+    return None
 
 
 def _cyclonedx_xml_licenses(licenses_el: ElementTree.Element) -> list[str]:
@@ -119,8 +149,20 @@ def _cyclonedx_xml_licenses(licenses_el: ElementTree.Element) -> list[str]:
 
 def _from_spdx_json(text: str) -> list[dict[str, Any]]:
     doc = json.loads(text)
+    # Direct = SPDXIDs that are the target of a root DEPENDS_ON relationship (Story 8.4).
+    # When no DEPENDS_ON edges exist (all-unknown, e.g. pixi.lock) leave relationship unset.
+    relationships = doc.get("relationships", []) or []
+    direct_ids = {
+        r.get("relatedSpdxElement")
+        for r in relationships
+        if isinstance(r, dict) and r.get("relationshipType") == "DEPENDS_ON"
+    }
     components = []
     for pkg in doc.get("packages", []) or []:
+        relationship: str | None = None
+        # Skip the root application package (version NOASSERTION) — it's not a dependency.
+        if direct_ids and pkg.get("versionInfo") != "NOASSERTION":
+            relationship = "direct" if pkg.get("SPDXID") in direct_ids else "transitive"
         components.append(
             _component(
                 name=str(pkg.get("name", "")),
@@ -128,6 +170,7 @@ def _from_spdx_json(text: str) -> list[dict[str, Any]]:
                 type_=pkg.get("primaryPackagePurpose"),
                 purl=_spdx_purl(pkg.get("externalRefs")),
                 license_=_spdx_license(pkg),
+                relationship=relationship,
             )
         )
     return components

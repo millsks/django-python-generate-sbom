@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import cast
 
 from django.conf import settings
+from django.core.files.storage import default_storage
 from django.db import transaction
 from django.db.models import QuerySet
 from rest_framework import status
@@ -31,6 +32,7 @@ from .services import OUTPUT_FORMAT_MAP, create_job, estimate_seconds
 
 _NO_ACTIVE_ORG = {"error": "No active org.", "code": "no_active_org"}
 _ACTIVE_STATUSES = [SBOMJob.Status.PENDING, SBOMJob.Status.PROGRESS]
+_PRESIGN_TTL_SECONDS = 24 * 60 * 60  # 24-hour presigned URL TTL (AD-11)
 
 
 class GenerateJobView(APIView):
@@ -126,3 +128,32 @@ class StatusJobView(APIView):
                 "completed_at": job.completed_at.isoformat() if job.completed_at else None,
             }
         )
+
+
+class ResultJobView(APIView):
+    """Redirect to a presigned SBOM download (GET /api/v1/sbom/result/{task_id}/).
+
+    Django never streams artifact bytes — it issues a 303 to a presigned
+    S3/MinIO URL (AD-11). The code path is identical for MinIO (dev) and S3 (prod).
+    """
+
+    def get(self, request: Request, task_id: str) -> Response:
+        """Return 303 to a presigned artifact URL, or 404 for unknown/cross-org/not-ready."""
+        org = get_request_org(request)
+        if org is None:
+            return Response(_NO_ACTIVE_ORG, status=status.HTTP_404_NOT_FOUND)
+        try:
+            job = get_job(org, task_id)
+        except SBOMJob.DoesNotExist:
+            return Response({"error": "Job not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+        if job.status != SBOMJob.Status.SUCCESS or not job.result_key:
+            return Response(
+                {"error": "Result not ready.", "code": "not_ready"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        try:
+            url = default_storage.url(job.result_key, expire=_PRESIGN_TTL_SECONDS)  # type: ignore[call-arg]
+        except TypeError:
+            # FileSystemStorage (dev/tests) has no presigning; url() takes only the name.
+            url = default_storage.url(job.result_key)
+        return Response(status=status.HTTP_303_SEE_OTHER, headers={"Location": url})

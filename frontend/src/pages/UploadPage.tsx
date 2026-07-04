@@ -36,8 +36,8 @@ export function UploadPage() {
         sourceBranch,
       })
       setResult(`Uploaded — detected format: ${response.detected_format}`)
-    } catch {
-      setError('Upload failed. Check the file format and that all fields are filled in.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed. Check the file and try again.')
     }
   }
 

@@ -24,6 +24,8 @@ AWS_SECRET_ACCESS_KEY = env.str("AWS_SECRET_ACCESS_KEY", default="")
 AWS_S3_FILE_OVERWRITE = False
 
 STORAGES = {
-    "default": {"BACKEND": "storages.backends.s3.S3Boto3Storage"},
+    # django-storages 1.14: the S3 backend class is `S3Storage` in
+    # `storages.backends.s3` (the legacy `S3Boto3Storage` lives in `.s3boto3`).
+    "default": {"BACKEND": "storages.backends.s3.S3Storage"},
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
 }

@@ -67,15 +67,15 @@ def test_phase7_writes_artifact_and_returns_envelope() -> None:
 
 
 @pytest.mark.django_db
-def test_version_report_endpoint_303_and_cross_org_404() -> None:
+def test_version_report_endpoint_json_inline_and_cross_org_404() -> None:
     job = _make_job()
     artifact_key = f"sbom-results/{job.org_id}/{job.task_id}/versions.json"
-    default_storage.save(artifact_key, ContentFile(b'{"summary": {}}'))
+    default_storage.save(artifact_key, ContentFile(json.dumps(_REPORT).encode()))
     AnalysisReport.objects.create(job=job, report_type=AnalysisReport.ReportType.VERSION, artifact_key=artifact_key)
 
     ok = _login().get(f"/api/v1/sbom/result/{job.task_id}/reports/versions/")
-    assert ok.status_code == 303
-    assert artifact_key in ok.headers["Location"]
+    assert ok.status_code == 200
+    assert ok.data == _REPORT
 
     register_user(email="bob@example.com", password="pw12345678")
     cross = _login("bob@example.com").get(f"/api/v1/sbom/result/{job.task_id}/reports/versions/")

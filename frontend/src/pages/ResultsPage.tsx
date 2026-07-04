@@ -15,6 +15,7 @@ import Typography from '@mui/material/Typography'
 import { ApiError } from '../api/client'
 import { getJobStatus, TERMINAL_STATUSES, type JobStatus } from '../api/jobs'
 import { OverviewTab } from '../components/OverviewTab'
+import { VulnerabilitiesTab } from '../components/VulnerabilitiesTab'
 
 const TAB_LABELS = ['Overview', 'Vulnerabilities', 'Licenses', 'Dependency Graph', 'Version Currency']
 const POLL_MS = 5000
@@ -118,9 +119,12 @@ export function ResultsPage() {
       <TabPanel index={0} value={tab}>
         <OverviewTab status={status} onNavigate={setTab} />
       </TabPanel>
+      <TabPanel index={1} value={tab}>
+        <VulnerabilitiesTab taskId={taskId!} totalPackages={status.summary_stats?.total_packages ?? 0} />
+      </TabPanel>
 
-      {TAB_LABELS.slice(1).map((label, i) => (
-        <TabPanel key={label} index={i + 1} value={tab}>
+      {TAB_LABELS.slice(2).map((label, i) => (
+        <TabPanel key={label} index={i + 2} value={tab}>
           <Typography color="text.secondary">The {label} report will appear here.</Typography>
         </TabPanel>
       ))}

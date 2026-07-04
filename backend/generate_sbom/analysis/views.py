@@ -1,15 +1,16 @@
-"""DRF views for analysis report downloads.
+"""DRF views for analysis reports.
 
 These live in the ``analysis`` app (which may import ``sbom``, per the dependency
-direction). Blob reports redirect to presigned artifacts — Django never proxies
-bytes (AD-11); the dependency-graph JSON is served inline from the report summary
-(straight to Cytoscape.js, AD-9). Reports are org-scoped transitively via
-``SBOMJob.objects.for_org``.
+direction). Report JSON (vuln/license/version) and the graph JSON are served
+inline for the SPA tabs; only genuine file downloads (the graph SVG) redirect to
+a presigned artifact (Django never proxies download bytes, AD-11). Reports are
+org-scoped transitively via ``SBOMJob.objects.for_org``.
 """
 
 from __future__ import annotations
 
-from typing import cast
+import json
+from typing import Any, cast
 
 from django.core.files.storage import default_storage
 from django.db.models import QuerySet
@@ -63,13 +64,35 @@ def _unavailable(report: AnalysisReport | None) -> Response | None:
     return None
 
 
-class _ReportView(APIView):
-    """Base: 303-redirect to a presigned analysis-report artifact for the active org."""
+class _JsonReportView(APIView):
+    """Base: serve a report's JSON artifact inline (200) for the SPA tabs."""
 
     report_type: str
 
     def get(self, request: Request, task_id: str) -> Response:
-        """Return 303 to the presigned report, or 404 for unknown/cross-org/not-ready."""
+        """Return the report JSON, or 404 for unknown/cross-org/not-ready/failed."""
+        job, error = _resolve_job(request, task_id)
+        if error is not None:
+            return error
+        report = _report_for(cast(SBOMJob, job), self.report_type)
+        unavailable = _unavailable(report)
+        if unavailable is not None:
+            return unavailable
+        report = cast(AnalysisReport, report)
+        if not report.artifact_key:
+            return Response({"error": "Report not available.", "code": "not_ready"}, status=status.HTTP_404_NOT_FOUND)
+        with default_storage.open(report.artifact_key) as handle:
+            data: Any = json.loads(handle.read())
+        return Response(data)
+
+
+class _PresignedDownloadView(APIView):
+    """Base: 303-redirect to a presigned artifact for genuine file downloads (AD-11)."""
+
+    report_type: str
+
+    def get(self, request: Request, task_id: str) -> Response:
+        """Return 303 to the presigned artifact, or 404 for unknown/cross-org/not-ready/failed."""
         job, error = _resolve_job(request, task_id)
         if error is not None:
             return error
@@ -83,28 +106,28 @@ class _ReportView(APIView):
         return Response(status=status.HTTP_303_SEE_OTHER, headers={"Location": _presigned(report.artifact_key)})
 
 
-class VulnerabilityReportView(_ReportView):
-    """GET /api/v1/sbom/result/{task_id}/reports/vulnerabilities/ → 303 to vuln.json."""
+class VulnerabilityReportView(_JsonReportView):
+    """GET /api/v1/sbom/result/{task_id}/reports/vulnerabilities/ → vulnerability JSON."""
 
     report_type = AnalysisReport.ReportType.VULN
 
 
-class LicenseReportView(_ReportView):
-    """GET /api/v1/sbom/result/{task_id}/reports/licenses/ → 303 to licenses.json."""
+class LicenseReportView(_JsonReportView):
+    """GET /api/v1/sbom/result/{task_id}/reports/licenses/ → license JSON."""
 
     report_type = AnalysisReport.ReportType.LICENSE
 
 
-class GraphSvgDownloadView(_ReportView):
+class VersionReportView(_JsonReportView):
+    """GET /api/v1/sbom/result/{task_id}/reports/versions/ → version currency JSON."""
+
+    report_type = AnalysisReport.ReportType.VERSION
+
+
+class GraphSvgDownloadView(_PresignedDownloadView):
     """GET /api/v1/sbom/result/{task_id}/reports/graph/download/ → 303 to graph.svg."""
 
     report_type = AnalysisReport.ReportType.GRAPH
-
-
-class VersionReportView(_ReportView):
-    """GET /api/v1/sbom/result/{task_id}/reports/versions/ → 303 to versions.json."""
-
-    report_type = AnalysisReport.ReportType.VERSION
 
 
 class GraphReportView(APIView):

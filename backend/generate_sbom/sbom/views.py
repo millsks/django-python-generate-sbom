@@ -15,6 +15,8 @@ from django.core.files.storage import default_storage
 from django.db import transaction
 from django.db.models import QuerySet
 from rest_framework import status
+from rest_framework.generics import ListAPIView
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -26,8 +28,8 @@ from generate_sbom.tasks.sbom_pipeline import run_sbom_pipeline
 from generate_sbom.users.auth import get_request_org
 
 from .models import SBOMJob
-from .selectors import get_job
-from .serializers import GenerateJobSerializer
+from .selectors import get_job, get_jobs
+from .serializers import GenerateJobSerializer, JobListSerializer
 from .services import OUTPUT_FORMAT_MAP, create_job, estimate_seconds, mark_stale_job_timed_out
 
 _NO_ACTIVE_ORG = {"error": "No active org.", "code": "no_active_org"}
@@ -98,6 +100,32 @@ class GenerateJobView(APIView):
                 "estimated_seconds": estimate_seconds(upload.detected_format, size),
             },
             status=status.HTTP_202_ACCEPTED,
+        )
+
+
+class JobsPagination(PageNumberPagination):
+    """25 jobs per page; up to 100 via ?page_size= (solution-design §5.3)."""
+
+    page_size = 25
+    page_size_query_param = "page_size"
+    max_page_size = 100
+
+
+class JobsListView(ListAPIView[SBOMJob]):
+    """List the active org's jobs, most-recent-first (GET /api/v1/sbom/jobs/)."""
+
+    serializer_class = JobListSerializer
+    pagination_class = JobsPagination
+
+    def get_queryset(self) -> QuerySet[SBOMJob]:
+        """Return the org's jobs with the requested status/format filters (AD-2)."""
+        org = get_request_org(self.request)
+        if org is None:
+            return cast("QuerySet[SBOMJob]", SBOMJob.objects.none())
+        return get_jobs(
+            org,
+            status_filter=self.request.query_params.get("status"),
+            format_filter=self.request.query_params.get("format"),
         )
 
 

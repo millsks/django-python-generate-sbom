@@ -27,3 +27,22 @@ class GenerateJobSerializer(serializers.Serializer[SBOMJob]):
         if getattr(value, "size", 0) > MAX_MANIFEST_BYTES:
             raise serializers.ValidationError("File exceeds the 50 MB limit.")
         return value
+
+
+class JobListSerializer(serializers.ModelSerializer[SBOMJob]):
+    """A row in the dashboard jobs list (Story 6.1)."""
+
+    manifest_filename = serializers.CharField(source="manifest.original_filename", read_only=True)
+    manifest_format = serializers.CharField(source="manifest.detected_format", read_only=True)
+
+    class Meta:
+        model = SBOMJob
+        fields = [  # noqa: RUF012  # DRF Meta option, not a mutable dataclass default
+            "task_id",
+            "created_at",
+            "manifest_filename",
+            "manifest_format",
+            "output_format",
+            "status",
+            "failure_reason",
+        ]

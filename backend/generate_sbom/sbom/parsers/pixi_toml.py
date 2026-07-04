@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import tomllib
 
-from ._types import PackageSpec, ResolutionError
+from ._types import PackageSpec, ResolutionError, tag_relationships
 from ._uv import uv_pip_compile
 
 
@@ -15,9 +15,9 @@ def resolve(content: bytes) -> list[PackageSpec]:
     except tomllib.TOMLDecodeError as exc:
         raise ResolutionError("pixi.toml is not valid TOML.") from exc
 
-    names: list[str] = []
+    names: list[str] = []  # declared (direct) dependency names
     for section in ("dependencies", "pypi-dependencies"):
         for name in data.get(section, {}):
             if name.lower() != "python":
                 names.append(str(name))
-    return uv_pip_compile(names)
+    return tag_relationships(uv_pip_compile(names), names)

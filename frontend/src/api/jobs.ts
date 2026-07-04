@@ -1,5 +1,41 @@
 // Job-related API calls. Expanded in Epic 3 (submission) and Epic 6 (history).
-import { apiRequest } from './client'
+import { apiRequest, apiUpload } from './client'
+
+// Output-format choices accepted by POST /sbom/generate/ (server OUTPUT_FORMAT_MAP).
+export const OUTPUT_FORMATS = [
+  { value: 'cdx-json', label: 'CycloneDX (JSON)' },
+  { value: 'cdx-xml', label: 'CycloneDX (XML)' },
+  { value: 'spdx-2.3', label: 'SPDX (JSON)' },
+] as const
+
+export const DEFAULT_OUTPUT_FORMAT = 'cdx-json'
+
+export interface GenerateMetadata {
+  applicationId: string
+  componentName: string
+  repositoryUrl: string
+  sourceBranch: string
+  outputFormat: string
+}
+
+export interface GenerateResponse {
+  task_id: string
+  status: string
+  status_url: string
+  estimated_seconds: number
+}
+
+// Submit a manifest straight into the SBOM pipeline (creates a job, returns 202).
+export function generateSbom(file: File, meta: GenerateMetadata): Promise<GenerateResponse> {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('application_id', meta.applicationId)
+  form.append('component_name', meta.componentName)
+  form.append('repository_url', meta.repositoryUrl)
+  form.append('source_branch', meta.sourceBranch)
+  form.append('output_format', meta.outputFormat)
+  return apiUpload<GenerateResponse>('/sbom/generate/', form)
+}
 
 // One analysis report's summary, as merged into SBOMJob.summary_stats at aggregate.
 export interface ReportSummary {

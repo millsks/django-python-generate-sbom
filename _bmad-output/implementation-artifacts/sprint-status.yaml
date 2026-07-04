@@ -52,3 +52,13 @@ development_status:
   7-1-scheduled-artifact-expiry-and-cleanup: ready-for-dev
   7-2-manual-and-bulk-artifact-deletion: ready-for-dev
   7-3-expired-artifact-ui-indication: ready-for-dev
+
+  # Epic 8 — SBOM Enrichment & In-App Viewing (post-v1 enhancement).
+  # 8.3-8.5 stay backlog until the 8.2 spike settles the direct/transitive mechanism.
+  epic-8: ready-for-dev
+  8-1-broaden-lts-coverage-via-endoflife-date: ready-for-dev
+  8-2-spike-direct-vs-transitive-dependency-design: ready-for-dev
+  8-3-capture-direct-transitive-relationships-during-resolution: backlog
+  8-4-encode-direct-transitive-in-the-sbom-document: backlog
+  8-5-direct-transitive-visualization-in-the-dependency-graph-tab: backlog
+  8-6-in-app-sbom-viewer-tab: ready-for-dev

@@ -1,6 +1,30 @@
 # Story 10.1: App Shell & Auth-Aware Navigation
 
-Status: ready-for-dev
+Status: review
+
+## Dev Agent Record
+
+### Agent Model Used
+
+claude-opus-4-8[1m]
+
+### Completion Notes List
+
+- **Shared auth state:** `src/auth/AuthProvider.tsx` — `useAuth()` → `{ status: 'loading'|'authed'|'anon', activeOrg, isAdmin, refresh, logout }`. On mount `getActiveOrg()` (success → authed + org; throw → anon), then `getMembers().is_admin` for `isAdmin`. `logout()` calls `api/auth.logout()` then clears. `refresh()` re-runs the check (for Story 10.2 after login).
+- **ProtectedRoute** refactored to consume `useAuth()` (loading → null; anon → `<Navigate to="/login" replace/>`; authed → children). Return-to is Story 10.2.
+- **App shell:** `src/components/Layout.tsx` — MUI AppBar with the title (→`/`), auth-aware nav (anon: Login/Register; authed: Upload/History/API Keys + `OrgSwitcher` + theme toggle + account menu → Logout), `Members` only when `isAdmin`, active-route highlight via `NavLink` `.active`. Renders `<Outlet/>`.
+- **Theme toggle** moved into the app bar: `ThemeModeProvider` now exposes `useThemeMode()` + a `<ThemeToggle/>` (color=inherit) and no longer renders the fixed floating button.
+- **App.tsx** nests all existing routes (paths + ProtectedRoute wrappers unchanged, incl. `*`→Home) under `<Route element={<Layout/>}>`, inside `<AuthProvider>`; `main.tsx` still wraps `App` in `ThemeModeProvider`.
+- **Tests:** Layout (nav per auth state + admin, active route, logout, wraps route via Outlet — `ThemeToggle` stubbed for isolation), ProtectedRoute (authed/anon/loading), AuthProvider (authed+admin, anon, logout). No existing tests broke (pages are tested directly).
+- Gate: `pixi run ci` exits 0 — backend 262, frontend 85 (17 files).
+
+### File List
+
+- frontend/src/auth/AuthProvider.tsx (new) + AuthProvider.test.tsx (new)
+- frontend/src/components/Layout.tsx (new) + Layout.test.tsx (new)
+- frontend/src/components/ProtectedRoute.tsx (use auth context) + ProtectedRoute.test.tsx (new)
+- frontend/src/ThemeModeProvider.tsx (useThemeMode + ThemeToggle; removed floating button)
+- frontend/src/App.tsx (Layout + AuthProvider nesting)
 
 ## Story
 

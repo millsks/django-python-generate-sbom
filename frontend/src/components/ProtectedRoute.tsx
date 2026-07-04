@@ -1,22 +1,17 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
-import { getActiveOrg } from '../api/orgs'
+import { useAuth } from '../auth/AuthProvider'
 
-type AuthState = 'checking' | 'authed' | 'anon'
-
+// Gate a route on authentication using the shared auth state (Story 10.1). While
+// the initial check is in flight, render nothing; anonymous users go to /login
+// (the return-to redirect is Story 10.2).
 export function ProtectedRoute({ children }: { children: ReactNode }) {
-  const [authState, setAuthState] = useState<AuthState>('checking')
+  const { status } = useAuth()
 
-  useEffect(() => {
-    getActiveOrg()
-      .then(() => setAuthState('authed'))
-      .catch(() => setAuthState('anon'))
-  }, [])
-
-  if (authState === 'checking') {
+  if (status === 'loading') {
     return null
   }
-  if (authState === 'anon') {
+  if (status === 'anon') {
     return <Navigate to="/login" replace />
   }
   return <>{children}</>

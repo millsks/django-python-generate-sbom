@@ -1,6 +1,7 @@
 """Tests for manifest parsers and transitive resolution (Story 3.3)."""
 
 import subprocess
+from dataclasses import asdict
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -11,6 +12,7 @@ from generate_sbom.sbom.parsers import (
     ResolutionError,
     SolverUnavailableError,
     resolve_packages,
+    tag_relationships,
 )
 from generate_sbom.sbom.parsers._conda import conda_solve, parse_conda_json
 from generate_sbom.sbom.parsers._uv import parse_compiled, uv_pip_compile
@@ -36,7 +38,7 @@ def test_requirements_strips_and_uses_uv() -> None:
     with patch("generate_sbom.sbom.parsers.requirements.uv_pip_compile", return_value=_FAKE) as uv:
         packages = resolve_packages("requirements", b"django==5.2\n# comment\n-r other.txt\n")
     assert uv.call_args.args[0] == ["django==5.2"]
-    assert packages == _FAKE
+    assert {p.name for p in packages} == {"django", "asgiref"}
 
 
 def test_pyproject_extracts_pep621_deps() -> None:
@@ -57,7 +59,7 @@ def test_conda_uses_solver() -> None:
     with patch("generate_sbom.sbom.parsers.conda.conda_solve", return_value=_FAKE) as solver:
         packages = resolve_packages("conda", b"name: env\ndependencies:\n  - numpy\n")
     solver.assert_called_once()
-    assert packages == _FAKE
+    assert {p.name for p in packages} == {"django", "asgiref"}
 
 
 def test_conda_missing_solver_raises_descriptively() -> None:
@@ -152,3 +154,54 @@ def test_pixi_toml_malformed_raises() -> None:
 def test_conda_non_dict_raises() -> None:
     with pytest.raises(ResolutionError):
         resolve_packages("conda", b"- a\n- b\n")
+
+
+# --- direct/transitive tagging (Story 8.3) -------------------------------------------
+
+_MIXED = [PackageSpec(name="django", version="5.2.1"), PackageSpec(name="asgiref", version="3.8.1")]
+
+
+def test_requirements_tags_direct_vs_transitive() -> None:
+    with patch("generate_sbom.sbom.parsers.requirements.uv_pip_compile", return_value=_MIXED):
+        packages = resolve_packages("requirements", b"django==5.2\n")
+    assert {p.name: p.relationship for p in packages} == {"django": "direct", "asgiref": "transitive"}
+
+
+def test_pyproject_tags_direct_vs_transitive() -> None:
+    content = b'[project]\nname = "x"\ndependencies = ["django>=5"]\n'
+    with patch("generate_sbom.sbom.parsers.pyproject.uv_pip_compile", return_value=_MIXED):
+        packages = resolve_packages("pyproject", content)
+    assert {p.name: p.relationship for p in packages} == {"django": "direct", "asgiref": "transitive"}
+
+
+def test_pixi_toml_tags_direct_vs_transitive() -> None:
+    resolved = [PackageSpec(name="numpy", version="1.26.0"), PackageSpec(name="asgiref", version="3.8.1")]
+    content = b'[dependencies]\nnumpy = ">=1.26"\n'
+    with patch("generate_sbom.sbom.parsers.pixi_toml.uv_pip_compile", return_value=resolved):
+        packages = resolve_packages("pixi_toml", content)
+    assert {p.name: p.relationship for p in packages} == {"numpy": "direct", "asgiref": "transitive"}
+
+
+def test_conda_tags_direct_vs_transitive() -> None:
+    resolved = [PackageSpec(name="numpy", version="1.26.0"), PackageSpec(name="libblas", version="3.9.0")]
+    content = b"name: env\ndependencies:\n  - numpy=1.26\n  - pip:\n    - requests>=2\n"
+    with patch("generate_sbom.sbom.parsers.conda.conda_solve", return_value=resolved):
+        packages = resolve_packages("conda", content)
+    assert {p.name: p.relationship for p in packages} == {"numpy": "direct", "libblas": "transitive"}
+
+
+def test_pixi_lock_packages_are_unknown() -> None:
+    # pixi.lock is the full solved env with no declared marker → all unknown (never guessed).
+    packages = resolve_packages(ManifestUpload.Format.PIXI_LOCK, PIXI_LOCK)
+    assert all(p.relationship == "unknown" for p in packages)
+
+
+def test_tag_relationships_canonicalizes_names() -> None:
+    # Declared "foo-bar" matches resolved "Foo.Bar" (PEP 503), and declared wins.
+    tagged = tag_relationships([PackageSpec(name="Foo.Bar", version="1.0")], ["foo-bar"])
+    assert tagged[0].relationship == "direct"
+
+
+def test_relationship_survives_asdict_roundtrip() -> None:
+    spec = PackageSpec(name="django", version="5.2.1", relationship="direct")
+    assert PackageSpec(**asdict(spec)).relationship == "direct"

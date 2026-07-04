@@ -1,6 +1,6 @@
 # Story 8.3: Capture Direct/Transitive Relationships During Resolution
 
-Status: ready-for-dev
+Status: review
 
 <!-- Contexted from the 8.2 spike: planning-artifacts/research/direct-vs-transitive-design.md -->
 
@@ -71,8 +71,22 @@ research/direct-vs-transitive-design.md#Decision 4]
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
 
 ### Completion Notes List
 
+- **Model:** `PackageSpec.relationship: str = "unknown"` + `DIRECT`/`TRANSITIVE`/`UNKNOWN` constants and a shared `tag_relationships(specs, declared_names)` helper (declared-set intersection by PEP 503 `canonicalize_name`, `dataclasses.replace`) in `parsers/_types.py`, re-exported from the package `__init__`.
+- **Resolvers wired:** requirements (declared = `Requirement(line).name`), pyproject (PEP 621 requirement strings / Poetry keys), pixi.toml (`[dependencies]` + `[pypi-dependencies]` names), conda (`dependencies:` conda specs with version/build stripped + nested `pip:` names). `pixi.lock` needs no change — the full solved env has no declared marker, so its packages keep the `unknown` default (never guessed).
+- **Chain:** the frozen-dataclass default makes the single `asdict` → `PackageSpec(**spec)` hop (`resolve_transitive_deps` → `generate_sbom_document`) carry `relationship` transparently — no pipeline change, verified by a round-trip test.
+- **Not yet consumed:** nothing reads `relationship` yet — 8.4 encodes it in the SBOM document (lighting up the viewer's column) and 8.5 styles the graph. This story is the capture layer only.
+- **Tests:** per-resolver direct/transitive tagging; `pixi.lock` all-unknown; PEP 503 canonicalization (declared wins); asdict round-trip. Two existing invocation tests relaxed from `== _FAKE` to name-based (they now carry tagged relationships).
+- Gate: `pixi run ci` exits 0 — backend 229 tests (93.91%), frontend 43.
+
 ### File List
+
+- backend/generate_sbom/sbom/parsers/_types.py (relationship field, constants, tag_relationships)
+- backend/generate_sbom/sbom/parsers/__init__.py (re-exports)
+- backend/generate_sbom/sbom/parsers/requirements.py, pyproject.py, pixi_toml.py, conda.py (per-resolver tagging)
+- backend/tests/unit/test_parsers.py (tagging tests + relaxed invocation asserts)

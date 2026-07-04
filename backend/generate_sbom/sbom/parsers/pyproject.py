@@ -4,8 +4,18 @@ from __future__ import annotations
 
 import tomllib
 
-from ._types import PackageSpec, ResolutionError
+from packaging.requirements import InvalidRequirement, Requirement
+
+from ._types import PackageSpec, ResolutionError, tag_relationships
 from ._uv import uv_pip_compile
+
+
+def _declared_name(dep: str) -> str:
+    """Best-effort direct-dependency name from a PEP 621 requirement string."""
+    try:
+        return Requirement(dep).name
+    except InvalidRequirement:
+        return dep
 
 
 def resolve(content: bytes) -> list[PackageSpec]:
@@ -16,7 +26,10 @@ def resolve(content: bytes) -> list[PackageSpec]:
         raise ResolutionError("pyproject.toml is not valid TOML.") from exc
 
     deps = list(data.get("project", {}).get("dependencies", []))
-    if not deps:
+    if deps:
+        declared = [_declared_name(str(dep)) for dep in deps]  # PEP 621: requirement strings
+    else:
         poetry = data.get("tool", {}).get("poetry", {}).get("dependencies", {})
         deps = [name for name in poetry if name.lower() != "python"]
-    return uv_pip_compile([str(dep) for dep in deps])
+        declared = list(deps)  # Poetry: keys are already names
+    return tag_relationships(uv_pip_compile([str(dep) for dep in deps]), declared)

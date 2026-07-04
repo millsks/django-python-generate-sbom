@@ -11,7 +11,15 @@ from collections.abc import Callable
 from generate_sbom.manifests.models import ManifestUpload
 
 from . import conda, pixi_lock, pixi_toml, pyproject, requirements
-from ._types import PackageSpec, ResolutionError, SolverUnavailableError
+from ._types import (
+    DIRECT,
+    TRANSITIVE,
+    UNKNOWN,
+    PackageSpec,
+    ResolutionError,
+    SolverUnavailableError,
+    tag_relationships,
+)
 
 _RESOLVERS: dict[str, Callable[[bytes], list[PackageSpec]]] = {
     ManifestUpload.Format.PIXI_LOCK: pixi_lock.resolve,
@@ -30,4 +38,13 @@ def resolve_packages(manifest_format: str, content: bytes) -> list[PackageSpec]:
     return resolver(content)
 
 
-__all__ = ["PackageSpec", "ResolutionError", "SolverUnavailableError", "resolve_packages"]
+__all__ = [
+    "DIRECT",
+    "TRANSITIVE",
+    "UNKNOWN",
+    "PackageSpec",
+    "ResolutionError",
+    "SolverUnavailableError",
+    "resolve_packages",
+    "tag_relationships",
+]

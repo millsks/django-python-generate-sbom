@@ -5,18 +5,37 @@ from datetime import date, timedelta
 import pytest
 import responses
 
-from generate_sbom.analysis.services import http
+from generate_sbom.analysis.services import http, parselmouth
 from generate_sbom.analysis.services import versions as versions_service
 from generate_sbom.sbom.parsers import PackageSpec
 
 
 def _session() -> http.CachedLimiterSession:
-    return http.build_session("test-versions", timedelta(hours=1), 5)
+    return http.build_session("test-versions", timedelta(hours=1), 5, allowed_methods=("GET", "POST"))
+
+
+@pytest.fixture(autouse=True)
+def _isolate_external(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Use a fresh (non-throttled) prefix.dev session by default and reset the
+    # parselmouth name-map cache so conda-forge lookups don't leak across tests.
+    monkeypatch.setattr(http, "prefix_dev_session", _session)
+    parselmouth._invalidate()
 
 
 def _mock_latest(name: str, latest: str | None) -> None:
     body = {"info": {"version": latest}} if latest is not None else {"info": {}}
     responses.add(responses.GET, f"{versions_service.PYPI_JSON_URL}/{name}/json", json=body, status=200)
+
+
+def _mock_conda(versions: list[str]) -> None:
+    page = [{"version": v} for v in versions]
+    responses.add(
+        responses.POST, versions_service.PREFIX_DEV_API_URL, json={"data": {"package": {"variants": {"page": page}}}}
+    )
+
+
+def _mock_conda_missing() -> None:
+    responses.add(responses.POST, versions_service.PREFIX_DEV_API_URL, json={"data": {"package": None}})
 
 
 def _mock_eol(product: str, cycles: object) -> None:
@@ -365,3 +384,49 @@ def test_python_falls_back_to_builtin_default() -> None:
     entry = report["packages"][0]
     assert entry["lts"] == "3.12"  # built-in default, endoflife.date has no LTS cycle
     assert entry["on_lts"] is True
+
+
+# --- conda-forge latest & PyPI divergence (Story 8.10) -------------------------------
+
+
+@responses.activate
+def test_conda_latest_and_divergence_flag() -> None:
+    _mock_latest("somepkg", "5.2.0")  # PyPI latest
+    _mock_conda(["5.1.0", "5.1.0", "5.0.0"])  # conda-forge behind PyPI
+    report = versions_service.classify(
+        [PackageSpec(name="somepkg", version="5.0.0")], session=_session(), eol_session=_session(), lts_registry={}
+    )
+    entry = report["packages"][0]
+    assert entry["conda_latest"] == "5.1.0"
+    assert entry["latest_mismatch"] is True
+
+
+@responses.activate
+def test_conda_latest_matching_pypi_has_no_mismatch() -> None:
+    _mock_latest("somepkg", "1.26.4")
+    _mock_conda(["1.26.4"])
+    report = versions_service.classify(
+        [PackageSpec(name="somepkg", version="1.26.0")], session=_session(), eol_session=_session(), lts_registry={}
+    )
+    entry = report["packages"][0]
+    assert entry["conda_latest"] == "1.26.4"
+    assert entry["latest_mismatch"] is False
+
+
+@responses.activate
+def test_conda_latest_none_when_not_on_conda_forge() -> None:
+    _mock_latest("pypi-only", "1.0.0")
+    _mock_conda_missing()
+    report = versions_service.classify(
+        [PackageSpec(name="pypi-only", version="1.0.0")], session=_session(), eol_session=_session(), lts_registry={}
+    )
+    entry = report["packages"][0]
+    assert entry["conda_latest"] is None
+    assert entry["latest_mismatch"] is False
+
+
+def test_latest_stable_prefers_stable_and_handles_garbage() -> None:
+    assert versions_service._latest_stable(["2.0.0", "2.1.0rc1", "1.9.0"]) == "2.0.0"
+    assert versions_service._latest_stable(["2.1.0rc1", "2.1.0rc2"]) == "2.1.0rc2"  # all prerelease → highest
+    assert versions_service._latest_stable(["not-a-version"]) is None
+    assert versions_service._latest_stable([]) is None

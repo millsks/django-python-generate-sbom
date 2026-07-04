@@ -15,6 +15,7 @@ import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import TableSortLabel from '@mui/material/TableSortLabel'
+import Typography from '@mui/material/Typography'
 import { ApiError } from '../api/client'
 import { getVersions, type VersionEntry, type VersionReport } from '../api/reports'
 import { buildWorkbook, downloadWorkbook } from '../excelExport'
@@ -68,6 +69,19 @@ function NameCell({ pkg }: { pkg: VersionEntry }) {
 function SourceCell({ ecosystem }: { ecosystem?: string }) {
   const label = ecosystemLabel(ecosystem)
   return label ? <Chip size="small" variant="outlined" label={label} /> : <>—</>
+}
+
+// conda-forge latest (via prefix.dev). Rendered in an error color when it diverges
+// from the PyPI latest, to flag that conda-forge is out of step (Story 8.10).
+function CondaLatestCell({ condaLatest, mismatch }: { condaLatest?: string | null; mismatch?: boolean }) {
+  if (!condaLatest) return <>—</>
+  return mismatch ? (
+    <Typography component="span" variant="body2" color="error" title="Differs from the PyPI latest">
+      {condaLatest}
+    </Typography>
+  ) : (
+    <>{condaLatest}</>
+  )
 }
 
 function compare(a: VersionEntry, b: VersionEntry, orderBy: Column): number {
@@ -141,6 +155,7 @@ export function VersionsTab({ taskId }: { taskId: string }) {
                   </TableSortLabel>
                 </TableCell>
               ))}
+              <TableCell>conda-forge</TableCell>
               <TableCell>LTS</TableCell>
               <TableCell>Source</TableCell>
             </TableRow>
@@ -157,6 +172,9 @@ export function VersionsTab({ taskId }: { taskId: string }) {
                   <TableCell>{row.latest ?? '—'}</TableCell>
                   <TableCell>
                     <Chip size="small" label={b.label} color={b.color} />
+                  </TableCell>
+                  <TableCell>
+                    <CondaLatestCell condaLatest={row.conda_latest} mismatch={row.latest_mismatch} />
                   </TableCell>
                   <TableCell>
                     <LtsCell lts={row.lts} onLts={row.on_lts} />

@@ -58,6 +58,8 @@ export interface VersionEntry {
   lts: string | null // the tracked LTS series for this package, or null if untracked
   on_lts: boolean | null // whether the installed version is on that LTS series; null if untracked
   ecosystem?: string // "pypi" | "conda" — the package's source registry (Story 8.8)
+  conda_latest?: string | null // latest version on conda-forge (via prefix.dev), or null (Story 8.10)
+  latest_mismatch?: boolean // true when the PyPI latest and conda-forge latest diverge (Story 8.10)
 }
 
 export interface VersionReport {

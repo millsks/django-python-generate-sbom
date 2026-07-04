@@ -1,6 +1,6 @@
 # Story 8.9: Link Packages to PyPI / prefix.dev in the Version Currency Tab
 
-Status: review
+Status: done
 
 <!-- Depends on Story 8.8 (PackageSpec.ecosystem in the version-currency report). -->
 

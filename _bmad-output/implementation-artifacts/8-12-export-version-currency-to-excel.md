@@ -1,6 +1,6 @@
 # Story 8.12: Export Version Currency to Excel
 
-Status: review
+Status: done
 
 <!-- Establishes the shared Excel-export mechanism; 8.13/8.14 reuse it, 8.15 composes a combined workbook. -->
 

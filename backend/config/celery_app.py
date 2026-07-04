@@ -9,6 +9,7 @@
 import os
 
 from celery import Celery
+from celery.schedules import crontab
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.local")
 
@@ -19,5 +20,11 @@ app.autodiscover_tasks()
 # (not a per-app tasks.py), so discover it explicitly.
 app.autodiscover_tasks(["generate_sbom"])
 
-# Beat schedule placeholder; the nightly artifact-cleanup task is added in Epic 7.
-app.conf.beat_schedule = {}
+# Beat schedule. The nightly artifact-cleanup task is added in Epic 7.
+app.conf.beat_schedule = {
+    # Weekly refresh of the parselmouth conda↔PyPI name mapping (Story 8.10).
+    "refresh-parselmouth-mapping": {
+        "task": "generate_sbom.tasks.maintenance.refresh_parselmouth_mapping",
+        "schedule": crontab(hour=3, minute=0, day_of_week=1),
+    },
+}

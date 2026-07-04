@@ -26,10 +26,12 @@ OSV_TTL = timedelta(hours=24)
 PYPI_TTL = timedelta(hours=1)
 NVD_TTL = timedelta(hours=24)
 EOL_TTL = timedelta(days=7)  # endoflife.date product data changes slowly
+PREFIX_DEV_TTL = timedelta(hours=24)  # conda-forge latest via prefix.dev
 OSV_RATE_PER_SECOND = 1
 PYPI_RATE_PER_SECOND = 5
 NVD_RATE_PER_SECOND = 1  # NVD is strict without an API key; caching absorbs the rest
 EOL_RATE_PER_SECOND = 2
+PREFIX_DEV_RATE_PER_SECOND = 3
 
 
 class CachedLimiterSession(CacheMixin, LimiterMixin, requests.Session):
@@ -41,6 +43,7 @@ def build_session(
     expire_after: timedelta,
     per_second: int,
     allowable_codes: tuple[int, ...] = (200,),
+    allowed_methods: tuple[str, ...] = ("GET", "HEAD"),
 ) -> CachedLimiterSession:
     """Build a cached, rate-limited session using the configured cache backend."""
     backend: str = settings.REQUESTS_CACHE_BACKEND
@@ -55,6 +58,7 @@ def build_session(
         expire_after=expire_after,
         per_second=per_second,
         allowable_codes=allowable_codes,
+        allowed_methods=allowed_methods,
         **backend_kwargs,
     )
 
@@ -63,6 +67,7 @@ _osv_session: CachedLimiterSession | None = None
 _pypi_session: CachedLimiterSession | None = None
 _nvd_session: CachedLimiterSession | None = None
 _eol_session: CachedLimiterSession | None = None
+_prefix_dev_session: CachedLimiterSession | None = None
 
 
 def osv_session() -> CachedLimiterSession:
@@ -99,6 +104,24 @@ def eol_session() -> CachedLimiterSession:
     if _eol_session is None:
         _eol_session = build_session("eol-cache", EOL_TTL, EOL_RATE_PER_SECOND, allowable_codes=(200, 404))
     return _eol_session
+
+
+def prefix_dev_session() -> CachedLimiterSession:
+    """Return the shared prefix.dev session (24h cache, 3 req/s) for conda-forge latest.
+
+    prefix.dev's package API is GraphQL over POST, so POST responses are cached
+    (keyed by URL + body) — repeated identical queries and shared packages don't
+    re-hit the API (Story 8.10).
+    """
+    global _prefix_dev_session
+    if _prefix_dev_session is None:
+        _prefix_dev_session = build_session(
+            "prefix-dev-cache",
+            PREFIX_DEV_TTL,
+            PREFIX_DEV_RATE_PER_SECOND,
+            allowed_methods=("GET", "POST"),
+        )
+    return _prefix_dev_session
 
 
 # Retry wrapper for transient external-API errors (used by 4.2/4.5).

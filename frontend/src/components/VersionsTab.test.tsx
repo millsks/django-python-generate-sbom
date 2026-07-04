@@ -108,6 +108,33 @@ describe('VersionsTab', () => {
     expect(within(table).getByText('Conda')).toBeInTheDocument()
   })
 
+  it('shows the conda-forge latest and highlights divergence from PyPI (Story 8.10)', async () => {
+    mockGet.mockResolvedValue({
+      packages: [
+        { name: 'behind', installed: '5.0.0', latest: '5.2.0', currency: 'behind-1', lts: null, on_lts: null, conda_latest: '5.1.0', latest_mismatch: true },
+        { name: 'matchd', installed: '1.0.0', latest: '1.2.0', currency: 'behind-1', lts: null, on_lts: null, conda_latest: '1.2.0', latest_mismatch: false },
+        { name: 'nonda', installed: '2.0.0', latest: '2.0.0', currency: 'current', lts: null, on_lts: null, conda_latest: null },
+      ],
+      summary: { current: 1, 'behind-1': 2, 'behind-2+': 0, unknown: 0 },
+    })
+    render(<VersionsTab taskId="t" />)
+
+    const table = await screen.findByRole('table')
+    const rowFor = (name: string) =>
+      within(table)
+        .getAllByRole('row')
+        .find((r) => within(r).queryByText(name))!
+
+    // Divergent conda-forge value is flagged (error-colored Typography with a hint title).
+    expect(within(rowFor('behind')).getByText('5.1.0')).toHaveAttribute('title', 'Differs from the PyPI latest')
+    // Matching value is plain text — neither the Latest nor conda-forge cell is flagged.
+    within(rowFor('matchd'))
+      .getAllByText('1.2.0')
+      .forEach((el) => expect(el).not.toHaveAttribute('title'))
+    // Not on conda-forge → dash in the conda-forge column.
+    expect(within(rowFor('nonda')).getAllByText('—').length).toBeGreaterThan(0)
+  })
+
   it('exports the version-currency report to an .xlsx on demand (Story 8.12)', async () => {
     mockGet.mockResolvedValue(REPORT)
     render(<VersionsTab taskId="t" />)

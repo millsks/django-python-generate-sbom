@@ -23,10 +23,15 @@ from packaging.version import InvalidVersion, Version
 
 from generate_sbom.sbom.parsers import PackageSpec
 
-from . import http
+from . import http, parselmouth
 
 PYPI_JSON_URL = "https://pypi.org/pypi"
 EOL_API_URL = "https://endoflife.date/api"
+PREFIX_DEV_API_URL = "https://prefix.dev/api/graphql"
+# conda-forge latest via prefix.dev's GraphQL API (variables → injection-safe).
+_CONDA_LATEST_QUERY = (
+    'query($name: String!) { package(channelName: "conda-forge", name: $name) { variants { page { version } } } }'
+)
 
 CURRENT = "current"
 BEHIND_1 = "behind-1"
@@ -144,6 +149,43 @@ def _latest_version(session: http.CachedLimiterSession, name: str) -> str | None
     return version
 
 
+def _latest_stable(versions: list[str]) -> str | None:
+    """Pick the highest stable version (falling back to the highest overall)."""
+    parsed = []
+    for raw in versions:
+        try:
+            parsed.append((Version(raw), raw))
+        except InvalidVersion:
+            continue
+    if not parsed:
+        return None
+    stable = [item for item in parsed if not item[0].is_prerelease]
+    return max(stable or parsed, key=lambda item: item[0])[1]
+
+
+def _conda_forge_latest(session: http.CachedLimiterSession, pypi_name: str) -> str | None:
+    """Return the latest conda-forge version for a package via prefix.dev, or None.
+
+    Resolves the PyPI name to its conda-forge name (parselmouth) first, then queries
+    prefix.dev. A package not on conda-forge, or any network/parse error, → None.
+    """
+    conda_name = parselmouth.pypi_to_conda(pypi_name)
+    try:
+        response = session.post(
+            PREFIX_DEV_API_URL, json={"query": _CONDA_LATEST_QUERY, "variables": {"name": conda_name}}
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except (requests.RequestException, ValueError):
+        return None
+    package = (payload.get("data") or {}).get("package")
+    if not isinstance(package, dict):
+        return None
+    page = (package.get("variants") or {}).get("page") or []
+    versions = [str(v["version"]) for v in page if isinstance(v, dict) and v.get("version")]
+    return _latest_stable(versions)
+
+
 def _is_on_lts(installed: str, lts: str | None) -> bool | None:
     """Whether ``installed`` is on the tracked LTS release series.
 
@@ -188,6 +230,7 @@ def classify(
     *,
     session: http.CachedLimiterSession | None = None,
     eol_session: http.CachedLimiterSession | None = None,
+    conda_session: http.CachedLimiterSession | None = None,
     lts_registry: dict[str, str] | None = None,
     today: date | None = None,
 ) -> dict[str, Any]:
@@ -195,9 +238,12 @@ def classify(
 
     LTS precedence (Story 8.7): operator override (``SBOM_LTS_REGISTRY`` /
     ``lts_registry``) → endoflife.date current LTS → built-in ``_DEFAULT_LTS`` fallback.
+    Also records each package's latest conda-forge version (via prefix.dev) and flags
+    when it diverges from the PyPI latest (Story 8.10). Currency stays PyPI-based.
     """
     session = session or http.pypi_session()
     eol = eol_session or http.eol_session()
+    conda = conda_session or http.prefix_dev_session()
     overrides = lts_registry if lts_registry is not None else load_operator_registry()
     today = today or datetime.now(UTC).date()
 
@@ -209,6 +255,7 @@ def classify(
         # Operator override wins; else the live current LTS; else the built-in default.
         lts = overrides.get(norm) or _eol_lts_series(eol, pkg.name, today=today) or _DEFAULT_LTS_NORMALIZED.get(norm)
         currency = _classify_currency(pkg.version, latest, lts)
+        conda_latest = _conda_forge_latest(conda, pkg.name)
         counts[currency] += 1
         entries.append(
             {
@@ -219,6 +266,8 @@ def classify(
                 "lts": lts,
                 "on_lts": _is_on_lts(pkg.version, lts),
                 "ecosystem": pkg.ecosystem,
+                "conda_latest": conda_latest,
+                "latest_mismatch": bool(latest and conda_latest and latest != conda_latest),
             }
         )
 

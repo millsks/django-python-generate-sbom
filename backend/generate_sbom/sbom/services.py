@@ -16,6 +16,8 @@ from generate_sbom.manifests.models import ManifestUpload
 from generate_sbom.users.models import Org, User
 
 from .models import SBOMJob
+from .parsers import PackageSpec, resolve_packages
+from .selectors import get_job_by_task_id
 
 logger = structlog.get_logger()
 
@@ -65,6 +67,14 @@ def finalize_job(task_id: str, result_key: str, summary_stats: dict[str, object]
         completed_at=now,
         artifacts_expire_at=now + timedelta(days=ARTIFACT_TTL_DAYS),
     )
+
+
+def resolve_job_packages(task_id: str) -> list[PackageSpec]:
+    """Load a job's manifest, download it, and resolve the full package list (Phase 2)."""
+    job = get_job_by_task_id(task_id)
+    with job.manifest.file.open("rb") as handle:
+        content = handle.read()
+    return resolve_packages(job.manifest.detected_format, content)
 
 
 def estimate_seconds(detected_format: str, size_bytes: int) -> int:

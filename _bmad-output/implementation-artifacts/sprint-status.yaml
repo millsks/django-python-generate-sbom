@@ -23,7 +23,7 @@ development_status:
   epic-3: in-progress
   3-1-manifest-upload-and-format-detection: done
   3-2-job-submission-concurrency-gate-and-status-api: done
-  3-3-manifest-parsers-and-transitive-resolution: ready-for-dev
+  3-3-manifest-parsers-and-transitive-resolution: review
   3-4-sbom-document-generation-and-persistence: ready-for-dev
   3-5-pipeline-orchestration-progress-and-timeout-handling: ready-for-dev
 
@@ -42,7 +42,7 @@ development_status:
   5-4-licenses-tab: ready-for-dev
   5-5-dependency-graph-tab: ready-for-dev
   5-6-version-currency-tab: ready-for-dev
-  5-7-light-dark-theme-toggle: review
+  5-7-light-dark-theme-toggle: done
 
   epic-6: ready-for-dev
   6-1-jobs-list-api-and-dashboard-table: ready-for-dev

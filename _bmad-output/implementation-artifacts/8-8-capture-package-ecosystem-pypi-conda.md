@@ -1,6 +1,6 @@
 # Story 8.8: Capture Package Ecosystem (PyPI/Conda) During Resolution
 
-Status: ready-for-dev
+Status: review
 
 <!-- Follow-on to the version-currency work; sibling of 8.3 (both add a PackageSpec field at resolution). -->
 
@@ -87,8 +87,23 @@ PyPI-based there too. [Source: epics.md#Story 8.10]
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
 
 ### Completion Notes List
 
+- **Model:** `PackageSpec.ecosystem: str = "pypi"` + `PYPI`/`CONDA` constants and two helpers — `tag_ecosystems(specs, conda_names)` (name-based) and `mark_ecosystem(specs, eco)` (uniform) — in `parsers/_types.py`, re-exported from the package.
+- **Resolvers:** `pixi.lock` reads each entry's `conda:`/`pypi:` source key (the clean per-package case — verified against the repo's own v7 lock); conda env marks the solver `LINK` set `conda`; pixi.toml tags `[dependencies]` names `conda` and `[pypi-dependencies]` + transitive `pypi`; requirements/pyproject keep the `pypi` default.
+- **Report:** `versions.classify` now includes `ecosystem` per entry. Analysis tasks re-resolve via `resolve_job_packages`, so the freshly-resolved `PackageSpec.ecosystem` reaches `classify` — no chain-payload plumbing.
+- **Not consumed yet:** the frontend badge + registry links are Story 8.9; the conda-forge latest comparison is 8.10.
+- **Tests:** `pixi.lock` mixed conda/pypi; requirements → pypi; conda env → conda; pixi.toml conda-deps vs pypi-deps vs transitive; asdict round-trip; report includes `ecosystem`.
+- Gate: `pixi run ci` exits 0 — backend 235 tests (93.95%), frontend 43.
+
 ### File List
+
+- backend/generate_sbom/sbom/parsers/_types.py (ecosystem field, PYPI/CONDA, tag_ecosystems, mark_ecosystem)
+- backend/generate_sbom/sbom/parsers/__init__.py (re-exports)
+- backend/generate_sbom/sbom/parsers/pixi_lock.py, conda.py, pixi_toml.py (per-resolver ecosystem tagging)
+- backend/generate_sbom/analysis/services/versions.py (ecosystem in report entry)
+- backend/tests/unit/test_parsers.py, test_versions_service.py (ecosystem tests)

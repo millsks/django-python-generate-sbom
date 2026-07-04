@@ -205,3 +205,52 @@ def test_tag_relationships_canonicalizes_names() -> None:
 def test_relationship_survives_asdict_roundtrip() -> None:
     spec = PackageSpec(name="django", version="5.2.1", relationship="direct")
     assert PackageSpec(**asdict(spec)).relationship == "direct"
+
+
+# --- ecosystem tagging (Story 8.8) ---------------------------------------------------
+
+PIXI_LOCK_MIXED = b"""
+version: 6
+packages:
+  - conda: https://conda.anaconda.org/conda-forge/linux-64/numpy-1.26.0-x.conda
+    name: numpy
+    version: "1.26.0"
+  - pypi: https://files.pythonhosted.org/x/requests-2.32.3-any.whl
+    name: requests
+    version: "2.32.3"
+"""
+
+
+def test_pixi_lock_tags_ecosystem_per_package() -> None:
+    packages = resolve_packages(ManifestUpload.Format.PIXI_LOCK, PIXI_LOCK_MIXED)
+    assert {p.name: p.ecosystem for p in packages} == {"numpy": "conda", "requests": "pypi"}
+
+
+def test_requirements_packages_are_pypi() -> None:
+    with patch("generate_sbom.sbom.parsers.requirements.uv_pip_compile", return_value=_MIXED):
+        packages = resolve_packages("requirements", b"django==5.2\n")
+    assert all(p.ecosystem == "pypi" for p in packages)
+
+
+def test_conda_packages_are_conda() -> None:
+    resolved = [PackageSpec(name="numpy", version="1.26.0"), PackageSpec(name="libblas", version="3.9.0")]
+    with patch("generate_sbom.sbom.parsers.conda.conda_solve", return_value=resolved):
+        packages = resolve_packages("conda", b"name: env\ndependencies:\n  - numpy\n")
+    assert all(p.ecosystem == "conda" for p in packages)
+
+
+def test_pixi_toml_tags_conda_deps_vs_pypi_deps() -> None:
+    resolved = [
+        PackageSpec(name="numpy", version="1.26.0"),  # declared under [dependencies] → conda
+        PackageSpec(name="requests", version="2.32.3"),  # declared under [pypi-dependencies] → pypi
+        PackageSpec(name="urllib3", version="2.2.0"),  # transitive → pypi
+    ]
+    content = b'[dependencies]\nnumpy = ">=1.26"\n[pypi-dependencies]\nrequests = ">=2"\n'
+    with patch("generate_sbom.sbom.parsers.pixi_toml.uv_pip_compile", return_value=resolved):
+        packages = resolve_packages("pixi_toml", content)
+    assert {p.name: p.ecosystem for p in packages} == {"numpy": "conda", "requests": "pypi", "urllib3": "pypi"}
+
+
+def test_ecosystem_survives_asdict_roundtrip() -> None:
+    spec = PackageSpec(name="numpy", version="1.26.0", ecosystem="conda")
+    assert PackageSpec(**asdict(spec)).ecosystem == "conda"

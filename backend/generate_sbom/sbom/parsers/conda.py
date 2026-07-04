@@ -9,7 +9,7 @@ import yaml
 from packaging.requirements import InvalidRequirement, Requirement
 
 from ._conda import conda_solve
-from ._types import PackageSpec, ResolutionError, tag_relationships
+from ._types import CONDA, PackageSpec, ResolutionError, mark_ecosystem, tag_relationships
 
 # Split a conda match-spec on its first version/build/operator token → the name.
 _CONDA_NAME_RE = re.compile(r"[=<>!~\s]")
@@ -40,4 +40,6 @@ def resolve(content: bytes) -> list[PackageSpec]:
         raise ResolutionError("environment.yml is not valid YAML.") from exc
     if not isinstance(data, dict):
         raise ResolutionError("environment.yml has an unexpected structure.")
-    return tag_relationships(conda_solve(data), _declared_names(data))
+    # The solver's resolved set is all conda packages (Story 8.8); pip: extras aren't captured here.
+    resolved = mark_ecosystem(conda_solve(data), CONDA)
+    return tag_relationships(resolved, _declared_names(data))

@@ -12,12 +12,16 @@ from generate_sbom.manifests.models import ManifestUpload
 
 from . import conda, pixi_lock, pixi_toml, pyproject, requirements
 from ._types import (
+    CONDA,
     DIRECT,
+    PYPI,
     TRANSITIVE,
     UNKNOWN,
     PackageSpec,
     ResolutionError,
     SolverUnavailableError,
+    mark_ecosystem,
+    tag_ecosystems,
     tag_relationships,
 )
 
@@ -39,12 +43,16 @@ def resolve_packages(manifest_format: str, content: bytes) -> list[PackageSpec]:
 
 
 __all__ = [
+    "CONDA",
     "DIRECT",
+    "PYPI",
     "TRANSITIVE",
     "UNKNOWN",
     "PackageSpec",
     "ResolutionError",
     "SolverUnavailableError",
+    "mark_ecosystem",
     "resolve_packages",
+    "tag_ecosystems",
     "tag_relationships",
 ]

@@ -71,6 +71,18 @@ def test_ahead_of_latest_is_current() -> None:
 
 
 @responses.activate
+def test_report_includes_package_ecosystem() -> None:
+    _mock_latest("numpy", "1.26.4")
+    report = versions_service.classify(
+        [PackageSpec(name="numpy", version="1.26.0", ecosystem="conda")],
+        session=_session(),
+        eol_session=_session(),
+        lts_registry={},
+    )
+    assert report["packages"][0]["ecosystem"] == "conda"
+
+
+@responses.activate
 def test_lts_series_counts_as_current() -> None:
     # Django 4.2 (an LTS) is behind latest 5.2, but on the LTS series → current.
     _mock_latest("django", "5.2.0")

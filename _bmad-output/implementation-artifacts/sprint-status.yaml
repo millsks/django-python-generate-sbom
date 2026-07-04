@@ -58,11 +58,11 @@ development_status:
   epic-8: in-progress
   8-1-broaden-lts-coverage-via-endoflife-date: done
   8-2-spike-direct-vs-transitive-dependency-design: done
-  8-3-capture-direct-transitive-relationships-during-resolution: review
+  8-3-capture-direct-transitive-relationships-during-resolution: done
   8-4-encode-direct-transitive-in-the-sbom-document: ready-for-dev
   8-5-direct-transitive-visualization-in-the-dependency-graph-tab: ready-for-dev
   8-6-in-app-sbom-viewer-tab: done
   8-7-fix-lts-currency-honor-eol-and-current-lts: done
-  8-8-capture-package-ecosystem-pypi-conda: ready-for-dev
+  8-8-capture-package-ecosystem-pypi-conda: review
   8-9-link-packages-to-pypi-prefix-dev: ready-for-dev
   8-10-conda-forge-latest-and-divergence: ready-for-dev

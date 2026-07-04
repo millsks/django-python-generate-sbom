@@ -13,6 +13,10 @@ DIRECT = "direct"
 TRANSITIVE = "transitive"
 UNKNOWN = "unknown"
 
+# Package ecosystem / source registry (Story 8.8). ``pypi`` is the default.
+PYPI = "pypi"
+CONDA = "conda"
+
 
 @dataclass(frozen=True)
 class PackageSpec:
@@ -23,6 +27,7 @@ class PackageSpec:
     extras: tuple[str, ...] = ()
     markers: str = ""
     relationship: str = UNKNOWN  # direct | transitive | unknown (Story 8.3)
+    ecosystem: str = PYPI  # pypi | conda (Story 8.8)
 
 
 def tag_relationships(specs: list[PackageSpec], declared_names: Iterable[str]) -> list[PackageSpec]:
@@ -36,6 +41,17 @@ def tag_relationships(specs: list[PackageSpec], declared_names: Iterable[str]) -
     return [
         replace(spec, relationship=DIRECT if canonicalize_name(spec.name) in declared else TRANSITIVE) for spec in specs
     ]
+
+
+def tag_ecosystems(specs: list[PackageSpec], conda_names: Iterable[str]) -> list[PackageSpec]:
+    """Tag each spec ``conda`` if its canonical name is in ``conda_names``, else ``pypi`` (Story 8.8)."""
+    conda = {canonicalize_name(name) for name in conda_names}
+    return [replace(spec, ecosystem=CONDA if canonicalize_name(spec.name) in conda else PYPI) for spec in specs]
+
+
+def mark_ecosystem(specs: list[PackageSpec], ecosystem: str) -> list[PackageSpec]:
+    """Set a uniform ecosystem on every spec (Story 8.8)."""
+    return [replace(spec, ecosystem=ecosystem) for spec in specs]
 
 
 class ResolutionError(Exception):

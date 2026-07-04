@@ -30,6 +30,11 @@ const SIGNALS: Record<string, string> = {
   Permissive: 'Use freely',
 }
 
+// Default tier order: most legally-significant first (copyleft → unknown → permissive),
+// with packages sorted by name within a tier (Story 8.16).
+const TIER_RANK: Record<string, number> = { 'Strong Copyleft': 4, 'Weak Copyleft': 3, Unknown: 2, Permissive: 1 }
+const byTierRank = (a: { tier: string }, b: { tier: string }) => (TIER_RANK[b.tier] ?? 0) - (TIER_RANK[a.tier] ?? 0)
+
 export function LicensesTab({ taskId }: { taskId: string }) {
   const [report, setReport] = useState<LicenseReport | null>(null)
   const [failure, setFailure] = useState<{ reason: string | null } | null>(null)
@@ -88,7 +93,7 @@ export function LicensesTab({ taskId }: { taskId: string }) {
           </Button>
         </Stack>
       )}
-      {report.tiers.map((tier) => (
+      {[...report.tiers].sort(byTierRank).map((tier) => (
         <Accordion key={tier.tier} expanded={expanded.has(tier.tier)} onChange={toggleTier(tier.tier)}>
           <AccordionSummary expandIcon={<span aria-hidden>▾</span>}>
             <Typography sx={{ fontWeight: 600 }}>
@@ -109,7 +114,9 @@ export function LicensesTab({ taskId }: { taskId: string }) {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {tier.packages.map((pkg) => (
+                  {[...tier.packages]
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map((pkg) => (
                     <TableRow key={`${pkg.name}-${pkg.version}`}>
                       <TableCell>
                         <Link href={`https://pypi.org/project/${pkg.name}/`} target="_blank" rel="noopener">

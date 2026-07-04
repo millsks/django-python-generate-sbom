@@ -93,8 +93,8 @@ export function VersionsTab({ taskId }: { taskId: string }) {
   const [report, setReport] = useState<VersionReport | null>(null)
   const [failure, setFailure] = useState<{ reason: string | null } | null>(null)
   const [error, setError] = useState(false)
-  const [orderBy, setOrderBy] = useState<Column>('currency')
-  const [order, setOrder] = useState<'asc' | 'desc'>('desc') // most-outdated first
+  const [orderBy, setOrderBy] = useState<Column>('name') // default: by package name (Story 8.16)
+  const [order, setOrder] = useState<'asc' | 'desc'>('asc')
 
   useEffect(() => {
     let active = true

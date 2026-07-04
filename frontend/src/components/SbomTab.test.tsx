@@ -30,6 +30,9 @@ describe('SbomTab', () => {
     expect(within(table).getByText('django')).toBeInTheDocument()
     expect(within(table).getByText('5.2.1')).toBeInTheDocument()
     expect(within(table).getByText('BSD-3-Clause')).toBeInTheDocument()
+    // Default sort is by package name, ascending (Story 8.16): asgiref before django.
+    const [, ...rows] = within(table).getAllByRole('row')
+    expect(within(rows[0]).getByText('asgiref')).toBeInTheDocument()
   })
 
   it('toggles to the raw document view', async () => {

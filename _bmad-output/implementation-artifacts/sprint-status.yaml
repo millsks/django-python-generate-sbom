@@ -70,8 +70,8 @@ development_status:
   8-12-export-version-currency-to-excel: done
   8-13-export-vulnerabilities-to-excel: done
   8-14-export-licenses-to-excel: done
-  8-15-overview-export-all-to-excel: ready-for-dev
-  8-16-default-sort-order-per-tab: ready-for-dev
+  8-15-overview-export-all-to-excel: done
+  8-16-default-sort-order-per-tab: review
   8-17-licenses-expand-collapse-all: done
 
   # Epic 9 — Project Management & CI/CD Workflows (ported from millsks/idp-app,

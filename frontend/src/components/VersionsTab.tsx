@@ -155,7 +155,7 @@ export function VersionsTab({ taskId }: { taskId: string }) {
                   </TableSortLabel>
                 </TableCell>
               ))}
-              <TableCell>conda-forge</TableCell>
+              <TableCell>conda-forge Latest</TableCell>
               <TableCell>LTS</TableCell>
               <TableCell>Source</TableCell>
             </TableRow>

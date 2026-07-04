@@ -55,7 +55,7 @@ development_status:
 
   # Epic 8 — SBOM Enrichment & In-App Viewing (post-v1 enhancement).
   # 8.3-8.5 stay backlog until the 8.2 spike settles the direct/transitive mechanism.
-  epic-8: in-progress
+  epic-8: done
   8-1-broaden-lts-coverage-via-endoflife-date: done
   8-2-spike-direct-vs-transitive-dependency-design: done
   8-3-capture-direct-transitive-relationships-during-resolution: done
@@ -71,7 +71,7 @@ development_status:
   8-13-export-vulnerabilities-to-excel: done
   8-14-export-licenses-to-excel: done
   8-15-overview-export-all-to-excel: done
-  8-16-default-sort-order-per-tab: review
+  8-16-default-sort-order-per-tab: done
   8-17-licenses-expand-collapse-all: done
 
   # Epic 9 — Project Management & CI/CD Workflows (ported from millsks/idp-app,
@@ -86,6 +86,6 @@ development_status:
   9-7-adopt-beneficial-pixi-tasks: ready-for-dev
 
   # Epic 10 — UI Navigation & Authenticated Routing (frontend).
-  epic-10: ready-for-dev
-  10-1-app-shell-and-auth-aware-navigation: ready-for-dev
+  epic-10: in-progress
+  10-1-app-shell-and-auth-aware-navigation: done
   10-2-redirect-to-login-and-back: ready-for-dev

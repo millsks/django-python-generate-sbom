@@ -2,18 +2,41 @@ import { describe, expect, it } from 'vitest'
 import { licensesSheet, versionCurrencySheet, vulnerabilitiesSheet } from './reportSheets'
 
 describe('versionCurrencySheet', () => {
-  it('maps version-currency entries to a sheet with normalized cells', () => {
+  it('maps version-currency entries to all UI columns with a linked package name', () => {
     const sheet = versionCurrencySheet([
-      { name: 'django', installed: '5.2.1', latest: '5.2.1', currency: 'current', lts: '5.2', on_lts: true, ecosystem: 'pypi' },
+      { name: 'django', installed: '5.2.1', latest: '5.2.1', currency: 'current', lts: '5.2', on_lts: true, ecosystem: 'pypi', conda_latest: '5.1.0' },
       { name: 'numpy', installed: '1.26.0', latest: null, currency: 'unknown', lts: null, on_lts: null, ecosystem: 'conda' },
     ])
 
     expect(sheet.name).toBe('Version Currency')
-    expect(sheet.columns.map((c) => c.header)).toContain('Package')
-    expect(sheet.rows).toHaveLength(2)
-    expect(sheet.rows[0]).toMatchObject({ name: 'django', on_lts: 'yes', ecosystem: 'pypi', latest: '5.2.1' })
-    // null latest/lts → '' and null on_lts → '' (not 'no').
-    expect(sheet.rows[1]).toMatchObject({ name: 'numpy', latest: '', lts: '', on_lts: '', ecosystem: 'conda' })
+    // All UI columns are present, including the conda-forge latest.
+    expect(sheet.columns.map((c) => c.header)).toEqual([
+      'Package',
+      'Installed',
+      'Latest (PyPI)',
+      'conda-forge Latest',
+      'Status',
+      'LTS',
+      'On LTS',
+      'Source',
+    ])
+    // Package name is a hyperlink to its registry (PyPI project page).
+    expect(sheet.rows[0]).toMatchObject({
+      name: { text: 'django', hyperlink: 'https://pypi.org/project/django/5.2.1/' },
+      latest: '5.2.1',
+      conda_latest: '5.1.0',
+      on_lts: 'yes',
+      ecosystem: 'pypi',
+    })
+    // Conda package links to prefix.dev; null latest/conda_latest/lts → '', null on_lts → ''.
+    expect(sheet.rows[1]).toMatchObject({
+      name: { text: 'numpy', hyperlink: 'https://prefix.dev/channels/conda-forge/packages/numpy' },
+      latest: '',
+      conda_latest: '',
+      lts: '',
+      on_lts: '',
+      ecosystem: 'conda',
+    })
   })
 })
 

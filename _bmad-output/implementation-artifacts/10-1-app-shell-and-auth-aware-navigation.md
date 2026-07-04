@@ -1,6 +1,6 @@
 # Story 10.1: App Shell & Auth-Aware Navigation
 
-Status: review
+Status: done
 
 ## Dev Agent Record
 

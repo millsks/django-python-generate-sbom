@@ -218,6 +218,7 @@ def classify(
                 "currency": currency,
                 "lts": lts,
                 "on_lts": _is_on_lts(pkg.version, lts),
+                "ecosystem": pkg.ecosystem,
             }
         )
 

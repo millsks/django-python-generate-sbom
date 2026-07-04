@@ -1,6 +1,6 @@
 # Story 8.3: Capture Direct/Transitive Relationships During Resolution
 
-Status: review
+Status: done
 
 <!-- Contexted from the 8.2 spike: planning-artifacts/research/direct-vs-transitive-design.md -->
 

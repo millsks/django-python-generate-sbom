@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import yaml
 
-from ._types import PackageSpec, ResolutionError
+from ._types import CONDA, PYPI, PackageSpec, ResolutionError
 
 
 def resolve(content: bytes) -> list[PackageSpec]:
@@ -19,5 +19,7 @@ def resolve(content: bytes) -> list[PackageSpec]:
     specs: list[PackageSpec] = []
     for pkg in data.get("packages", []):
         if isinstance(pkg, dict) and pkg.get("name") and pkg.get("version") is not None:
-            specs.append(PackageSpec(name=str(pkg["name"]), version=str(pkg["version"])))
+            # Each entry is discriminated by a ``conda:`` or ``pypi:`` source key (Story 8.8).
+            ecosystem = CONDA if "conda" in pkg else PYPI
+            specs.append(PackageSpec(name=str(pkg["name"]), version=str(pkg["version"]), ecosystem=ecosystem))
     return specs

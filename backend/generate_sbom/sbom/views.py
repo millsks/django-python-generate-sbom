@@ -27,6 +27,7 @@ from generate_sbom.manifests.services import upload_manifest
 from generate_sbom.tasks.sbom_pipeline import run_sbom_pipeline
 from generate_sbom.users.auth import get_request_org
 
+from .document import normalize_components
 from .models import SBOMJob
 from .selectors import get_job, get_jobs
 from .serializers import GenerateJobSerializer, JobListSerializer
@@ -191,3 +192,37 @@ class ResultJobView(APIView):
             # FileSystemStorage (dev/tests) has no presigning; url() takes only the name.
             url = default_storage.url(job.result_key)
         return Response(status=status.HTTP_303_SEE_OTHER, headers={"Location": url})
+
+
+class SbomDocumentView(APIView):
+    """Serve the SBOM inline for the viewer tab (GET /api/v1/sbom/document/{task_id}/).
+
+    Returns a JSON envelope — the normalized component list plus the raw document
+    text — so the SPA reads the SBOM in-page without the 303 download flow (AD-5).
+    Cross-org / unknown / not-yet-ready jobs all 404 (no existence leak, AD-2).
+    """
+
+    def get(self, request: Request, task_id: str) -> Response:
+        """Return {format, components, raw}, or 404 for unknown/cross-org/not-ready/expired."""
+        org = get_request_org(request)
+        if org is None:
+            return Response(_NO_ACTIVE_ORG, status=status.HTTP_404_NOT_FOUND)
+        try:
+            job = get_job(org, task_id)
+        except SBOMJob.DoesNotExist:
+            return Response({"error": "Job not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+        if job.status != SBOMJob.Status.SUCCESS or not job.result_key or not default_storage.exists(job.result_key):
+            # Never produced, not finished, or artifacts expired/deleted (Epic 7).
+            return Response(
+                {"error": "SBOM not available.", "code": "not_ready"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        with default_storage.open(job.result_key) as handle:
+            raw = handle.read()
+        return Response(
+            {
+                "format": job.output_format,
+                "components": normalize_components(raw, job.output_format),
+                "raw": raw.decode("utf-8"),
+            }
+        )

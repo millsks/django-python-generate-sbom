@@ -12,8 +12,8 @@ import CardContent from '@mui/material/CardContent'
 import Typography from '@mui/material/Typography'
 import type { JobStatus, ReportSummary } from '../api/jobs'
 
-// Tab indices in the shell's fixed order (5.1).
-const TAB = { vulnerabilities: 1, licenses: 2, versions: 4 }
+// Tab indices in the shell's fixed order (5.1; SBOM inserted at 1 in 8.6).
+const TAB = { vulnerabilities: 2, licenses: 3, versions: 5 }
 
 const num = (value: unknown): number => (typeof value === 'number' ? value : 0)
 

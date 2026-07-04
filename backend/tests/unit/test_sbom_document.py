@@ -1,0 +1,112 @@
+"""Tests for the SBOM viewer parser + inline content endpoint (Story 8.6)."""
+
+import pytest
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+from rest_framework.test import APIClient
+
+from generate_sbom.manifests.models import ManifestUpload
+from generate_sbom.sbom.document import normalize_components
+from generate_sbom.sbom.generation import Provenance, generate_sbom_document
+from generate_sbom.sbom.models import SBOMJob
+from generate_sbom.sbom.parsers import PackageSpec
+from generate_sbom.sbom.services import finalize_job
+from generate_sbom.users.services import register_user
+
+PKGS = [PackageSpec(name="django", version="5.2.1"), PackageSpec(name="asgiref", version="3.8.1")]
+PROV = Provenance(
+    application_id="APP-1", component_name="web", repository_url="https://github.com/acme/web", source_branch="main"
+)
+
+
+@pytest.fixture(autouse=True)
+def _tmp_media(settings: pytest.FixtureRequest, tmp_path: object) -> None:
+    settings.MEDIA_ROOT = str(tmp_path)  # type: ignore[attr-defined]
+
+
+# --- pure parser: round-trip real generated documents --------------------------------
+
+
+@pytest.mark.parametrize("output_format", ["cyclonedx-json", "cyclonedx-xml", "spdx-json"])
+def test_normalize_extracts_components(output_format: str) -> None:
+    raw, _ = generate_sbom_document(PKGS, output_format, PROV)
+
+    components = normalize_components(raw, output_format)
+
+    by_name = {c["name"]: c for c in components}
+    # Both dependencies are present with their versions, regardless of format.
+    assert by_name["django"]["version"] == "5.2.1"
+    assert by_name["asgiref"]["version"] == "3.8.1"
+    # relationship is not populated yet (Stories 8.3/8.4).
+    assert all(c["relationship"] is None for c in components)
+
+
+def test_normalize_unknown_format_is_empty() -> None:
+    assert normalize_components(b"{}", "totally-made-up") == []
+
+
+# --- inline content endpoint ---------------------------------------------------------
+
+
+def _make_job(output_format: str = "cyclonedx-json", email: str = "alice@example.com") -> SBOMJob:
+    user = register_user(email=email, password="pw12345678")
+    org = user.org_memberships.select_related("org").get().org
+    upload = ManifestUpload(
+        org=org,
+        user=user,
+        detected_format=ManifestUpload.Format.PIXI_LOCK,
+        original_filename="pixi.lock",
+        application_id="APP-1",
+        component_name="web",
+        repository_url="https://github.com/acme/web",
+        source_branch="main",
+    )
+    upload.file.save("pixi.lock", ContentFile(b"version: 5\n"), save=False)
+    upload.save()
+    return SBOMJob.objects.create(org=org, manifest=upload, output_format=output_format)
+
+
+def _login(email: str = "alice@example.com") -> APIClient:
+    client = APIClient()
+    client.post("/api/v1/auth/login/", {"email": email, "password": "pw12345678"}, format="json")
+    return client
+
+
+def _complete(job: SBOMJob) -> str:
+    raw, _ = generate_sbom_document(PKGS, job.output_format, PROV)
+    result_key = f"sbom-results/{job.org_id}/{job.task_id}/sbom.json"
+    default_storage.save(result_key, ContentFile(raw))
+    finalize_job(str(job.task_id), result_key, {"total_packages": 2})
+    return result_key
+
+
+@pytest.mark.django_db
+def test_document_endpoint_returns_components_and_raw() -> None:
+    job = _make_job()
+    _complete(job)
+
+    response = _login().get(f"/api/v1/sbom/document/{job.task_id}/")
+
+    assert response.status_code == 200
+    assert response.data["format"] == "cyclonedx-json"
+    assert {c["name"] for c in response.data["components"]} == {"django", "asgiref"}
+    assert '"bomFormat": "CycloneDX"' in response.data["raw"]  # raw is the exact document text
+
+
+@pytest.mark.django_db
+def test_document_endpoint_cross_org_404() -> None:
+    job = _make_job()
+    _complete(job)
+    register_user(email="bob@example.com", password="pw12345678")
+
+    response = _login("bob@example.com").get(f"/api/v1/sbom/document/{job.task_id}/")
+
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_document_endpoint_not_ready_404() -> None:
+    job = _make_job()  # PENDING, no result_key
+    response = _login().get(f"/api/v1/sbom/document/{job.task_id}/")
+    assert response.status_code == 404
+    assert response.data["code"] == "not_ready"

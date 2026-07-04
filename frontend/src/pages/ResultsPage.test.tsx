@@ -39,7 +39,7 @@ describe('ResultsPage', () => {
     mockStatus.mockReset()
   })
 
-  it('renders the five tabs in order with Overview active by default', async () => {
+  it('renders the tabs in order with Overview active by default', async () => {
     mockStatus.mockResolvedValue(SUCCESS)
     renderPage()
 
@@ -47,6 +47,7 @@ describe('ResultsPage', () => {
     const tabs = screen.getAllByRole('tab')
     expect(tabs.map((t) => t.textContent)).toEqual([
       'Overview',
+      'SBOM',
       'Vulnerabilities',
       'Licenses',
       'Dependency Graph',

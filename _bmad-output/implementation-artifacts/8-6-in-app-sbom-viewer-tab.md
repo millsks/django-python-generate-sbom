@@ -1,6 +1,6 @@
 # Story 8.6: In-App SBOM Viewer Tab
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -76,8 +76,23 @@ When artifacts are expired/deleted (Epic 7), `result_key` is nulled; the endpoin
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
 
 ### Completion Notes List
 
+- **Backend:** new pure parser `sbom/document.py::normalize_components(raw, output_format)` round-trips all three stored formats (cyclonedx-json, cyclonedx-xml, spdx-json) into `{name, version, type, purl, license, relationship}` dicts (`relationship` always `None` until 8.3/8.4). New `SbomDocumentView` (`GET /api/v1/sbom/document/{task_id}/`) org-scopes via `get_job` (404 cross-org/unknown), 404s `not_ready` when the job isn't SUCCESS / `result_key` is null / the artifact is gone (expired — Epic 7), and returns `{format, components, raw}` inline (AD-5) — the download 303 flow is untouched.
+- **Frontend:** `api/sbom.ts::getSbomDocument` + typed `SbomDocument`; `SbomTab` component with a Components/Raw `ToggleButtonGroup` — a sticky-header, name-sortable, scroll-contained component table and a monospace scrollable raw view. Inserted as tab index 1 (right of Overview) in `ResultsPage`; analysis tabs shifted right and `OverviewTab`'s navigation index map updated accordingly.
+- **License caveat (deviation from AC #2):** the current SBOM generator does not embed per-component licenses for CycloneDX (license is a separate analysis report/tab), so the License column shows a value only when the document carries one (SPDX may) and `—` otherwise. The column is kept for when generation is enriched; the raw view always shows the exact document. The `relationship` column is hidden until 8.3/8.4 populate it.
+- **Tests:** backend — parser round-trips all three formats + unknown-format guard; endpoint returns components+raw, 404 cross-org, 404 not-ready. Frontend — table renders, Raw toggle, relationship column hidden, 404 → unavailable notice. ResultsPage/OverviewTab tests updated for the new tab + shifted indices.
+- Gate: `pixi run ci` exits 0 — backend 212 tests (94.19%), frontend 43 tests (11 files).
+
 ### File List
+
+- backend/generate_sbom/sbom/document.py (new — SBOM parser)
+- backend/generate_sbom/sbom/views.py (SbomDocumentView), urls.py (sbom/document/ route)
+- backend/tests/unit/test_sbom_document.py (new)
+- frontend/src/api/sbom.ts (new), components/SbomTab.tsx (new) + SbomTab.test.tsx (new)
+- frontend/src/pages/ResultsPage.tsx (SBOM tab at index 1) + ResultsPage.test.tsx
+- frontend/src/components/OverviewTab.tsx (shifted nav indices) + OverviewTab.test.tsx

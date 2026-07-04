@@ -62,6 +62,6 @@ describe('OverviewTab', () => {
     const onNavigate = vi.fn()
     render(<OverviewTab status={makeStatus()} onNavigate={onNavigate} />)
     await userEvent.click(screen.getByRole('button', { name: /Vulnerabilities/ }))
-    expect(onNavigate).toHaveBeenCalledWith(1)
+    expect(onNavigate).toHaveBeenCalledWith(2)
   })
 })

@@ -1,6 +1,6 @@
-// Results page shell (Story 5.1): five tabs over a completed job's outputs, with
-// a shareable URL (/results/:taskId), org access control, and a polling gate.
-// Tab bodies (Vulnerabilities/Licenses/Graph/Versions) are filled by 5.2-5.6.
+// Results page shell (Story 5.1): tabs over a completed job's outputs, with a
+// shareable URL (/results/:taskId), org access control, and a polling gate. The
+// SBOM viewer sits second, right of Overview (Story 8.6).
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
@@ -15,12 +15,13 @@ import Typography from '@mui/material/Typography'
 import { TERMINAL_STATUSES } from '../api/jobs'
 import { useJobStatus } from '../hooks/useJobStatus'
 import { OverviewTab } from '../components/OverviewTab'
+import { SbomTab } from '../components/SbomTab'
 import { VulnerabilitiesTab } from '../components/VulnerabilitiesTab'
 import { LicensesTab } from '../components/LicensesTab'
 import { DepGraph } from '../components/DepGraph'
 import { VersionsTab } from '../components/VersionsTab'
 
-const TAB_LABELS = ['Overview', 'Vulnerabilities', 'Licenses', 'Dependency Graph', 'Version Currency']
+const TAB_LABELS = ['Overview', 'SBOM', 'Vulnerabilities', 'Licenses', 'Dependency Graph', 'Version Currency']
 
 function TabPanel({ index, value, children }: { index: number; value: number; children: ReactNode }) {
   return (
@@ -93,15 +94,18 @@ export function ResultsPage() {
         <OverviewTab status={status} onNavigate={setTab} />
       </TabPanel>
       <TabPanel index={1} value={tab}>
-        <VulnerabilitiesTab taskId={taskId!} totalPackages={status.summary_stats?.total_packages ?? 0} />
+        <SbomTab taskId={taskId!} />
       </TabPanel>
       <TabPanel index={2} value={tab}>
-        <LicensesTab taskId={taskId!} />
+        <VulnerabilitiesTab taskId={taskId!} totalPackages={status.summary_stats?.total_packages ?? 0} />
       </TabPanel>
       <TabPanel index={3} value={tab}>
-        <DepGraph taskId={taskId!} />
+        <LicensesTab taskId={taskId!} />
       </TabPanel>
       <TabPanel index={4} value={tab}>
+        <DepGraph taskId={taskId!} />
+      </TabPanel>
+      <TabPanel index={5} value={tab}>
         <VersionsTab taskId={taskId!} />
       </TabPanel>
     </Container>

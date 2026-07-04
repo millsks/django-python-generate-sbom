@@ -1,6 +1,6 @@
 """Tests for the version-currency service (Story 4.5). No real network (responses)."""
 
-from datetime import timedelta
+from datetime import date, timedelta
 
 import pytest
 import responses
@@ -227,3 +227,129 @@ def test_load_lts_registry_from_file(settings: pytest.FixtureRequest, tmp_path: 
     registry = versions_service.load_lts_registry()
     assert registry["flask"] == "3.0"
     assert registry["django"] == "4.2"  # defaults still present
+
+
+# --- EOL-aware current-LTS selection (Story 8.7) -------------------------------------
+
+_TODAY = date(2026, 7, 4)
+
+
+@responses.activate
+def test_expired_lts_points_to_current_lts() -> None:
+    # Django 4.2 reached EOL 2026-04-07; on 2026-07-04 the current LTS is 5.2.
+    _mock_latest("django", "5.2.0")
+    _mock_eol(
+        "django",
+        [
+            {"cycle": "5.2", "lts": True, "eol": "2028-04-30"},
+            {"cycle": "4.2", "lts": True, "eol": "2026-04-07"},  # past EOL
+        ],
+    )
+    report = versions_service.classify(
+        [PackageSpec(name="django", version="4.2.30")],
+        session=_session(),
+        eol_session=_session(),
+        lts_registry={},
+        today=_TODAY,
+    )
+    entry = report["packages"][0]
+    assert entry["lts"] == "5.2"  # current LTS, not the expired 4.2
+    assert entry["on_lts"] is False  # installed 4.2.x is no longer on an active LTS
+    assert entry["currency"] == "behind-2+"  # flagged as needing an upgrade
+
+
+@responses.activate
+def test_builtin_default_no_longer_traps_django() -> None:
+    # Even though _DEFAULT_LTS pins django=4.2, endoflife.date's current LTS wins.
+    _mock_latest("django", "5.2.0")
+    _mock_eol("django", [{"cycle": "5.2", "lts": True, "eol": "2028-04-30"}])
+    report = versions_service.classify(
+        [PackageSpec(name="django", version="5.2.1")],
+        session=_session(),
+        eol_session=_session(),
+        lts_registry={},
+        today=_TODAY,
+    )
+    entry = report["packages"][0]
+    assert entry["lts"] == "5.2"  # not the built-in 4.2
+    assert entry["on_lts"] is True
+
+
+@responses.activate
+def test_all_lts_past_eol_degrades_to_highest_cycle() -> None:
+    _mock_latest("legacy", "3.0.0")
+    _mock_eol(
+        "legacy",
+        [
+            {"cycle": "2.0", "lts": True, "eol": "2020-01-01"},
+            {"cycle": "1.0", "lts": True, "eol": "2018-01-01"},
+        ],
+    )
+    report = versions_service.classify(
+        [PackageSpec(name="legacy", version="2.0.1")],
+        session=_session(),
+        eol_session=_session(),
+        lts_registry={},
+        today=_TODAY,
+    )
+    assert report["packages"][0]["lts"] == "2.0"  # highest cycle, not None / crash
+
+
+@responses.activate
+def test_missing_or_malformed_eol_is_treated_as_not_expired() -> None:
+    _mock_latest("proj", "9.0.0")
+    _mock_eol(
+        "proj",
+        [
+            {"cycle": "8.0", "lts": True},  # no eol field
+            {"cycle": "7.0", "lts": True, "eol": "n/a"},  # malformed
+            {"cycle": "6.0", "lts": True, "eol": "2019-01-01"},  # expired
+        ],
+    )
+    report = versions_service.classify(
+        [PackageSpec(name="proj", version="8.0.0")],
+        session=_session(),
+        eol_session=_session(),
+        lts_registry={},
+        today=_TODAY,
+    )
+    assert report["packages"][0]["lts"] == "8.0"  # highest not-expired (missing eol)
+
+
+@responses.activate
+def test_operator_override_wins_over_current_lts() -> None:
+    _mock_latest("django", "5.2.0")
+    _mock_eol("django", [{"cycle": "5.2", "lts": True, "eol": "2028-04-30"}])
+    report = versions_service.classify(
+        [PackageSpec(name="django", version="4.2.0")],
+        session=_session(),
+        eol_session=_session(),
+        lts_registry={"django": "4.2"},  # operator pin
+        today=_TODAY,
+    )
+    entry = report["packages"][0]
+    assert entry["lts"] == "4.2"  # operator override beats endoflife.date's 5.2
+    assert entry["on_lts"] is True
+
+
+@responses.activate
+def test_python_falls_back_to_builtin_default() -> None:
+    # endoflife.date tracks python but marks no cycle LTS → built-in 3.12 fallback (AC #4).
+    _mock_latest("python", "3.13.0")
+    _mock_eol(
+        "python",
+        [
+            {"cycle": "3.13", "lts": False, "eol": "2029-10-01"},
+            {"cycle": "3.12", "lts": False, "eol": "2028-10-01"},
+        ],
+    )
+    report = versions_service.classify(
+        [PackageSpec(name="python", version="3.12.4")],
+        session=_session(),
+        eol_session=_session(),
+        lts_registry={},
+        today=_TODAY,
+    )
+    entry = report["packages"][0]
+    assert entry["lts"] == "3.12"  # built-in default, endoflife.date has no LTS cycle
+    assert entry["on_lts"] is True

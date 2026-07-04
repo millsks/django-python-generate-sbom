@@ -22,13 +22,15 @@ const REPORT = {
   summary: { current: 1, 'behind-1': 1, 'behind-2+': 1, unknown: 1 },
 }
 
+// Ground truth after Story 8.7's EOL fix: a package on its current LTS shows the
+// green chip; Django 4.2.x (past its 2026-04-07 EOL) points at the current LTS 5.2.
 const LTS_REPORT = {
   packages: [
-    { name: 'django', installed: '4.2.1', latest: '5.2.0', currency: 'current', lts: '4.2', on_lts: true },
-    { name: 'flask', installed: '5.1.0', latest: '5.2.0', currency: 'behind-1', lts: '4.2', on_lts: false },
+    { name: 'wagtail', installed: '7.4.0', latest: '7.4.1', currency: 'current', lts: '7.4', on_lts: true },
+    { name: 'django', installed: '4.2.30', latest: '5.2.0', currency: 'behind-2+', lts: '5.2', on_lts: false },
     { name: 'requests', installed: '2.0', latest: '2.1', currency: 'current', lts: null, on_lts: null },
   ],
-  summary: { current: 2, 'behind-1': 1, 'behind-2+': 0, unknown: 0 },
+  summary: { current: 2, 'behind-1': 0, 'behind-2+': 1, unknown: 0 },
 }
 
 async function dataRows() {
@@ -68,8 +70,8 @@ describe('VersionsTab', () => {
         .getAllByRole('row')
         .find((r) => within(r).queryByText(name))!
 
-    expect(within(rowFor('django')).getByText('On LTS (4.2)')).toBeInTheDocument()
-    expect(within(rowFor('flask')).getByText('LTS 4.2 (target)')).toBeInTheDocument()
+    expect(within(rowFor('wagtail')).getByText('On LTS (7.4)')).toBeInTheDocument()
+    expect(within(rowFor('django')).getByText('LTS 5.2 (target)')).toBeInTheDocument()
     // Untracked package shows a dash, not an LTS chip.
     expect(within(rowFor('requests')).queryByText(/LTS/)).not.toBeInTheDocument()
   })

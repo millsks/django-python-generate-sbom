@@ -1,6 +1,6 @@
 # Story 8.2: [Spike] Direct vs Transitive Dependency Design
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

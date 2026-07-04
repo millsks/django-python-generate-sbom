@@ -14,14 +14,54 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .auth import SESSION_ACTIVE_ORG, get_request_org, set_active_org_by_slug
+from .auth import SESSION_ACTIVE_ORG, get_admin_org, get_request_org, set_active_org_by_slug
 from .models import OrgMembership, User
-from .selectors import get_user_orgs
-from .serializers import LoginSerializer, RegistrationSerializer
+from .selectors import get_org_members, get_user_orgs
+from .serializers import (
+    AddMemberSerializer,
+    CreateOrgSerializer,
+    LoginSerializer,
+    RegistrationSerializer,
+    TransferAdminSerializer,
+)
+from .services import (
+    MembershipError,
+    create_member,
+    create_org,
+    leave_org,
+    remove_member,
+    transfer_admin,
+)
 
 logger = structlog.get_logger()
 
 _INVALID_CREDENTIALS = {"error": "Invalid email or password", "code": "invalid_credentials"}
+_NOT_ADMIN = {"error": "Admin privileges are required.", "code": "not_admin"}
+_NO_ACTIVE_ORG = {"error": "No active org.", "code": "no_active_org"}
+
+
+def _validation_error(serializer_errors: object) -> Response:
+    """Build a 400 error envelope from serializer errors."""
+    first_error = next(iter(serializer_errors.values()))[0]  # type: ignore[attr-defined]
+    return Response(
+        {"error": str(first_error), "code": "validation_error"},
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
+def _membership_error(exc: MembershipError) -> Response:
+    """Build a 400 error envelope from a membership domain error."""
+    return Response({"error": str(exc), "code": exc.code}, status=status.HTTP_400_BAD_REQUEST)
+
+
+def _member_data(membership: OrgMembership) -> dict[str, object]:
+    """Serialize a membership row for the roster."""
+    return {
+        "user_id": membership.user_id,
+        "email": membership.user.email,
+        "role": membership.role,
+        "joined_at": membership.created_at.isoformat(),
+    }
 
 
 class RegisterView(APIView):
@@ -133,8 +173,108 @@ class OrgMeView(APIView):
         """Return the active org, or 404 if the user has no orgs."""
         org = get_request_org(request)
         if org is None:
+            return Response(_NO_ACTIVE_ORG, status=status.HTTP_404_NOT_FOUND)
+        return Response({"slug": org.slug, "name": org.name})
+
+
+class CreateOrgView(APIView):
+    """Create a new org with the caller as admin (POST /orgs/create/)."""
+
+    def post(self, request: Request) -> Response:
+        """Create the org and add the caller as its admin (FR-1.2)."""
+        serializer = CreateOrgSerializer(data=request.data)
+        if not serializer.is_valid():
+            return _validation_error(serializer.errors)
+        org = create_org(name=serializer.validated_data["name"], admin_user=cast(User, request.user))
+        return Response({"slug": org.slug, "name": org.name}, status=status.HTTP_201_CREATED)
+
+
+class MembersView(APIView):
+    """List (any member) or add (admin only) members of the active org."""
+
+    def get(self, request: Request) -> Response:
+        """Return the active org's roster and whether the caller is an admin."""
+        org = get_request_org(request)
+        if org is None:
+            return Response(_NO_ACTIVE_ORG, status=status.HTTP_404_NOT_FOUND)
+        members = [_member_data(m) for m in get_org_members(org)]
+        return Response({"members": members, "is_admin": get_admin_org(request) is not None})
+
+    def post(self, request: Request) -> Response:
+        """Add a member to the active org (admin only, FR-1.3)."""
+        org = get_admin_org(request)
+        if org is None:
+            return Response(_NOT_ADMIN, status=status.HTTP_403_FORBIDDEN)
+        serializer = AddMemberSerializer(data=request.data)
+        if not serializer.is_valid():
+            return _validation_error(serializer.errors)
+        try:
+            user = create_member(
+                org,
+                serializer.validated_data["email"],
+                serializer.validated_data["temp_password"],
+            )
+        except MembershipError as exc:
+            return _membership_error(exc)
+        return Response({"user_id": user.pk, "email": user.email}, status=status.HTTP_201_CREATED)
+
+
+class MemberDetailView(APIView):
+    """Remove a member from the active org (DELETE /orgs/members/{user_id}/)."""
+
+    def delete(self, request: Request, user_id: int) -> Response:
+        """Remove the member (admin only, FR-1.4)."""
+        org = get_admin_org(request)
+        if org is None:
+            return Response(_NOT_ADMIN, status=status.HTTP_403_FORBIDDEN)
+        target = User.objects.filter(pk=user_id).first()
+        if target is None:
             return Response(
-                {"error": "No active org.", "code": "no_active_org"},
+                {"error": "That user is not a member of this org.", "code": "not_a_member"},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        return Response({"slug": org.slug, "name": org.name})
+        try:
+            remove_member(org, target)
+        except MembershipError as exc:
+            return _membership_error(exc)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class TransferAdminView(APIView):
+    """Transfer admin to another member (POST /orgs/transfer-admin/)."""
+
+    def post(self, request: Request) -> Response:
+        """Promote the target to admin, demoting the caller if sole admin (FR-1.5)."""
+        org = get_admin_org(request)
+        if org is None:
+            return Response(_NOT_ADMIN, status=status.HTTP_403_FORBIDDEN)
+        serializer = TransferAdminSerializer(data=request.data)
+        if not serializer.is_valid():
+            return _validation_error(serializer.errors)
+        target = User.objects.filter(pk=serializer.validated_data["user_id"]).first()
+        if target is None:
+            return Response(
+                {"error": "That user is not a member of this org.", "code": "not_a_member"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        try:
+            transfer_admin(org, cast(User, request.user), target)
+        except MembershipError as exc:
+            return _membership_error(exc)
+        return Response(status=status.HTTP_200_OK)
+
+
+class LeaveOrgView(APIView):
+    """Leave the active org (POST /orgs/leave/)."""
+
+    def post(self, request: Request) -> Response:
+        """Remove the caller's membership; a sole admin cannot leave (FR-1.7)."""
+        org = get_request_org(request)
+        if org is None:
+            return Response(_NO_ACTIVE_ORG, status=status.HTTP_404_NOT_FOUND)
+        try:
+            leave_org(org, cast(User, request.user))
+        except MembershipError as exc:
+            return _membership_error(exc)
+        request.session.pop(SESSION_ACTIVE_ORG, None)
+        return Response(status=status.HTTP_204_NO_CONTENT)

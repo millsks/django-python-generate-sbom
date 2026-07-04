@@ -3,12 +3,17 @@
 from django.urls import path
 
 from .views import (
+    CreateOrgView,
+    LeaveOrgView,
     LoginView,
     LogoutView,
+    MemberDetailView,
+    MembersView,
     OrgListView,
     OrgMeView,
     OrgSwitchView,
     RegisterView,
+    TransferAdminView,
 )
 
 urlpatterns = [
@@ -16,6 +21,11 @@ urlpatterns = [
     path("auth/login/", LoginView.as_view(), name="login"),
     path("auth/logout/", LogoutView.as_view(), name="logout"),
     path("orgs/", OrgListView.as_view(), name="org-list"),
+    path("orgs/create/", CreateOrgView.as_view(), name="org-create"),
     path("orgs/switch/", OrgSwitchView.as_view(), name="org-switch"),
     path("orgs/me/", OrgMeView.as_view(), name="org-me"),
+    path("orgs/leave/", LeaveOrgView.as_view(), name="org-leave"),
+    path("orgs/transfer-admin/", TransferAdminView.as_view(), name="org-transfer-admin"),
+    path("orgs/members/", MembersView.as_view(), name="org-members"),
+    path("orgs/members/<int:user_id>/", MemberDetailView.as_view(), name="org-member-detail"),
 ]

@@ -33,3 +33,22 @@ class LoginSerializer(serializers.Serializer[User]):
 
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
+
+
+class CreateOrgSerializer(serializers.Serializer[User]):
+    """Validates the create-org request."""
+
+    name = serializers.CharField(max_length=255)
+
+
+class AddMemberSerializer(serializers.Serializer[User]):
+    """Validates the add-member request."""
+
+    email = serializers.EmailField()
+    temp_password = serializers.CharField(write_only=True, min_length=8)
+
+
+class TransferAdminSerializer(serializers.Serializer[User]):
+    """Validates the transfer-admin request."""
+
+    user_id = serializers.IntegerField()

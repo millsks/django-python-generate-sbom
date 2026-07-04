@@ -16,8 +16,8 @@ development_status:
 
   epic-2: in-progress
   2-1-user-and-org-data-models-and-registration: done
-  2-2-login-session-auth-and-org-switcher: review
-  2-3-org-administration-and-membership-management: ready-for-dev
+  2-2-login-session-auth-and-org-switcher: done
+  2-3-org-administration-and-membership-management: review
   2-4-api-key-management: ready-for-dev
 
   epic-3: ready-for-dev

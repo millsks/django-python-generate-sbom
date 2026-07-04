@@ -1,6 +1,6 @@
 # Story 2.2: Login, Session Auth & Org Switcher
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

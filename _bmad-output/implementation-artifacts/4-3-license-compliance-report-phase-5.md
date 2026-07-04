@@ -1,6 +1,6 @@
 # Story 4.3: License Compliance Report — Phase 5
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -89,8 +89,24 @@ On failure, return envelope `failed=True` + `failure_reason`; the chord (4.6) co
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
+
+- Deviated from the story's `pip-licenses` suggestion — it reads the *installed* environment, but the resolved package set is not installed here. Used the **PyPI JSON API** (via 4.1's `pypi_session`) instead. Documented below.
 
 ### Completion Notes List
 
+- **`analysis/services/license.py::classify(packages)`** — pure (AD-3). Extracts the declared license per package from PyPI JSON metadata, preferring PEP 639 `license_expression` (SPDX) → Trove `classifiers` (mapped to SPDX via a controlled table) → a short free-text `license`. Classifies into four tiers and returns `{tiers, summary}`.
+- **Tiers** in descending-attention order (AC #3): **Strong Copyleft** (AGPL/GPL families), **Weak Copyleft** (LGPL/MPL families), **Unknown** (no license / non-SPDX / unrecognized), **Permissive** (a curated set of common permissive SPDX ids). Anything not recognized falls to **Unknown** (AC #4). PyPI fetch failures degrade to Unknown (best-effort).
+- **PyPI JSON, not pip-licenses:** `pip-licenses` inspects installed packages; our resolved list isn't installed, so the PyPI JSON API (already provisioned as `pypi_session` in 4.1) is the correct source.
+- **Phase 5 task** `tasks/analysis.py::classify_licenses` (analysis queue, 80→88%). Refactored the module to a shared **`_run_phase`** helper (build → persist → envelope, with the FR-4.5 failed-envelope-not-raise semantics) now driving both Phase 4 and Phase 5, and reusable by 4.4/4.5.
+- **Endpoint** `GET /api/v1/sbom/result/{task_id}/reports/licenses/` via `LicenseReportView(_ReportView)` → 303 presigned; cross-org → 404.
+- Gate: `pixi run ci` exits 0 — 161 tests, 95.29% coverage.
+
 ### File List
+
+- backend/generate_sbom/analysis/services/license.py (classify + tier logic)
+- backend/generate_sbom/tasks/analysis.py (_run_phase helper + classify_licenses; refactored scan_vulnerabilities onto it)
+- backend/generate_sbom/analysis/views.py, urls.py (LicenseReportView + route)
+- backend/tests/unit/test_license_service.py, test_license_task_api.py (new)

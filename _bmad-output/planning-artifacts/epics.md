@@ -1940,3 +1940,239 @@ success; the round-trip is covered by a test.
 **When** I visit `/login`,
 **Then** I am sent to the default authenticated page rather than shown the form again
 (optional but recommended).
+
+---
+
+## Epic 11: Project Documentation
+
+The project has code and a BMad planning trail but **no reader-facing documentation** —
+no user guide, no developer/contributor docs, a thin README, and no published docs
+site. This epic documents the whole project in **markdown**, published to **GitHub
+Pages** via **MkDocs Material** (installed into the pixi umbrella from conda-forge, so
+docs build the same way everything else does). The docs cover both audiences: end
+users (register → upload → read reports → export) and developers/contributors
+(architecture, local setup, the SBOM pipeline, the REST API, how to contribute).
+
+**Toolchain (decided):** MkDocs Material for the site (markdown-native), with
+`mkdocstrings[python]` auto-rendering the backend's Google-style docstrings into a code
+reference. Content lives under `docs/`; `mkdocs.yml` defines the nav; a `docs.yml`
+workflow deploys to Pages. New dev deps (`mkdocs-material`, `mkdocstrings-python`) are
+flagged in the stories that add them. Root-level meta files (README, CONTRIBUTING,
+CODE_OF_CONDUCT, SECURITY) stay at the repo root (GitHub renders them there) and are
+also surfaced in the site nav where useful.
+
+**Sequencing:** Story 11.1 (site scaffold) is the foundation — it establishes
+`docs/`, `mkdocs.yml`, the pixi tasks, and the Pages workflow. The content stories
+(11.2–11.5) each add pages and nav entries to `mkdocs.yml`, so they build on 11.1 and
+touch a shared file (best done in sequence or with careful nav coordination). Stories
+11.6 (meta files) and 11.7 (README) are largely independent of `mkdocs.yml`.
+
+**External prerequisite (operator):** enable GitHub Pages with **source = GitHub
+Actions** in repo settings so the `docs.yml` deploy can publish (flagged in 11.1).
+
+- FR-DOC1: A MkDocs Material documentation site is scaffolded, buildable/serveable via
+  pixi tasks, and auto-deployed to GitHub Pages on push to `main`.
+- FR-DOC2: An end-user **User Guide** covers the full user journey (accounts/orgs,
+  uploading manifests, reading each report tab, exporting, downloading the SBOM, job
+  history, API keys).
+- FR-DOC3: Task-oriented **How-To guides** answer specific "how do I…" questions.
+- FR-DOC4: **Developer documentation** covers architecture, local setup, the SBOM
+  pipeline, data model, testing, and an auto-generated backend code reference.
+- FR-DOC5: A **REST API reference** documents the endpoints (auth, orgs, jobs,
+  reports, artifacts, API keys).
+- FR-DOC6: **Contribution & project meta-docs** exist: `CONTRIBUTING.md`,
+  `CODE_OF_CONDUCT.md`, `SECURITY.md`, and issue/PR templates.
+- FR-DOC7: The **README** is rewritten as a proper project front page (overview,
+  badges, quick start, screenshots, links to the docs site, license).
+
+### Story 11.1: Documentation Site Scaffold & GitHub Pages Deployment
+
+As a maintainer,
+I want a MkDocs Material site wired into pixi and auto-deployed to GitHub Pages,
+So that all subsequent documentation has a home that publishes automatically.
+
+**Acceptance Criteria:**
+
+**Given** the pixi umbrella toolchain,
+**When** the docs site is scaffolded,
+**Then** `mkdocs-material` (and `mkdocstrings-python`, used by Story 11.4) are added as
+dev dependencies from conda-forge (**new dev deps — flagged**), a `mkdocs.yml`
+configures the Material theme (navigation, search, light/dark palette toggle, repo
+link), and a `docs/index.md` landing page exists (FR-DOC1).
+
+**Given** local docs work,
+**When** tasks are added,
+**Then** `pixi run docs-serve` (live-reload preview) and `pixi run docs-build`
+(`mkdocs build --strict`, so broken links/nav fail the build) are defined, and
+`docs-build` is runnable in CI.
+
+**Given** pushes to `main`,
+**When** docs change,
+**Then** a `.github/workflows/docs.yml` builds the site and deploys it to GitHub Pages
+using the Pages deploy actions (`actions/configure-pages`, `upload-pages-artifact`,
+`deploy-pages`) with the correct `pages: write` / `id-token: write` permissions.
+
+**Given** external setup,
+**When** implemented,
+**Then** the story documents the one-time operator step — enabling GitHub Pages with
+**source = GitHub Actions** — and `mkdocs build --strict` is wired so `pixi run ci`
+(or a docs check) stays green.
+
+**Given** the initial nav,
+**When** created,
+**Then** it establishes the top-level sections (Home, User Guide, How-To, Developer,
+API Reference, Contributing) as placeholders the content stories fill in.
+
+### Story 11.2: User Guide
+
+As an end user,
+I want a guide that walks through using the app,
+So that I can register, generate an SBOM, and understand the results without help.
+
+**Acceptance Criteria:**
+
+**Given** the User Guide section,
+**When** authored,
+**Then** it covers the full journey in markdown pages: creating an account and
+organization, logging in and switching orgs, uploading a manifest (supported formats),
+submitting a job and watching progress, and reading the Results page (FR-DOC2).
+
+**Given** the reports,
+**When** documented,
+**Then** each Results tab is explained — Overview, Vulnerabilities, Licenses,
+Dependency Graph (direct vs. transitive), Version Currency (incl. LTS and
+PyPI/conda-forge latest), and the in-app SBOM viewer — with what each column/badge
+means.
+
+**Given** outputs,
+**When** documented,
+**Then** exporting reports to Excel, downloading the SBOM document, the Job History
+dashboard, and API key management are each covered.
+
+**Given** clarity,
+**When** authored,
+**Then** screenshots (or annotated placeholders) illustrate the key screens, and pages
+are added to the `mkdocs.yml` nav under **User Guide**.
+
+### Story 11.3: How-To Guides
+
+As a user,
+I want short task-focused how-to pages,
+So that I can quickly accomplish a specific goal without reading the whole guide.
+
+**Acceptance Criteria:**
+
+**Given** the How-To section,
+**When** authored,
+**Then** it provides concise, task-oriented recipes (FR-DOC3), including at least:
+"Generate an SBOM from a `requirements.txt` / `pyproject.toml` / lockfile",
+"Interpret the vulnerability report", "Check license compliance", "See which
+dependencies are outdated", "Export a report to Excel", "Create and use an API key",
+and "Invite a member / switch organizations".
+
+**Given** each how-to,
+**When** written,
+**Then** it is a focused, numbered-steps page (goal → steps → result), cross-linked to
+the relevant User Guide section, and added to the `mkdocs.yml` nav under **How-To**.
+
+### Story 11.4: Developer Documentation
+
+As a contributor,
+I want developer documentation of the architecture and codebase,
+So that I can set up locally and understand how the system fits together.
+
+**Acceptance Criteria:**
+
+**Given** the Developer section,
+**When** authored,
+**Then** it covers: an architecture overview (Django/DRF backend, React/Vite SPA,
+Celery workers, MinIO, Postgres/Redis, the pixi umbrella), local development setup
+(`pixi install`, Docker Compose, running the stack), the project layout, and the
+testing model (unit vs. integration, `pixi run ci`) (FR-DOC4).
+
+**Given** the SBOM pipeline,
+**When** documented,
+**Then** the phased Celery pipeline (generation → enrichment phases → finalize) and the
+key data models (jobs, SBOM artifacts, analysis reports) are explained, drawing on the
+BMad architecture spine where useful.
+
+**Given** the backend's Google-style docstrings,
+**When** the code reference is set up,
+**Then** `mkdocstrings[python]` auto-renders an API/code reference for the backend
+package into the site (markdown pages with `:::` handlers), so docstrings surface in
+the docs.
+
+**Given** navigation,
+**When** complete,
+**Then** the developer pages are added to the `mkdocs.yml` nav under **Developer**.
+
+### Story 11.5: REST API Reference
+
+As a developer integrating with the app,
+I want the HTTP API documented,
+So that I can call the endpoints without reading the source.
+
+**Acceptance Criteria:**
+
+**Given** the DRF API,
+**When** documented,
+**Then** an API Reference section documents the endpoints grouped by area — auth/session,
+organizations & membership, API keys, job submission & status, reports
+(vulnerabilities, licenses, graph, versions), artifacts/SBOM download — with method,
+path, auth requirements, and request/response shape (FR-DOC5).
+
+**Given** "markdown where possible" and accuracy,
+**When** implemented,
+**Then** the reference is authored in markdown; if an OpenAPI schema is generated
+(e.g. via drf-spectacular) it may be surfaced/embedded, but a generated schema tool is
+**optional** and any new dependency is flagged and confirmed before adding.
+
+**Given** navigation,
+**When** complete,
+**Then** the API pages are added to the `mkdocs.yml` nav under **API Reference**.
+
+### Story 11.6: Contribution & Project Meta-Documentation
+
+As a maintainer,
+I want standard contribution and community health files,
+So that contributors know how to work with the project and report issues securely.
+
+**Acceptance Criteria:**
+
+**Given** the repo root,
+**When** the meta-docs are added,
+**Then** `CONTRIBUTING.md` documents the workflow (branch naming, Conventional Commits,
+the pixi tasks, `pixi run ci` gate, tests-required, PR process), `CODE_OF_CONDUCT.md`
+(e.g. Contributor Covenant) and `SECURITY.md` (private vulnerability reporting) exist
+(FR-DOC6).
+
+**Given** GitHub's templates,
+**When** added,
+**Then** `.github/ISSUE_TEMPLATE/` (bug report + feature request) and a
+`PULL_REQUEST_TEMPLATE.md` are provided, consistent with the label automation
+(Story 9.6) and commit conventions.
+
+**Given** the docs site,
+**When** complete,
+**Then** `CONTRIBUTING.md` is surfaced in the site nav under **Contributing** (via
+include or a short pointer page) so it appears in both places without duplication.
+
+### Story 11.7: README Overhaul
+
+As a visitor to the repository,
+I want a README that explains the project at a glance,
+So that I understand what it does and where to go next.
+
+**Acceptance Criteria:**
+
+**Given** the current thin README,
+**When** rewritten,
+**Then** it is a proper project front page: name + one-line description, status/coverage
+badges, a short overview of what the tool does, a screenshot or two, a Quick Start
+(`pixi install` → run the stack), a features summary, and prominent links to the
+published docs site and to CONTRIBUTING (FR-DOC7).
+
+**Given** the other documentation,
+**When** the README is written,
+**Then** it links to (rather than duplicates) the User Guide, Developer docs, and API
+reference, and includes the License section.

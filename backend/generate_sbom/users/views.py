@@ -15,10 +15,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .auth import SESSION_ACTIVE_ORG, get_admin_org, get_request_org, set_active_org_by_slug
-from .models import OrgMembership, User
-from .selectors import get_org_members, get_user_orgs
+from .models import OrgApiKey, OrgMembership, User
+from .selectors import get_api_keys, get_org_members, get_user_orgs
 from .serializers import (
     AddMemberSerializer,
+    CreateKeySerializer,
     CreateOrgSerializer,
     LoginSerializer,
     RegistrationSerializer,
@@ -26,10 +27,12 @@ from .serializers import (
 )
 from .services import (
     MembershipError,
+    create_api_key,
     create_member,
     create_org,
     leave_org,
     remove_member,
+    revoke_api_key,
     transfer_admin,
 )
 
@@ -61,6 +64,17 @@ def _member_data(membership: OrgMembership) -> dict[str, object]:
         "email": membership.user.email,
         "role": membership.role,
         "joined_at": membership.created_at.isoformat(),
+    }
+
+
+def _key_data(key: OrgApiKey) -> dict[str, object]:
+    """Serialize an API key for the list (never the hash or plaintext)."""
+    return {
+        "id": key.pk,
+        "name": key.name,
+        "prefix": key.prefix,
+        "created_at": key.created.isoformat(),
+        "last_used_at": key.last_used_at.isoformat() if key.last_used_at else None,
     }
 
 
@@ -277,4 +291,48 @@ class LeaveOrgView(APIView):
         except MembershipError as exc:
             return _membership_error(exc)
         request.session.pop(SESSION_ACTIVE_ORG, None)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class KeysView(APIView):
+    """List (any member/key) or create (admin only) API keys for the active org."""
+
+    def get(self, request: Request) -> Response:
+        """List the active org's non-revoked keys (name/prefix/created/last-used)."""
+        org = get_request_org(request)
+        if org is None:
+            return Response(_NO_ACTIVE_ORG, status=status.HTTP_404_NOT_FOUND)
+        return Response([_key_data(key) for key in get_api_keys(org)])
+
+    def post(self, request: Request) -> Response:
+        """Create a key and return the plaintext exactly once (admin only)."""
+        org = get_admin_org(request)
+        if org is None:
+            return Response(_NOT_ADMIN, status=status.HTTP_403_FORBIDDEN)
+        serializer = CreateKeySerializer(data=request.data)
+        if not serializer.is_valid():
+            return _validation_error(serializer.errors)
+        try:
+            api_key, plaintext = create_api_key(org, serializer.validated_data["name"])
+        except MembershipError as exc:
+            return _membership_error(exc)
+        return Response(
+            {"id": api_key.pk, "name": api_key.name, "prefix": api_key.prefix, "key": plaintext},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class KeyDetailView(APIView):
+    """Revoke an API key (DELETE /keys/{key_id}/, admin only)."""
+
+    def delete(self, request: Request, key_id: str) -> Response:
+        """Soft-revoke the key; 404 if it is not an active key of the caller's org."""
+        org = get_admin_org(request)
+        if org is None:
+            return Response(_NOT_ADMIN, status=status.HTTP_403_FORBIDDEN)
+        if not revoke_api_key(org, key_id):
+            return Response(
+                {"error": "API key not found.", "code": "not_found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         return Response(status=status.HTTP_204_NO_CONTENT)

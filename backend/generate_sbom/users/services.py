@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import structlog
 from django.db import transaction
+from django.utils import timezone
 from django.utils.text import slugify
 
-from .models import Org, OrgMembership, User
+from .models import Org, OrgApiKey, OrgMembership, User
+
+MAX_ACTIVE_API_KEYS = 10
 
 logger = structlog.get_logger()
 
@@ -75,6 +80,39 @@ class NotAMemberError(MembershipError):
 
     code = "not_a_member"
     message = "That user is not a member of this org."
+
+
+class ApiKeyLimitError(MembershipError):
+    """Raised when an org is already at its active API-key limit."""
+
+    code = "api_key_limit_reached"
+    message = "This org has reached the maximum of 10 active API keys."
+
+
+def create_api_key(org: Org, name: str) -> tuple[OrgApiKey, str]:
+    """Create an org-scoped API key, returning the object and the plaintext once.
+
+    Enforces the 10-active-key limit before creation (FR-2.2). The library hashes
+    the key; the plaintext is returned here and never stored (FR-2.1, AD-8).
+    """
+    active = OrgApiKey.objects.filter(org=org, revoked_at__isnull=True).count()
+    if active >= MAX_ACTIVE_API_KEYS:
+        raise ApiKeyLimitError
+    api_key_base, key = OrgApiKey.objects.create_key(name=name, org=org)
+    api_key = cast(OrgApiKey, api_key_base)
+    logger.info("api_key_created", org_id=org.pk, key_prefix=api_key.prefix)
+    return api_key, key
+
+
+def revoke_api_key(org: Org, key_id: str) -> bool:
+    """Soft-revoke an active key owned by ``org``; return False if not found (FR-2.3)."""
+    api_key = OrgApiKey.objects.filter(org=org, pk=key_id, revoked_at__isnull=True).first()
+    if api_key is None:
+        return False
+    api_key.revoked_at = timezone.now()
+    api_key.save(update_fields=["revoked_at"])
+    logger.info("api_key_revoked", org_id=org.pk, key_prefix=api_key.prefix)
+    return True
 
 
 def _is_sole_admin(org: Org, user: User) -> bool:

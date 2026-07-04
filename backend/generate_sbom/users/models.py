@@ -12,6 +12,7 @@ from typing import ClassVar
 from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.models import UserManager as DjangoUserManager
 from django.db import models
+from rest_framework_api_key.models import AbstractAPIKey, BaseAPIKeyManager
 
 
 class UserManager(DjangoUserManager["User"]):
@@ -84,3 +85,25 @@ class OrgMembership(models.Model):
     def __str__(self) -> str:
         """Return a readable membership summary."""
         return f"{self.user} in {self.org} ({self.role})"
+
+
+class OrgApiKeyManager(BaseAPIKeyManager):
+    """Manager for OrgApiKey; inherits create_key / get_from_key (AD-8)."""
+
+
+class OrgApiKey(AbstractAPIKey):
+    """An org-scoped API key (SHA-512 hashed by the library; AD-8).
+
+    The library owns key generation, hashing, prefix storage, and lookup via
+    ``get_from_key``. We add org scoping and soft revocation (``revoked_at``).
+    """
+
+    objects: ClassVar[OrgApiKeyManager] = OrgApiKeyManager()  # type: ignore[assignment]
+
+    org = models.ForeignKey(Org, on_delete=models.CASCADE, related_name="api_keys")
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta(AbstractAPIKey.Meta):
+        verbose_name = "Org API key"
+        verbose_name_plural = "Org API keys"

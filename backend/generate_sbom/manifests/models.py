@@ -30,7 +30,15 @@ class ManifestUpload(OrgScopedModel):
         CONDA = "conda", "conda environment.yml"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="manifest_uploads")
+    # Nullable: programmatic (API-key) uploads have an org but no user, matching
+    # SBOMJob.user. SET_NULL keeps an org's uploads if the uploading user is removed.
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="manifest_uploads",
+    )
     file = models.FileField(upload_to=manifest_upload_path)
     detected_format = models.CharField(max_length=20, choices=Format.choices)
     original_filename = models.CharField(max_length=255)

@@ -118,6 +118,28 @@ def test_cross_org_status_poll_returns_404() -> None:
 
 
 @pytest.mark.django_db
+def test_generate_via_api_key_creates_userless_job() -> None:
+    # Programmatic (API-key) requests have an org but no user; the job and its
+    # manifest must persist with user=None rather than 500 on a NOT NULL violation.
+    admin = _login("alice@example.com")  # helper registers + logs in
+    key = admin.post("/api/v1/keys/", {"name": "ci"}, format="json").data["key"]
+
+    file = SimpleUploadedFile("pixi.lock", b"version: 5\npackages: []\n", content_type="text/plain")
+    with patch(_DISPATCH):
+        response = APIClient().post(
+            "/api/v1/sbom/generate/",
+            {"file": file, **META},
+            format="multipart",
+            HTTP_AUTHORIZATION=f"Api-Key {key}",
+        )
+
+    assert response.status_code == 202
+    job = SBOMJob.objects.select_related("manifest").get(task_id=response.data["task_id"])
+    assert job.user is None
+    assert job.manifest.user is None
+
+
+@pytest.mark.django_db
 def test_generate_requires_authentication() -> None:
     file = SimpleUploadedFile("requirements.txt", b"django==5.2\n")
     response = APIClient().post("/api/v1/sbom/generate/", {"file": file, **META}, format="multipart")

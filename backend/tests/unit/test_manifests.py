@@ -4,6 +4,7 @@ import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 
+from generate_sbom.manifests.detection import UnsupportedFormatError, detect_format
 from generate_sbom.manifests.models import ManifestUpload
 from generate_sbom.users.services import register_user
 
@@ -69,6 +70,35 @@ def test_format_detection(filename: str, content: bytes, expected: str) -> None:
     response = _upload(_login(), filename, content)
     assert response.status_code == 201
     assert response.data["detected_format"] == expected
+
+
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "requirements.txt",
+        "REQUIREMENTS.TXT",
+        "requirements-dev.txt",
+        "requirements_test.txt",
+        "dev-requirements.txt",
+        "app-requirements.txt",  # the reported failing case (prefixed name)
+        "APP-REQUIREMENTS.TXT",
+    ],
+)
+def test_requirements_detection_allows_prefix_and_suffix(filename: str) -> None:
+    assert detect_format(filename) == ManifestUpload.Format.REQUIREMENTS
+
+
+@pytest.mark.parametrize("filename", ["notes.txt", "readme.txt", "requirements.md", "Pipfile"])
+def test_non_requirements_names_rejected(filename: str) -> None:
+    with pytest.raises(UnsupportedFormatError):
+        detect_format(filename)
+
+
+@pytest.mark.django_db
+def test_prefixed_requirements_upload_succeeds() -> None:
+    response = _upload(_login(), "app-requirements.txt", b"django==5.2\n")
+    assert response.status_code == 201
+    assert response.data["detected_format"] == "requirements"
 
 
 @pytest.mark.django_db

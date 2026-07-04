@@ -16,7 +16,10 @@ from .models import ManifestUpload
 _Format = ManifestUpload.Format
 SUPPORTED = "requirements.txt, pyproject.toml, pixi.lock, pixi.toml, environment.yml"
 
-_REQUIREMENTS_RE = re.compile(r"^requirements.*\.txt$")
+# A pip requirements file: a ``.txt`` whose name contains "requirements", with an
+# optional prefix and/or suffix (e.g. requirements.txt, requirements-dev.txt,
+# dev-requirements.txt, tta-requirements.txt).
+_REQUIREMENTS_RE = re.compile(r"requirements[\w.-]*\.txt$")
 
 
 class UnsupportedFormatError(Exception):
@@ -38,7 +41,7 @@ def detect_format(filename: str) -> str:
         return _Format.PYPROJECT
     if name in {"environment.yml", "environment.yaml"}:
         return _Format.CONDA
-    if _REQUIREMENTS_RE.match(name):
+    if _REQUIREMENTS_RE.search(name):
         return _Format.REQUIREMENTS
     raise UnsupportedFormatError(f"Unsupported manifest format. Supported: {SUPPORTED}")
 

@@ -6,6 +6,7 @@ import { DashboardPage } from './pages/DashboardPage'
 import { MembersPage } from './pages/MembersPage'
 import { KeysPage } from './pages/KeysPage'
 import { UploadPage } from './pages/UploadPage'
+import { ResultsPage } from './pages/ResultsPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 
 function App() {
@@ -44,6 +45,14 @@ function App() {
           element={
             <ProtectedRoute>
               <UploadPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/results/:taskId"
+          element={
+            <ProtectedRoute>
+              <ResultsPage />
             </ProtectedRoute>
           }
         />

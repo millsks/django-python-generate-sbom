@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
 import Link from '@mui/material/Link'
@@ -16,7 +17,9 @@ import TableRow from '@mui/material/TableRow'
 import TableSortLabel from '@mui/material/TableSortLabel'
 import { ApiError } from '../api/client'
 import { getVersions, type VersionEntry, type VersionReport } from '../api/reports'
+import { buildWorkbook, downloadWorkbook } from '../excelExport'
 import { ecosystemLabel, registryUrl } from '../registryLinks'
+import { versionCurrencySheet } from '../reportSheets'
 import { TabFailureNotice } from './TabFailureNotice'
 
 // Descending outdatedness: behind-2+ first, then behind-1, current, unknown.
@@ -113,8 +116,16 @@ export function VersionsTab({ taskId }: { taskId: string }) {
   if (!report) return <CircularProgress aria-label="Loading version currency" />
   if (report.packages.length === 0) return <Alert severity="info">No version data available.</Alert>
 
+  const exportExcel = () =>
+    downloadWorkbook(buildWorkbook([versionCurrencySheet(report.packages)]), 'version-currency.xlsx')
+
   return (
     <Box>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
+        <Button size="small" variant="outlined" onClick={exportExcel}>
+          Export to Excel
+        </Button>
+      </Box>
       <TableContainer>
         <Table size="small" aria-label="version currency">
           <TableHead>

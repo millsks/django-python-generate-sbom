@@ -1,6 +1,6 @@
 # Story 8.12: Export Version Currency to Excel
 
-Status: ready-for-dev
+Status: review
 
 <!-- Establishes the shared Excel-export mechanism; 8.13/8.14 reuse it, 8.15 composes a combined workbook. -->
 
@@ -52,8 +52,23 @@ Export the whole report (AC #3) — filters/sort are a viewing aid; a shared spr
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
 
 ### Completion Notes List
 
+- **Approach:** client-side generation with `exceljs` (user-approved dependency) — the report JSON is already fetched, so no backend endpoint/storage/streaming.
+- **Shared mechanism (AC #4):** `src/excelExport.ts` — `buildWorkbook(sheets)` (one worksheet per spec, bold header) + `downloadWorkbook(wb, filename)` (writeBuffer → Blob → anchor download). Reused by 8.13/8.14 (per-tab) and 8.15 (combined workbook). Per-report column/row mapping lives in `src/reportSheets.ts::versionCurrencySheet` so the standalone file and the Overview sheet stay identical.
+- **VersionsTab:** an "Export to Excel" button (top-right) downloads `version-currency.xlsx` (package, installed, latest, status, LTS, on-LTS, source). The button sits after the failure/loading/empty early-returns, so it's absent when there's nothing to export (AC #5).
+- **Full report (AC #3):** exports all packages, not the filtered/sorted view.
+- **Tests:** `excelExport.test.ts` (worksheet/header/rows, multi-sheet); `reportSheets.test.ts` (mapping incl. null→'' normalization); VersionsTab export button triggers `downloadWorkbook` with the right filename.
+- **Note:** exceljs adds ~significant bundle weight; the build's pre-existing >500 kB chunk warning grows but is non-blocking. Code-splitting the export is a possible future optimization.
+- Gate: `pixi run ci` exits 0 — backend 242, frontend 57 (14 files).
+
 ### File List
+
+- frontend/package.json (exceljs dependency)
+- frontend/src/excelExport.ts (new) + excelExport.test.ts (new)
+- frontend/src/reportSheets.ts (new) + reportSheets.test.ts (new)
+- frontend/src/components/VersionsTab.tsx (export button) + VersionsTab.test.tsx

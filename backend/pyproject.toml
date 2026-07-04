@@ -56,6 +56,10 @@ plugins = ["mypy_django_plugin.main"]
 [tool.django-stubs]
 django_settings_module = "config.settings.local"
 
+[[tool.mypy.overrides]]
+module = ["celery.*"]
+ignore_missing_imports = true
+
 [tool.coverage.run]
 source = ["generate_sbom"]
 omit = ["*/migrations/*"]

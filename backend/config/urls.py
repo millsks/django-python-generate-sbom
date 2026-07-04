@@ -13,5 +13,6 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/v1/", include("generate_sbom.users.urls")),
     path("api/v1/", include("generate_sbom.manifests.urls")),
+    path("api/v1/", include("generate_sbom.sbom.urls")),
     re_path(r"^(?!api/|health/|static/|admin/).*$", SpaView.as_view()),
 ]

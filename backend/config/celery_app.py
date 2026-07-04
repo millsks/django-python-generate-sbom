@@ -15,6 +15,9 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.local")
 app = Celery("generate_sbom")
 app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()
+# The pipeline/analysis tasks live in the dedicated generate_sbom.tasks package
+# (not a per-app tasks.py), so discover it explicitly.
+app.autodiscover_tasks(["generate_sbom"])
 
 # Beat schedule placeholder; the nightly artifact-cleanup task is added in Epic 7.
 app.conf.beat_schedule = {}

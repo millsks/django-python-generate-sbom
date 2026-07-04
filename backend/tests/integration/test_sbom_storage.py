@@ -51,8 +51,8 @@ def test_generate_persist_download_roundtrip(settings: pytest.FixtureRequest, tm
     prev = {"task_id": str(job.task_id), "packages": [asdict(pkg) for pkg in PKGS]}
 
     with patch(_NO_UPDATE):
-        generated = generate_phase.apply(args=(prev,)).get()
-        persist_artifacts.apply(args=(generated,)).get()
+        generate_phase.apply(args=(prev,)).get()  # writes the blob + records the key
+        persist_artifacts.apply(args=(str(job.task_id),)).get()
 
     job.refresh_from_db()
     assert job.status == SBOMJob.Status.SUCCESS

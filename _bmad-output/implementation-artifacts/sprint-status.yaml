@@ -25,7 +25,7 @@ development_status:
   3-2-job-submission-concurrency-gate-and-status-api: done
   3-3-manifest-parsers-and-transitive-resolution: done
   3-4-sbom-document-generation-and-persistence: done
-  3-5-pipeline-orchestration-progress-and-timeout-handling: ready-for-dev
+  3-5-pipeline-orchestration-progress-and-timeout-handling: review
 
   epic-4: ready-for-dev
   4-1-external-api-caching-rate-limiting-and-analysisreport-model: ready-for-dev

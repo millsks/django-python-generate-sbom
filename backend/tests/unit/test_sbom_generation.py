@@ -168,9 +168,12 @@ def test_phase3_serializer_error_fails_job_no_artifact() -> None:
 @pytest.mark.django_db
 def test_phase8_finalizes_job() -> None:
     job = _make_job()
-    prev = {"task_id": str(job.task_id), "result_key": "sbom-results/x/y/sbom.json", "package_count": 5}
+    # Phase 3 records the key + count; Phase 8 finalizes by task_id alone (reads the DB).
+    from generate_sbom.sbom.services import record_generation
+
+    record_generation(str(job.task_id), "sbom-results/x/y/sbom.json", 5)
     with patch(_NO_UPDATE):
-        persist_artifacts.apply(args=(prev,)).get()
+        persist_artifacts.apply(args=(str(job.task_id),)).get()
 
     job.refresh_from_db()
     assert job.status == SBOMJob.Status.SUCCESS

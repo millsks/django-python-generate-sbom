@@ -1,6 +1,6 @@
 # Story 8.13: Export Vulnerabilities to Excel
 
-Status: review
+Status: done
 
 <!-- Reuses the shared Excel-export helper from Story 8.12. -->
 

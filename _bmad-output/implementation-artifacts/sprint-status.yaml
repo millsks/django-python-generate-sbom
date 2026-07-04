@@ -66,3 +66,10 @@ development_status:
   8-8-capture-package-ecosystem-pypi-conda: ready-for-dev
   8-9-link-packages-to-pypi-prefix-dev: ready-for-dev
   8-10-conda-forge-latest-and-divergence: ready-for-dev
+  8-11-sbom-metadata-block-and-viewer: ready-for-dev
+  8-12-export-version-currency-to-excel: ready-for-dev
+  8-13-export-vulnerabilities-to-excel: ready-for-dev
+  8-14-export-licenses-to-excel: ready-for-dev
+  8-15-overview-export-all-to-excel: ready-for-dev
+  8-16-default-sort-order-per-tab: ready-for-dev
+  8-17-licenses-expand-collapse-all: ready-for-dev

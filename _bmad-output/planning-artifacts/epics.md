@@ -1635,3 +1635,33 @@ highlighting.
 **Given** the currency classification (current/behind-1/behind-2+),
 **When** it is computed,
 **Then** it remains PyPI-based — this story does not reclassify currency against conda-forge (out of scope; candidate future story).
+
+### Epic 8 addendum — Metadata, Excel export, default sort & licenses UX
+
+Post-review UX/reporting requests. New capability tags:
+
+- FR-E9: The SBOM viewer shows a metadata block above the component table, and the
+  generated SBOM places `metadata` before component data.
+- FR-E10: Report tabs export to Excel — one `.xlsx` per tab, plus an Overview
+  "export all" producing one workbook with a sheet per report.
+- FR-E11: Each results tab opens pre-sorted in its most useful default order.
+- FR-E12: The Licenses tab has Expand-all / Collapse-all controls for its tier groups.
+
+Product decisions: default sorts — SBOM & Version Currency by package name,
+Vulnerabilities by severity (unchanged), Licenses tier groups by risk
+(copyleft → unknown → permissive). Excel: per-tab single-sheet files on each tab +
+a combined workbook on Overview. Excel generation approach (client-side vs backend)
+is decided in Story 8.12 and applied uniformly.
+
+- **Story 8.11 — SBOM Metadata Block:** viewer shows metadata above the components;
+  the document leads with `metadata` before components; content endpoint returns a
+  parsed metadata object.
+- **Story 8.12 — Export Version Currency to Excel:** per-tab `.xlsx` + the shared
+  export mechanism reused by 8.13/8.14/8.15.
+- **Story 8.13 — Export Vulnerabilities to Excel:** per-tab `.xlsx` (reuses 8.12).
+- **Story 8.14 — Export Licenses to Excel:** per-tab `.xlsx` (reuses 8.12).
+- **Story 8.15 — Overview Export All to Excel:** one workbook, a sheet per report.
+- **Story 8.16 — Default Sort Order Per Tab:** SBOM/Version Currency by name,
+  Vulnerabilities by severity, Licenses tier groups copyleft-first.
+- **Story 8.17 — Licenses Expand All / Collapse All:** controls to open/close every
+  risk-tier accordion at once.

@@ -71,3 +71,9 @@ ignore_missing_imports = true
 [tool.coverage.run]
 source = ["generate_sbom"]
 omit = ["*/migrations/*"]
+
+[tool.bandit]
+# B314: the ElementTree.fromstring calls in sbom/document.py parse the tool's OWN
+# generated CycloneDX XML (trusted, not user input — see the in-line comments there),
+# so the XXE warning is a false positive. Revisit if untrusted XML parsing is added.
+skips = ["B314"]

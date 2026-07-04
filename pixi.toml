@@ -56,6 +56,8 @@ git-cliff = ">=2,<3"
 python-build = ">=1.2,<2"
 hatchling = ">=1.25,<2"
 responses = ">=0.25,<1"
+bandit = ">=1.7,<2"
+flower = ">=2,<3"
 
 [environments]
 default = { features = ["dev"], solve-group = "default" }
@@ -89,6 +91,27 @@ cwd = "backend"
 cmd = "python -m build --no-isolation --wheel"
 cwd = "backend"
 
+# Non-mutating format check (companion to the mutating `fmt`) — CI-friendly.
+[tasks.fmt-check]
+cmd = "ruff format --check ."
+cwd = "backend"
+
+# Lint with autofix (companion to the read-only `lint`).
+[tasks.lint-fix]
+cmd = "ruff check --fix ."
+cwd = "backend"
+
+# Static security scan (bandit); reads [tool.bandit] from pyproject, medium+ severity
+# only so low-noise asserts don't fail it.
+[tasks.security]
+cmd = "bandit -r generate_sbom -c pyproject.toml -ll"
+cwd = "backend"
+
+# Full suite with an HTML coverage report for local inspection (htmlcov/).
+[tasks.cov-html]
+cmd = "pytest tests/ --cov=generate_sbom --cov-report=html"
+cwd = "backend"
+
 # --- Server / ops tasks — also the Docker service commands ---
 [tasks.migrate]
 cmd = "python manage.py migrate"
@@ -114,6 +137,11 @@ cwd = "backend"
 cmd = "celery -A config.celery_app beat -s /tmp/celerybeat-schedule"
 cwd = "backend"
 
+# Celery Flower monitoring UI (http://localhost:5555).
+[tasks.flower]
+cmd = "celery -A config.celery_app flower --port=5555"
+cwd = "backend"
+
 # --- Project-wide tasks — run from the root ---
 [tasks.bootstrap]
 cmd = "pre-commit install --install-hooks --hook-type commit-msg --hook-type pre-commit"
@@ -126,6 +154,40 @@ cmd = "pre-commit run --all-files"
 
 [tasks.act]
 cmd = "act --container-architecture linux/amd64"
+
+# Refresh pinned pre-commit hook revisions (bootstrap already installs the
+# commit-msg + pre-commit hooks; this keeps their versions current).
+[tasks.hooks-update]
+cmd = "pre-commit autoupdate"
+
+# Prepend only the unreleased commits to CHANGELOG.md (companion to the full `changelog`).
+[tasks.changelog-unreleased]
+cmd = "git cliff --unreleased --prepend CHANGELOG.md"
+
+# --- Docker Compose convenience wrappers (compose file at repo root) ---
+[tasks.docker-build]
+cmd = "docker compose build"
+
+[tasks.docker-up]
+cmd = "docker compose up -d"
+
+[tasks.docker-down]
+cmd = "docker compose down"
+
+[tasks.docker-down-v]
+cmd = "docker compose down -v"
+
+[tasks.docker-logs]
+cmd = "docker compose logs -f"
+
+[tasks.docker-ps]
+cmd = "docker compose ps"
+
+[tasks.docker-migrate]
+cmd = "docker compose exec web pixi run migrate"
+
+[tasks.docker-shell]
+cmd = "docker compose exec web bash"
 
 # --- Frontend (Node) tasks — run from ./frontend; pixi provides the Node runtime ---
 [tasks.fe-install]
@@ -144,6 +206,20 @@ depends-on = ["fe-install"]
 
 [tasks.fe-test]
 cmd = "npm run test"
+cwd = "frontend"
+depends-on = ["fe-install"]
+
+# Standalone type check (tsc, no emit via tsconfig noEmit) so CI can type-check
+# independently of the build. Runs the local tsc binary — no registry access.
+[tasks.fe-typecheck]
+cmd = "node_modules/.bin/tsc -b"
+cwd = "frontend"
+depends-on = ["fe-install"]
+
+# npm dependency vulnerability audit for the frontend; gates on high/critical
+# (lists moderate/low too, but doesn't fail the task on them).
+[tasks.fe-security]
+cmd = "npm audit --audit-level=high"
 cwd = "frontend"
 depends-on = ["fe-install"]
 

@@ -1,6 +1,6 @@
 # Story 4.4: Dependency Graph — Phase 6
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -104,8 +104,27 @@ On failure, envelope `failed=True` + `failure_reason`; chord (4.6) continues; SB
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
+
+- The resolved `PackageSpec` list carries **no dependency edges** — derived them from each package's PyPI `requires_dist` (extras-gated deps skipped; PEP 503 name matching against the resolved set).
+- conda-forge Graphviz needs `dot -c` to register its plugins or pygraphviz fails with "Format: svg not recognized". Pixi skips the post-link script that does this by default → enabled `run-post-link-scripts` in `.pixi/config.toml` (tracked; covers local + CI) and added `RUN pixi run dot -c` to the Dockerfile (the image doesn't carry `.pixi/config.toml`).
 
 ### Completion Notes List
 
+- **`analysis/services/graph.py::build(packages) -> (cytoscape_json, svg_bytes)`** — pure (AD-3). Builds a NetworkX `DiGraph`: a node per resolved package (`id = name==version`), edges derived from PyPI `requires_dist`. Emits the **exact Cytoscape.js shape** (`{"nodes":[{"data":{id,label,version}}], "edges":[{"data":{source,target}}]}`, AD-9) and a **Graphviz SVG** via pygraphviz. **No PyVis HTML, ever.** PyPI fetch failures degrade to no-edges (nodes still present).
+- **Phase 6 task** `tasks/analysis.py::build_dependency_graph` (analysis queue, 88→93%). Dedicated (not `_run_phase`): the artifact is the SVG, and the Cytoscape JSON + counts live in the report `summary`. Failure → `failed` envelope (FR-4.5).
+- **Endpoints:** `GET .../reports/graph/` returns the `{nodes, edges}` JSON **inline from `summary`** (served straight to Cytoscape.js, AD-9); `GET .../reports/graph/download/` → **303** to the presigned SVG. Refactored `analysis/views.py` with a shared `_resolve_job` helper. Cross-org → 404.
+- New deps (conda-forge): `networkx`, `pygraphviz`, `graphviz`.
+- Gate: `pixi run ci` exits 0 — 167 tests, 95.20% coverage (real SVG rendering exercised in unit tests).
+
 ### File List
+
+- backend/generate_sbom/analysis/services/graph.py (DiGraph + Cytoscape + SVG)
+- backend/generate_sbom/tasks/analysis.py (build_dependency_graph task)
+- backend/generate_sbom/analysis/views.py, urls.py (_resolve_job helper, GraphReportView + GraphSvgDownloadView)
+- backend/pyproject.toml (mypy overrides for networkx/pygraphviz)
+- pixi.toml / pixi.lock (networkx, pygraphviz, graphviz)
+- .pixi/config.toml (run-post-link-scripts), Dockerfile (dot -c)
+- backend/tests/unit/test_graph_service.py, test_graph_task_api.py (new)

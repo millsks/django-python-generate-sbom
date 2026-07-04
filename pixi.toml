@@ -36,6 +36,9 @@ requests = ">=2.32,<3"
 requests-cache = ">=1.2,<2"
 requests-ratelimiter = ">=0.7,<1"
 tenacity = ">=9,<10"
+networkx = ">=3.4,<4"
+pygraphviz = ">=1.14,<2"
+graphviz = ">=12,<15"
 
 [pypi-dependencies]
 generate-sbom = { path = "./backend", editable = true }

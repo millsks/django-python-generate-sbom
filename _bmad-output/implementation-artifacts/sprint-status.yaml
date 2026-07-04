@@ -65,11 +65,22 @@ development_status:
   8-7-fix-lts-currency-honor-eol-and-current-lts: done
   8-8-capture-package-ecosystem-pypi-conda: done
   8-9-link-packages-to-pypi-prefix-dev: done
-  8-10-conda-forge-latest-and-divergence: review
+  8-10-conda-forge-latest-and-divergence: done
   8-11-sbom-metadata-block-and-viewer: done
   8-12-export-version-currency-to-excel: done
-  8-13-export-vulnerabilities-to-excel: ready-for-dev
-  8-14-export-licenses-to-excel: ready-for-dev
+  8-13-export-vulnerabilities-to-excel: done
+  8-14-export-licenses-to-excel: done
   8-15-overview-export-all-to-excel: ready-for-dev
   8-16-default-sort-order-per-tab: ready-for-dev
   8-17-licenses-expand-collapse-all: done
+
+  # Epic 9 — Project Management & CI/CD Workflows (ported from millsks/idp-app,
+  # excluding renovate + disabled workflows). External secrets are operator-supplied.
+  epic-9: ready-for-dev
+  9-1-comprehensive-ci-workflow: ready-for-dev
+  9-2-sonarcloud-code-analysis: ready-for-dev
+  9-3-automated-release-workflow: ready-for-dev
+  9-4-repository-maintenance-workflow: ready-for-dev
+  9-5-stale-issue-and-pr-management: ready-for-dev
+  9-6-label-automation: ready-for-dev
+  9-7-adopt-beneficial-pixi-tasks: ready-for-dev

@@ -1,6 +1,6 @@
 # Story 8.10: Capture conda-forge Latest & Flag PyPI/conda-forge Divergence
 
-Status: review
+Status: done
 
 <!-- Refines 8.8's "conda currency stays PyPI-derived" note: we now capture conda-forge latest for comparison. -->
 

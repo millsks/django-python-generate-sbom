@@ -1665,3 +1665,185 @@ is decided in Story 8.12 and applied uniformly.
   Vulnerabilities by severity, Licenses tier groups copyleft-first.
 - **Story 8.17 — Licenses Expand All / Collapse All:** controls to open/close every
   risk-tier accordion at once.
+
+---
+
+## Epic 9: Project Management & CI/CD Workflows
+
+Port the enabled GitHub workflows and project-management automation from the
+reference component **millsks/idp-app** (`.github/`) into this repo, adapted to its
+pixi umbrella toolchain (Python: ruff/mypy/pytest; frontend: oxlint/vitest; git-cliff
++ cliff.toml already present). One story per workflow, plus the label config and the
+dev-tooling config.
+
+**Explicitly excluded** (per direction): anything renovate (`renovate.json5`,
+`renovate-runner.yml.disabled`) and the disabled workflows
+(`update-pixi-lock-file.yml.disabled`, `renovate-runner.yml.disabled`).
+
+External prerequisites are flagged per story (Codecov token, SonarCloud project +
+`SONAR_TOKEN`, a GitHub App token for releases). Stories create the workflow/config;
+the operator supplies the secrets.
+
+- FR-CI1: A comprehensive CI workflow runs quality, tests (with coverage upload),
+  builds, and a container build on push/PR.
+- FR-CI2: Static analysis is reported to SonarCloud.
+- FR-CI3: Releases are cut automatically (scheduled) and on demand, with a git-cliff
+  changelog and a GitHub Release.
+- FR-CI4: Scheduled repository maintenance prunes old workflow runs and runs a
+  security audit.
+- FR-CI5: Stale issues and PRs are managed automatically.
+- FR-CI6: Issues and PRs are auto-labeled (by keyword, changed paths, and PR size).
+- FR-CI7: Beneficial pixi tasks from idp-app (quality, security, Docker, hooks, changelog) are adopted.
+
+### Story 9.1: Comprehensive CI Workflow
+
+As a maintainer,
+I want a full CI pipeline mirroring idp-app's,
+So that every push/PR is quality-checked, tested with coverage, and built.
+
+**Acceptance Criteria:**
+
+**Given** a push or pull request,
+**When** CI runs,
+**Then** it executes (mirroring `idp-app/.github/workflows/ci.yml`, adapted): a
+`concurrency` group; **backend-quality** (ruff lint, ruff format check, mypy, a
+bandit security scan); **backend-test** (needs backend-quality) uploading coverage to
+Codecov; **frontend-quality** (oxlint, `tsc` type check); **frontend-test** (needs
+frontend-quality) uploading coverage to Codecov; **backend-build**; **frontend-build**;
+and a **docker-build** that validates the image(s) build (FR-CI1).
+
+**Given** the pixi umbrella toolchain,
+**When** each job sets up,
+**Then** it uses `prefix-dev/setup-pixi` and runs via `pixi run` tasks (no bespoke
+Python/Node setup), consistent with the repo's harness.
+
+**Given** the existing scaffold `ci.yml`,
+**When** this lands,
+**Then** it is expanded/replaced by the comprehensive workflow (keeping the
+Python 3.12/3.13/3.14 matrix intent where sensible), and `pixi run ci` remains the
+local gate.
+
+**Given** Codecov upload,
+**When** configured,
+**Then** it uses `codecov/codecov-action@v5` and is documented as needing a Codecov
+setup (token if the repo is private).
+
+### Story 9.2: SonarCloud Code Analysis
+
+As a maintainer,
+I want SonarCloud static analysis on CI,
+So that code quality/security issues are tracked over time.
+
+**Acceptance Criteria:**
+
+**Given** CI,
+**When** the `sonar` job runs,
+**Then** it invokes the SonarSource scan action against the project, publishing to
+SonarCloud (FR-CI2).
+
+**Given** the scan,
+**When** it runs,
+**Then** a `sonar-project.properties` (or equivalent) defines the project key, org,
+sources (`backend/`, `frontend/src`), and coverage report paths.
+
+**Given** external setup,
+**When** the story is implemented,
+**Then** it documents the prerequisites: a SonarCloud project and a `SONAR_TOKEN`
+repository secret. (Story creates the workflow/config; operator provisions the token.)
+
+### Story 9.3: Automated Release Workflow
+
+As a maintainer,
+I want scheduled and on-demand releases with a generated changelog,
+So that versioned GitHub Releases are cut without manual steps.
+
+**Acceptance Criteria:**
+
+**Given** the release workflow (mirroring `idp-app/.github/workflows/release.yml`),
+**When** it runs on its `schedule` or via `workflow_dispatch`,
+**Then** it generates/updates the changelog with **git-cliff** (using the existing
+`cliff.toml`), determines the next version, and publishes a **GitHub Release** via
+`softprops/action-gh-release` (FR-CI3).
+
+**Given** the release needs elevated permissions to push tags/commits,
+**When** it authenticates,
+**Then** it uses a GitHub App token (`actions/create-github-app-token`) — documented
+as requiring an App ID + private key secret — rather than the default `GITHUB_TOKEN`
+where branch protection requires it.
+
+**Given** no releasable changes since the last release,
+**When** the scheduled run executes,
+**Then** it no-ops gracefully (no empty release).
+
+### Story 9.4: Repository Maintenance Workflow
+
+As a maintainer,
+I want scheduled repository maintenance,
+So that old workflow runs are pruned and dependencies are audited.
+
+**Acceptance Criteria:**
+
+**Given** the maintenance workflow (mirroring `idp-app/.github/workflows/maintenance.yml`),
+**When** it runs on `schedule` / `workflow_dispatch`,
+**Then** a **cleanup-artifacts** job prunes old workflow runs (e.g.
+`Mattraks/delete-workflow-runs`) per a retention policy (FR-CI4).
+
+**Given** the same workflow,
+**When** it runs,
+**Then** a **security-audit** job runs a dependency/security audit via pixi and
+uploads the report as an artifact.
+
+### Story 9.5: Stale Issue & PR Management
+
+As a maintainer,
+I want stale issues/PRs handled automatically,
+So that the backlog stays current.
+
+**Acceptance Criteria:**
+
+**Given** the stale workflow (mirroring `idp-app/.github/workflows/stale.yml`),
+**When** it runs on `schedule` / `workflow_dispatch`,
+**Then** `actions/stale` marks and eventually closes stale issues and PRs per
+configured days/labels/exempt rules (FR-CI5).
+
+### Story 9.6: Label Automation
+
+As a maintainer,
+I want issues and PRs auto-labeled,
+So that triage is consistent without manual labeling.
+
+**Acceptance Criteria:**
+
+**Given** the labeler workflow (mirroring `idp-app/.github/workflows/labeler.yml`),
+**When** an issue or PR is opened/edited,
+**Then** it applies labels by **keyword** (`github/issue-labeler` + `issue-labeler.yml`),
+by **changed paths** (`actions/labeler` + `labeler.yml`), and by **PR size**
+(`codelytv/pr-size-labeler`) (FR-CI6).
+
+**Given** this repo's layout,
+**When** the config files are ported,
+**Then** `.github/labeler.yml` maps paths (`backend/**`, `frontend/**`,
+`docker/**`+`docker-compose*.yml`, `.github/**`, `**.md`+`docs/**`, dependencies) and
+`.github/issue-labeler.yml` maps keyword regexes (bug, enhancement, documentation,
+question) — adapted to this repo.
+
+**Given** the workflow needs the label set,
+**When** implemented,
+**Then** the referenced labels exist (documented as a one-time label bootstrap).
+
+
+### Story 9.7: Adopt Beneficial Pixi Tasks from idp-app
+
+As a maintainer,
+I want the useful pixi tasks idp-app defines but we lack,
+So that quality/security/Docker/release ergonomics match and the CI workflows have the tasks they call.
+
+**Acceptance Criteria:**
+
+**Given** `idp-app/pixi.toml`'s task set compared to ours,
+**When** the beneficial tasks are adopted (adapted to our ruff/mypy/pytest/oxlint/vitest/Django/Celery/Docker stack),
+**Then** we gain: `fmt-check` (ruff format --check) + `lint-fix`; `security` (bandit) + `fe-security` (npm audit); standalone `fe-typecheck` (tsc); `cov-html`; Docker convenience tasks (`docker-build/up/down/down-v/logs/ps/migrate/shell`); `flower` (Celery monitoring); `hooks-update` + commit-msg hook install; and `changelog-unreleased` — with new dev deps (bandit, flower) flagged, and `pixi run ci` still green (FR-CI7).
+
+**Given** stack differences,
+**When** adapting,
+**Then** Prettier-based tasks are omitted (we use oxlint) and Alembic tasks are replaced by our Django `migrate`. Complements Story 9.1 (CI calls `fmt-check`/`security`/`fe-typecheck`).

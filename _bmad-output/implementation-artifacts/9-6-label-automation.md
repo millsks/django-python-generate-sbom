@@ -1,6 +1,6 @@
 # Story 9.6: Label Automation
 
-Status: ready-for-dev
+Status: review
 
 <!-- Ports idp-app/.github/workflows/labeler.yml + .github/labeler.yml + .github/issue-labeler.yml. -->
 
@@ -36,6 +36,24 @@ Source: `idp-app/.github/workflows/labeler.yml` (`github/issue-labeler@v3.4`, `a
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Completion Notes List
 
+- Ported the Label Management workflow from idp-app: `github/issue-labeler@v3.4`
+  (content/keyword), `actions/labeler@v5` (changed-path), `codelytv/pr-size-labeler@v1`
+  (PR size), with `issues: write` / `pull-requests: write` / `contents: read`.
+- `.github/labeler.yml` path map adapted to this repo's layout (root `pixi.toml`/`pixi.lock`,
+  `backend/pyproject.toml`, `frontend/package*.json`, root `Dockerfile`/`docker-compose.yml`).
+  Kept the six labels the AC enumerates; used `**`-globs for manifests so nested moves stay covered.
+- `.github/issue-labeler.yml` keyword regexes map to `bug`, `enhancement`, `documentation`,
+  `question` (dropped idp-app's `security` keyword set, which is out of scope for the AC).
+- Added `.github/labels.md` documenting the one-time `gh label create` bootstrap (AC #4).
+- No pixi/code changes; `pixi run ci` stays green (unchanged code paths).
+
 ### File List
+
+- `.github/workflows/labeler.yml` (new)
+- `.github/labeler.yml` (new)
+- `.github/issue-labeler.yml` (new)
+- `.github/labels.md` (new)

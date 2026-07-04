@@ -1,6 +1,6 @@
 # Story 5.3: Vulnerabilities Tab
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -74,8 +74,24 @@ Depends on Story 5.1 (shell + api layer) and consumes the Epic 4 Story 4.2 vuln 
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
+
+- Endpoint name: the story lists `/reports/vuln/`; the built path is `/reports/vulnerabilities/`.
+- Frontend test gotcha (cost ~an hour): `beforeEach(mockReset())` on a mock later given `mockRejectedValue` makes vitest report a false "unhandled rejection" and fail the test. Fix: set the mock implementation per-test, no `mockReset`. Saved to memory [[vitest-mockreset-rejected-promise]].
 
 ### Completion Notes List
 
+- **Backend — inline JSON (the deferred 5.1 decision):** the vuln/license/version report endpoints now serve the report **JSON inline (200)** instead of 303-to-presigned. Split the view base into `_JsonReportView` (reads the artifact from storage, returns JSON) and `_PresignedDownloadView` (303 — kept for the genuine file download, the graph SVG). The graph JSON endpoint (served from `summary`) and the SBOM result 303 are unchanged. Updated the three affected endpoint tests (now assert 200 + JSON).
+- **`VulnerabilitiesTab`** (new): fetches `getVulnerabilities`, renders an MUI table (package, version, CVE/GHSA, CVSS, severity, advisory link opening OSV in a new tab). **Column sort** (severity by **rank** Critical>High>Medium>Low, not lexical); **severity filter**; **zero-state** ("No vulnerabilities found in X packages", X from the scanned total); **failure notice** via the shared `TabFailureNotice` when the report `failed` (surfaced through `ApiError.code === 'report_failed'` + `failureReason`). Lazy-mounted (fetches only when the tab is opened, via the shell's `TabPanel`).
+- Wired into `ResultsPage` (tab index 1), passed the scanned total from `summary_stats.total_packages`.
+- **Tests:** backend inline-JSON endpoints; frontend — severity-rank sort, severity filter, zero-state with count, failure notice.
+- Gate: `pixi run ci` exits 0 — backend 177 tests (95.26%), frontend 12 tests.
+
 ### File List
+
+- backend/generate_sbom/analysis/views.py (_JsonReportView / _PresignedDownloadView split)
+- backend/tests/unit/test_vulnerability_task_api.py, test_license_task_api.py, test_versions_task_api.py (inline-JSON assertions)
+- frontend/src/components/VulnerabilitiesTab.tsx (new) + VulnerabilitiesTab.test.tsx (new)
+- frontend/src/pages/ResultsPage.tsx (wires the Vulnerabilities tab)

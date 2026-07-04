@@ -2,7 +2,7 @@
 // job's summary_stats (no per-report fetch — NFR-2.2), a SBOM download, and
 // deep-links into the detail tabs. A metric backed by a failed phase shows
 // "Unavailable" rather than a misleading 0 (FR-6.7).
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -11,11 +11,16 @@ import CardActionArea from '@mui/material/CardActionArea'
 import CardContent from '@mui/material/CardContent'
 import Typography from '@mui/material/Typography'
 import type { JobStatus, ReportSummary } from '../api/jobs'
+import { getLicenses, getVersions, getVulnerabilities } from '../api/reports'
+import { buildWorkbook, downloadWorkbook, type SheetSpec } from '../excelExport'
+import { licensesSheet, versionCurrencySheet, vulnerabilitiesSheet } from '../reportSheets'
 
 // Tab indices in the shell's fixed order (5.1; SBOM inserted at 1 in 8.6).
 const TAB = { vulnerabilities: 2, licenses: 3, versions: 5 }
 
 const num = (value: unknown): number => (typeof value === 'number' ? value : 0)
+
+const reportAvailable = (report: ReportSummary | undefined): boolean => Boolean(report && !report.failed)
 
 function MetricCard({ title, value, onClick }: { title: string; value: ReactNode; onClick?: () => void }) {
   const body = (
@@ -55,16 +60,47 @@ function versionValue(report: ReportSummary | undefined): ReactNode {
 export function OverviewTab({ status, onNavigate }: { status: JobStatus; onNavigate: (tabIndex: number) => void }) {
   const stats = status.summary_stats ?? {}
   const reports = stats.reports ?? {}
+  const [exporting, setExporting] = useState(false)
+
+  const anyReportAvailable =
+    reportAvailable(reports.vuln) || reportAvailable(reports.license) || reportAvailable(reports.version)
+
+  // Combined workbook: fetch the three full reports and compose a sheet per report,
+  // reusing the per-tab sheet builders (Stories 8.12–8.14). A report whose phase
+  // failed rejects and its sheet is simply omitted (AC #3) — the export still
+  // succeeds for the available reports (Story 8.15).
+  async function exportAll() {
+    setExporting(true)
+    try {
+      const [versions, vulns, licenses] = await Promise.allSettled([
+        getVersions(status.task_id),
+        getVulnerabilities(status.task_id),
+        getLicenses(status.task_id),
+      ])
+      const sheets: SheetSpec[] = []
+      if (versions.status === 'fulfilled') sheets.push(versionCurrencySheet(versions.value.packages))
+      if (vulns.status === 'fulfilled') sheets.push(vulnerabilitiesSheet(vulns.value))
+      if (licenses.status === 'fulfilled') sheets.push(licensesSheet(licenses.value))
+      if (sheets.length > 0) await downloadWorkbook(buildWorkbook(sheets), 'sbom-report.xlsx')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <Box>
+      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
         {status.result_url ? (
           <Button variant="contained" href={status.result_url}>
             Download SBOM{status.output_format ? ` (${status.output_format})` : ''}
           </Button>
         ) : (
           <Alert severity="warning">The SBOM artifact is not available for this job.</Alert>
+        )}
+        {anyReportAvailable && (
+          <Button variant="outlined" onClick={exportAll} disabled={exporting}>
+            {exporting ? 'Exporting…' : 'Export all to Excel'}
+          </Button>
         )}
       </Box>
 

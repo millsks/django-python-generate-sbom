@@ -1,6 +1,6 @@
 # Story 8.15: Overview — Export All Reports to a Single Excel Workbook
 
-Status: ready-for-dev
+Status: review
 
 <!-- Composes the per-report exports (8.12/8.13/8.14) into one workbook. -->
 
@@ -42,8 +42,20 @@ The Overview tab currently reads `summary_stats` only; the combined export must 
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
 
 ### Completion Notes List
 
+- **OverviewTab** gains an "Export all to Excel" button (next to the SBOM download). On click it fetches the three full reports via the existing `getVersions`/`getVulnerabilities`/`getLicenses` (AD-5) with `Promise.allSettled`, composes one sheet per fulfilled report using the **existing** `versionCurrencySheet`/`vulnerabilitiesSheet`/`licensesSheet` builders (8.12–8.14) + the shared `buildWorkbook`/`downloadWorkbook` helper (8.12), and downloads `sbom-report.xlsx`. So each sheet is byte-for-byte identical to its standalone per-tab file (AC #2). No backend change, no new dependency.
+- **Failed report (AC #3):** a rejected fetch is simply **omitted** from the workbook (documented choice); the export still succeeds for the available reports.
+- **AC #5:** the button is hidden when no report is available (derived from `summary_stats.reports` — none present/all failed). A short `exporting` state disables the button while the reports load.
+- **Sheet order:** Version Currency → Vulnerabilities → Licenses.
+- **Tests:** all three reports → one workbook with the three sheets in order; a failed report is omitted and the rest still export; the control is hidden when no report is available.
+- Gate: `pixi run ci` exits 0 — backend 262, frontend 74 (14 files).
+
 ### File List
+
+- frontend/src/components/OverviewTab.tsx (Export-all button + combined-workbook handler)
+- frontend/src/components/OverviewTab.test.tsx (export tests)

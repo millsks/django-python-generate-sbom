@@ -1,8 +1,24 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import type { Mock } from 'vitest'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { OverviewTab } from './OverviewTab'
 import type { JobStatus } from '../api/jobs'
+import { getLicenses, getVersions, getVulnerabilities } from '../api/reports'
+import { buildWorkbook, downloadWorkbook } from '../excelExport'
+
+vi.mock('../api/reports', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../api/reports')>()
+  return { ...actual, getVersions: vi.fn(), getVulnerabilities: vi.fn(), getLicenses: vi.fn() }
+})
+vi.mock('../excelExport', () => ({ buildWorkbook: vi.fn(() => ({})), downloadWorkbook: vi.fn() }))
+
+const mockVersions = getVersions as Mock
+const mockVulns = getVulnerabilities as Mock
+const mockLicenses = getLicenses as Mock
+const mockBuild = buildWorkbook as Mock
+const mockDownload = downloadWorkbook as Mock
+const sheetNames = () => (mockBuild.mock.calls.at(-1)![0] as { name: string }[]).map((s) => s.name)
 
 function makeStatus(overrides: Partial<JobStatus> = {}): JobStatus {
   return {
@@ -63,5 +79,41 @@ describe('OverviewTab', () => {
     render(<OverviewTab status={makeStatus()} onNavigate={onNavigate} />)
     await userEvent.click(screen.getByRole('button', { name: /Vulnerabilities/ }))
     expect(onNavigate).toHaveBeenCalledWith(2)
+  })
+
+  it('exports all reports into one workbook, a sheet per report (Story 8.15)', async () => {
+    mockVersions.mockResolvedValue({ packages: [], summary: {} })
+    mockVulns.mockResolvedValue({ packages: [], summary: { vulnerable_package_count: 0, severity_breakdown: {} } })
+    mockLicenses.mockResolvedValue({ tiers: [], summary: {} })
+    render(<OverviewTab status={makeStatus()} onNavigate={vi.fn()} />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Export all to Excel' }))
+
+    await waitFor(() => expect(mockDownload).toHaveBeenCalledWith(expect.anything(), 'sbom-report.xlsx'))
+    expect(sheetNames()).toEqual(['Version Currency', 'Vulnerabilities', 'Licenses'])
+  })
+
+  it('omits a failed report and still exports the rest (AC #3)', async () => {
+    mockVersions.mockResolvedValue({ packages: [], summary: {} })
+    mockVulns.mockRejectedValue(new Error('vuln report failed'))
+    mockLicenses.mockResolvedValue({ tiers: [], summary: {} })
+    render(<OverviewTab status={makeStatus()} onNavigate={vi.fn()} />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Export all to Excel' }))
+
+    await waitFor(() => expect(mockDownload).toHaveBeenCalled())
+    expect(sheetNames()).toEqual(['Version Currency', 'Licenses'])
+  })
+
+  it('hides the export control when no report is available (AC #5)', () => {
+    const status = makeStatus()
+    status.summary_stats!.reports = {
+      vuln: { failed: true, failure_reason: 'x' },
+      license: { failed: true, failure_reason: 'x' },
+      version: { failed: true, failure_reason: 'x' },
+    }
+    render(<OverviewTab status={status} onNavigate={vi.fn()} />)
+
+    expect(screen.queryByRole('button', { name: 'Export all to Excel' })).not.toBeInTheDocument()
   })
 })

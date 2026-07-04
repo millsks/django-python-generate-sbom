@@ -86,6 +86,6 @@ development_status:
   9-7-adopt-beneficial-pixi-tasks: ready-for-dev
 
   # Epic 10 — UI Navigation & Authenticated Routing (frontend).
-  epic-10: in-progress
+  epic-10: done
   10-1-app-shell-and-auth-aware-navigation: done
-  10-2-redirect-to-login-and-back: ready-for-dev
+  10-2-redirect-to-login-and-back: done

@@ -1,6 +1,6 @@
 # Story 9.3: Automated Release Workflow
 
-Status: ready-for-dev
+Status: review
 
 <!-- Ports idp-app/.github/workflows/release.yml. -->
 
@@ -38,6 +38,19 @@ Prerequisite (operator): a GitHub App (or PAT) with contents write, exposed as `
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Completion Notes List
 
+- Added `.github/workflows/release.yml`, porting idp-app's release workflow to this repo's pixi umbrella toolchain.
+- Triggers: `schedule` (00:00 UTC on the 7th & 21st) + `workflow_dispatch` (inputs: `version`, `prerelease`, `force_recreate`); a `concurrency` group serializes releases.
+- Auth via `actions/create-github-app-token@v1` (secrets `APP_ID` + `APP_PRIVATE_KEY`) so the tag/changelog commit pushes past branch protection; documented as an operator prerequisite in a header comment.
+- Version derivation mirrors the source: read the latest `v*` tag, auto-increment the patch (first release → `0.1.0`), or accept an explicit `version` input; semver-validated; `force_recreate` deletes an existing tag/release first.
+- Graceful no-op: when `git diff` shows no changes since the last tag, every downstream step is gated off (`should_skip`), so no empty tag/release is cut.
+- Quality gate is the authoritative `pixi run ci`; changelog generated with `pixi run changelog` (git-cliff + existing `cliff.toml`); the release is published with `softprops/action-gh-release@v2`.
+- Adapted artifacts to this repo: a backend wheel (`backend/dist/*.whl` via `pixi run build`) and a frontend bundle tarball (`pixi run fe-build` → archived) — no conda package or PyPI publishing (idp-app-only).
+- `pixi run ci` green locally (no code paths changed); `release.yml` parses as valid YAML.
+
 ### File List
+
+- `.github/workflows/release.yml` (new)

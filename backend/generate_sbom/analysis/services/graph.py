@@ -56,7 +56,14 @@ def _requires(session: http.CachedLimiterSession, pkg: PackageSpec) -> list[str]
 def _to_cytoscape(digraph: nx.DiGraph) -> dict[str, Any]:
     """Convert the DiGraph to the exact Cytoscape.js data shape (AD-9)."""
     nodes = [
-        {"data": {"id": node, "label": attrs["label"], "version": attrs["version"]}}
+        {
+            "data": {
+                "id": node,
+                "label": attrs["label"],
+                "version": attrs["version"],
+                "relationship": attrs.get("relationship"),  # direct | transitive | unknown (Story 8.5)
+            }
+        }
         for node, attrs in digraph.nodes(data=True)
     ]
     edges = [{"data": {"source": source, "target": target}} for source, target in digraph.edges()]
@@ -80,7 +87,7 @@ def build(
     by_name: dict[str, str] = {}  # normalized name → node id
     for pkg in packages:
         node = _node_id(pkg.name, pkg.version)
-        digraph.add_node(node, label=pkg.name, version=pkg.version)
+        digraph.add_node(node, label=pkg.name, version=pkg.version, relationship=pkg.relationship)
         by_name[_normalize(pkg.name)] = node
 
     for pkg in packages:

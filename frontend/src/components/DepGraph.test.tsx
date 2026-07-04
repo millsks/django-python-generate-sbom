@@ -52,6 +52,29 @@ describe('DepGraph', () => {
     expect(link).toHaveAttribute('href', '/api/v1/sbom/result/t/reports/graph/download/')
   })
 
+  it('shows a direct/transitive legend when nodes carry a relationship (Story 8.5)', async () => {
+    mockGet.mockResolvedValue({
+      nodes: [
+        { data: { id: 'a==1', label: 'a', version: '1', relationship: 'direct' } },
+        { data: { id: 'b==2', label: 'b', version: '2', relationship: 'transitive' } },
+      ],
+      edges: [{ data: { source: 'a==1', target: 'b==2' } }],
+    })
+    render(<DepGraph taskId="t" />)
+
+    expect(await screen.findByText('Direct')).toBeInTheDocument()
+    expect(screen.getByText('Transitive')).toBeInTheDocument()
+  })
+
+  it('omits the legend for older graphs without relationship data (graceful, AC #4)', async () => {
+    mockGet.mockResolvedValue(GRAPH)
+    render(<DepGraph taskId="t" />)
+
+    await screen.findByTestId('cyto')
+    expect(screen.queryByText('Direct')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('graph legend')).not.toBeInTheDocument()
+  })
+
   it('renders the failure notice when the report failed', async () => {
     mockGet.mockRejectedValue(new ApiError('failed', 404, 'report_failed', 'graphviz down'))
     render(<DepGraph taskId="t" />)

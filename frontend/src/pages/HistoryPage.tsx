@@ -1,11 +1,12 @@
 // Dashboard: a paginated, filterable table of the org's SBOM jobs (Story 6.1).
-// Static status per row; live polling of in-progress rows is Story 6.2.
+// In-progress rows auto-refresh via the shared useJobStatus hook (Story 6.2).
 import { useEffect, useState } from 'react'
 import { Link as RouterLink } from 'react-router-dom'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
 import Container from '@mui/material/Container'
+import LinearProgress from '@mui/material/LinearProgress'
 import Link from '@mui/material/Link'
 import MenuItem from '@mui/material/MenuItem'
 import Pagination from '@mui/material/Pagination'
@@ -17,12 +18,54 @@ import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import { listJobs, type JobListItem, type Paginated } from '../api/jobs'
+import { listJobs, TERMINAL_STATUSES, type JobListItem, type Paginated } from '../api/jobs'
 import { JobStatusBadge } from '../components/JobStatusBadge'
+import { useJobStatus } from '../hooks/useJobStatus'
 
 const PAGE_SIZE = 25
 const STATUS_OPTIONS = ['All', 'In Progress', 'Completed', 'Failed']
 const FORMAT_OPTIONS = ['All', 'requirements', 'pyproject', 'pixi_lock', 'pixi_toml', 'conda']
+
+// One table row. Rows that start non-terminal poll live progress and swap to
+// their final state in place when the job completes or fails (Story 6.2).
+function JobRow({ job }: { job: JobListItem }) {
+  const { status: live } = useJobStatus(job.task_id, {
+    enabled: !TERMINAL_STATUSES.includes(job.status),
+  })
+  const status = live?.status ?? job.status
+  const failureReason = live?.failure_reason ?? job.failure_reason
+  const inProgress = !TERMINAL_STATUSES.includes(status)
+
+  return (
+    <TableRow>
+      <TableCell>{new Date(job.created_at).toLocaleString()}</TableCell>
+      <TableCell>{job.manifest_filename}</TableCell>
+      <TableCell>{job.manifest_format}</TableCell>
+      <TableCell>{job.output_format}</TableCell>
+      <TableCell>
+        <JobStatusBadge status={status} />
+        {inProgress && live && (
+          <Box sx={{ mt: 0.5, minWidth: 120 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+              {live.current_phase || 'Starting'} — {live.progress}%
+            </Typography>
+            <LinearProgress variant="determinate" value={live.progress} />
+          </Box>
+        )}
+        {status === 'FAILED' && failureReason && (
+          <Typography variant="caption" color="error" sx={{ display: 'block' }}>
+            {failureReason}
+          </Typography>
+        )}
+      </TableCell>
+      <TableCell>
+        <Link component={RouterLink} to={`/results/${job.task_id}`}>
+          View
+        </Link>
+      </TableCell>
+    </TableRow>
+  )
+}
 
 export function HistoryPage() {
   const [data, setData] = useState<Paginated<JobListItem> | null>(null)
@@ -112,25 +155,7 @@ export function HistoryPage() {
               </TableHead>
               <TableBody>
                 {data.results.map((job) => (
-                  <TableRow key={job.task_id}>
-                    <TableCell>{new Date(job.created_at).toLocaleString()}</TableCell>
-                    <TableCell>{job.manifest_filename}</TableCell>
-                    <TableCell>{job.manifest_format}</TableCell>
-                    <TableCell>{job.output_format}</TableCell>
-                    <TableCell>
-                      <JobStatusBadge status={job.status} />
-                      {job.status === 'FAILED' && job.failure_reason && (
-                        <Typography variant="caption" color="error" sx={{ display: 'block' }}>
-                          {job.failure_reason}
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Link component={RouterLink} to={`/results/${job.task_id}`}>
-                        View
-                      </Link>
-                    </TableCell>
-                  </TableRow>
+                  <JobRow key={job.task_id} job={job} />
                 ))}
               </TableBody>
             </Table>

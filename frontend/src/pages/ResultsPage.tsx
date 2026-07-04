@@ -1,7 +1,7 @@
 // Results page shell (Story 5.1): five tabs over a completed job's outputs, with
 // a shareable URL (/results/:taskId), org access control, and a polling gate.
 // Tab bodies (Vulnerabilities/Licenses/Graph/Versions) are filled by 5.2-5.6.
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import Alert from '@mui/material/Alert'
@@ -12,8 +12,8 @@ import LinearProgress from '@mui/material/LinearProgress'
 import Tab from '@mui/material/Tab'
 import Tabs from '@mui/material/Tabs'
 import Typography from '@mui/material/Typography'
-import { ApiError } from '../api/client'
-import { getJobStatus, TERMINAL_STATUSES, type JobStatus } from '../api/jobs'
+import { TERMINAL_STATUSES } from '../api/jobs'
+import { useJobStatus } from '../hooks/useJobStatus'
 import { OverviewTab } from '../components/OverviewTab'
 import { VulnerabilitiesTab } from '../components/VulnerabilitiesTab'
 import { LicensesTab } from '../components/LicensesTab'
@@ -21,7 +21,6 @@ import { DepGraph } from '../components/DepGraph'
 import { VersionsTab } from '../components/VersionsTab'
 
 const TAB_LABELS = ['Overview', 'Vulnerabilities', 'Licenses', 'Dependency Graph', 'Version Currency']
-const POLL_MS = 5000
 
 function TabPanel({ index, value, children }: { index: number; value: number; children: ReactNode }) {
   return (
@@ -41,37 +40,8 @@ function Centered({ children }: { children: ReactNode }) {
 
 export function ResultsPage() {
   const { taskId } = useParams<{ taskId: string }>()
-  const [status, setStatus] = useState<JobStatus | null>(null)
-  const [pageError, setPageError] = useState<'denied' | 'error' | null>(null)
+  const { status, error: pageError } = useJobStatus(taskId)
   const [tab, setTab] = useState(0)
-
-  useEffect(() => {
-    if (!taskId) return
-    const id = taskId
-    let active = true
-    let timer = 0
-
-    async function poll() {
-      try {
-        const next = await getJobStatus(id)
-        if (!active) return
-        setStatus(next)
-        if (!TERMINAL_STATUSES.includes(next.status)) {
-          timer = window.setTimeout(poll, POLL_MS)
-        }
-      } catch (err) {
-        if (!active) return
-        // Cross-org and unknown jobs both surface as 403/404 (no existence leak, AD-2).
-        setPageError(err instanceof ApiError && (err.status === 403 || err.status === 404) ? 'denied' : 'error')
-      }
-    }
-
-    void poll()
-    return () => {
-      active = false
-      window.clearTimeout(timer)
-    }
-  }, [taskId])
 
   if (pageError === 'denied') {
     return (

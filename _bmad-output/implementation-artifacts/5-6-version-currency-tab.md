@@ -1,6 +1,6 @@
 # Story 5.6: Version Currency Tab
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -67,8 +67,19 @@ Depends on Story 5.1 (shell + api layer) and consumes the Epic 4 Story 4.5 versi
 
 ### Agent Model Used
 
-### Debug Log References
+claude-opus-4-8[1m]
 
 ### Completion Notes List
 
+- **`VersionsTab`** (new, frontend-only — the versions endpoint already serves inline JSON): MUI table of package, installed, latest, and a **status badge** (MUI `Chip`) — Current (green), Behind 1 / Behind 2+ (orange), Unknown (grey). The badge collapses the four classes to Current/Behind/Unknown while the underlying class drives ordering.
+- **Default ordering (AC #2):** sorted by currency **class rank** descending — `behind-2+` first, then `behind-1`, `current`, `unknown` — so the most-outdated packages surface at the top.
+- **Sort by status (AC #3):** clicking the Status header toggles asc/desc by class rank; other columns sort lexically.
+- **Failure notice (AC #4):** shared `TabFailureNotice` on `report_failed`; empty state on no data.
+- Wired into `ResultsPage` (tab index 4). **This completes all five result tabs** (with 5.7 theme already done, Epic 5 is finished).
+- **Tests:** default behind-2+-first ordering, status-sort reorder, failure notice.
+- Gate: `pixi run ci` exits 0 — backend 177 tests, frontend 22 tests.
+
 ### File List
+
+- frontend/src/components/VersionsTab.tsx (new) + VersionsTab.test.tsx (new)
+- frontend/src/pages/ResultsPage.tsx (wires the Version Currency tab — all five panels now live)

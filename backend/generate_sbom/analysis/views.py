@@ -85,6 +85,12 @@ class GraphSvgDownloadView(_ReportView):
     report_type = AnalysisReport.ReportType.GRAPH
 
 
+class VersionReportView(_ReportView):
+    """GET /api/v1/sbom/result/{task_id}/reports/versions/ → 303 to versions.json."""
+
+    report_type = AnalysisReport.ReportType.VERSION
+
+
 class GraphReportView(APIView):
     """GET /api/v1/sbom/result/{task_id}/reports/graph/ → Cytoscape {nodes, edges} JSON (AD-9)."""
 

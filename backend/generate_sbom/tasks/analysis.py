@@ -24,6 +24,7 @@ from django.core.files.storage import default_storage
 
 from generate_sbom.analysis.services import graph as graph_service
 from generate_sbom.analysis.services import license as license_service
+from generate_sbom.analysis.services import versions as versions_service
 from generate_sbom.analysis.services import vulnerability
 from generate_sbom.analysis.services.reports import make_envelope
 from generate_sbom.sbom.parsers import PackageSpec
@@ -114,6 +115,22 @@ def classify_licenses(self: Any, ctx: dict[str, Any]) -> dict[str, Any]:
         end_pct=88,
         step="license compliance",
         fail_reason="license_classification_failed",
+    )
+
+
+@shared_task(bind=True, queue="analysis")  # type: ignore[untyped-decorator]
+def check_version_currency(self: Any, ctx: dict[str, Any]) -> dict[str, Any]:
+    """Phase 7 (93-97%): classify each package's version currency against PyPI + LTS."""
+    return _run_phase(
+        self,
+        ctx,
+        report_type="version",
+        filename="versions.json",
+        builder=versions_service.classify,
+        start_pct=93,
+        end_pct=97,
+        step="version currency",
+        fail_reason="version_currency_failed",
     )
 
 

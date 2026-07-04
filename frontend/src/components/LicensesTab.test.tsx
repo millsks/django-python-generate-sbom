@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Mock } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { LicensesTab } from './LicensesTab'
 import { ApiError } from '../api/client'
 import { getLicenses } from '../api/reports'
@@ -58,5 +59,72 @@ describe('LicensesTab', () => {
 
     expect(await screen.findByText(/could not be generated/i)).toBeInTheDocument()
     expect(screen.getByText(/pypi down/i)).toBeInTheDocument()
+  })
+
+  it('opens every accordion when Expand all is clicked', async () => {
+    mockGet.mockResolvedValue(REPORT)
+    render(<LicensesTab taskId="t" />)
+
+    const weak = await screen.findByRole('button', { name: /Weak Copyleft/ })
+    expect(weak).toHaveAttribute('aria-expanded', 'false')
+
+    await userEvent.click(screen.getByRole('button', { name: /expand all/i }))
+
+    for (const tier of ['Strong Copyleft', 'Weak Copyleft', 'Unknown', 'Permissive']) {
+      expect(screen.getByRole('button', { name: new RegExp(tier) })).toHaveAttribute('aria-expanded', 'true')
+    }
+  })
+
+  it('closes every accordion when Collapse all is clicked', async () => {
+    mockGet.mockResolvedValue(REPORT)
+    render(<LicensesTab taskId="t" />)
+
+    const strong = await screen.findByRole('button', { name: /Strong Copyleft/ })
+    expect(strong).toHaveAttribute('aria-expanded', 'true')
+
+    await userEvent.click(screen.getByRole('button', { name: /collapse all/i }))
+
+    for (const tier of ['Strong Copyleft', 'Weak Copyleft', 'Unknown', 'Permissive']) {
+      expect(screen.getByRole('button', { name: new RegExp(tier) })).toHaveAttribute('aria-expanded', 'false')
+    }
+  })
+
+  it('toggles an individual accordion independently of the others', async () => {
+    mockGet.mockResolvedValue(REPORT)
+    render(<LicensesTab taskId="t" />)
+
+    const strong = await screen.findByRole('button', { name: /Strong Copyleft/ })
+    const weak = screen.getByRole('button', { name: /Weak Copyleft/ })
+    expect(strong).toHaveAttribute('aria-expanded', 'true')
+    expect(weak).toHaveAttribute('aria-expanded', 'false')
+
+    // Collapsing the populated tier leaves the others untouched.
+    await userEvent.click(strong)
+    expect(strong).toHaveAttribute('aria-expanded', 'false')
+    expect(weak).toHaveAttribute('aria-expanded', 'false')
+
+    // Expand-all still acts on every group afterwards.
+    await userEvent.click(screen.getByRole('button', { name: /expand all/i }))
+    expect(strong).toHaveAttribute('aria-expanded', 'true')
+    expect(weak).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('hides the expand/collapse controls when there are no tiers', async () => {
+    mockGet.mockResolvedValue({ tiers: [], summary: {} })
+    render(<LicensesTab taskId="t" />)
+
+    // Wait for the report to load (the loading spinner disappears).
+    await waitFor(() => expect(screen.queryByLabelText('Loading licenses')).not.toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /expand all/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /collapse all/i })).not.toBeInTheDocument()
+  })
+
+  it('hides the expand/collapse controls when the report failed', async () => {
+    mockGet.mockRejectedValue(new ApiError('failed', 404, 'report_failed', 'pypi down'))
+    render(<LicensesTab taskId="t" />)
+
+    await screen.findByText(/could not be generated/i)
+    expect(screen.queryByRole('button', { name: /expand all/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /collapse all/i })).not.toBeInTheDocument()
   })
 })

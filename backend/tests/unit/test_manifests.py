@@ -88,8 +88,39 @@ def test_requirements_detection_allows_prefix_and_suffix(filename: str) -> None:
     assert detect_format(filename) == ManifestUpload.Format.REQUIREMENTS
 
 
-@pytest.mark.parametrize("filename", ["notes.txt", "readme.txt", "requirements.md", "Pipfile"])
-def test_non_requirements_names_rejected(filename: str) -> None:
+@pytest.mark.parametrize(
+    ("filename", "expected"),
+    [
+        # pyproject.toml with prefix/suffix/case
+        ("pyproject.toml", ManifestUpload.Format.PYPROJECT),
+        ("backend-pyproject.toml", ManifestUpload.Format.PYPROJECT),
+        ("pyproject-old.toml", ManifestUpload.Format.PYPROJECT),
+        ("PYPROJECT.TOML", ManifestUpload.Format.PYPROJECT),
+        # pixi.toml
+        ("pixi.toml", ManifestUpload.Format.PIXI_TOML),
+        ("pixi-dev.toml", ManifestUpload.Format.PIXI_TOML),
+        ("app-pixi.toml", ManifestUpload.Format.PIXI_TOML),
+        # pixi.lock
+        ("pixi.lock", ManifestUpload.Format.PIXI_LOCK),
+        ("pixi-prod.lock", ManifestUpload.Format.PIXI_LOCK),
+        ("app-pixi.lock", ManifestUpload.Format.PIXI_LOCK),
+        # environment.yml / .yaml
+        ("environment.yml", ManifestUpload.Format.CONDA),
+        ("environment.yaml", ManifestUpload.Format.CONDA),
+        ("dev-environment.yml", ManifestUpload.Format.CONDA),
+        ("environment-prod.yaml", ManifestUpload.Format.CONDA),
+        ("ENVIRONMENT.YML", ManifestUpload.Format.CONDA),
+    ],
+)
+def test_detection_allows_prefix_and_suffix_for_all_formats(filename: str, expected: str) -> None:
+    assert detect_format(filename) == expected
+
+
+@pytest.mark.parametrize(
+    "filename",
+    ["notes.txt", "readme.txt", "requirements.md", "Pipfile", "config.toml", "poetry.lock", "docker-compose.yml"],
+)
+def test_non_manifest_names_rejected(filename: str) -> None:
     with pytest.raises(UnsupportedFormatError):
         detect_format(filename)
 

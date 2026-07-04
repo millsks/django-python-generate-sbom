@@ -16,10 +16,20 @@ from .models import ManifestUpload
 _Format = ManifestUpload.Format
 SUPPORTED = "requirements.txt, pyproject.toml, pixi.lock, pixi.toml, environment.yml"
 
-# A pip requirements file: a ``.txt`` whose name contains "requirements", with an
-# optional prefix and/or suffix (e.g. requirements.txt, requirements-dev.txt,
-# dev-requirements.txt, tta-requirements.txt).
-_REQUIREMENTS_RE = re.compile(r"requirements[\w.-]*\.txt$")
+# Each manifest type is recognized by its core token plus its extension, with an
+# optional prefix and/or suffix around the token — e.g. requirements.txt,
+# dev-requirements.txt, requirements-test.txt; backend-pyproject.toml,
+# pyproject-old.toml; pixi-prod.lock; dev-environment.yaml. Matched with re.search
+# so a prefix before the token is allowed; ``[\w.-]*`` allows a suffix after it.
+# The core tokens are distinct, so a filename matches at most one type; order only
+# resolves pathological names carrying two tokens.
+_FORMAT_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"requirements[\w.-]*\.txt$"), _Format.REQUIREMENTS),
+    (re.compile(r"pyproject[\w.-]*\.toml$"), _Format.PYPROJECT),
+    (re.compile(r"pixi[\w.-]*\.toml$"), _Format.PIXI_TOML),
+    (re.compile(r"pixi[\w.-]*\.lock$"), _Format.PIXI_LOCK),
+    (re.compile(r"environment[\w.-]*\.ya?ml$"), _Format.CONDA),
+)
 
 
 class UnsupportedFormatError(Exception):
@@ -33,16 +43,9 @@ class ManifestParseError(Exception):
 def detect_format(filename: str) -> str:
     """Return the manifest format for ``filename`` or raise UnsupportedFormatError."""
     name = filename.lower()
-    if name == "pixi.lock":
-        return _Format.PIXI_LOCK
-    if name == "pixi.toml":
-        return _Format.PIXI_TOML
-    if name == "pyproject.toml":
-        return _Format.PYPROJECT
-    if name in {"environment.yml", "environment.yaml"}:
-        return _Format.CONDA
-    if _REQUIREMENTS_RE.search(name):
-        return _Format.REQUIREMENTS
+    for pattern, fmt in _FORMAT_PATTERNS:
+        if pattern.search(name):
+            return fmt
     raise UnsupportedFormatError(f"Unsupported manifest format. Supported: {SUPPORTED}")
 
 

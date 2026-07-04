@@ -91,6 +91,8 @@ The service uses a GitHub-style org model:
 
 **FR-3.7** The job record is owned by the submitting org. A user submitting under Org A cannot see or interact with the same job when acting under Org B, even if they belong to both.
 
+**FR-3.8** At submission the user provides four **required** provenance fields that are captured with the upload and embedded in the generated SBOM's document metadata: **Application ID** (free-text application identifier), **Application Component Name** (the component the manifest describes), **Repository URL** (the GitHub repository where the manifest normally lives; validated as a URL), and **Source Branch** (the branch the uploaded manifest came from). These are stored on the manifest/job record and written into the SBOM metadata at generation (FR-4.4): for CycloneDX into `metadata.component` (name), a `vcs` external reference (repository URL), and metadata properties (`application:id`, `vcs:branch`); for SPDX into the document/root package name, a VCS external reference, and annotations (best-effort).
+
 ---
 
 ### F4 — SBOM Generation Pipeline

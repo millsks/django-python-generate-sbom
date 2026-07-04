@@ -4,6 +4,10 @@ Status: ready-for-dev
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
+## Requirement Addition (2026-07-03) — embed provenance metadata (FR-3.8)
+
+`generate_sbom_document` takes the four provenance fields from the `ManifestUpload` (application_id, component_name, repository_url, source_branch) and writes them into the SBOM document metadata. CycloneDX 1.6: `metadata.component` (name=component_name, type=application), a `vcs` externalReference=repository_url, properties `application:id`=application_id and `vcs:branch`=source_branch. SPDX 2.3: root/document package name=component_name, VCS externalRef=repository_url, application_id + source_branch as annotations (best-effort). See PRD FR-3.8, solution-design §3.3, memory manifest-provenance-metadata.
+
 ## Story
 
 As the SBOM pipeline,

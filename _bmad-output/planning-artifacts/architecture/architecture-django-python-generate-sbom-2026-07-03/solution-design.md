@@ -176,6 +176,11 @@ class ManifestUpload(OrgScopedModel):
     detected_format: str  # 'requirements' | 'pyproject' | 'pixi_lock' | 'pixi_toml' | 'conda'
     original_filename: str
     uploaded_at: datetime
+    # Provenance metadata (FR-3.8, all required) — embedded in SBOM metadata (§3.3)
+    application_id: str        # free-text application identifier
+    component_name: str        # component the manifest describes
+    repository_url: str        # GitHub repo URL (URL-validated)
+    source_branch: str         # branch the manifest came from
 ```
 
 **Format detection** (applied in this order, not filename extension alone):
@@ -252,11 +257,25 @@ For manifest-only formats (`pyproject.toml`, `requirements.txt`, `pixi.toml`), t
 **SBOM generation** (`sbom/services.py`)
 
 ```python
-def generate_sbom_document(packages: list[PackageSpec], output_format: str) -> tuple[bytes, str]:
+def generate_sbom_document(
+    packages: list[PackageSpec], output_format: str, metadata: SbomMetadata
+) -> tuple[bytes, str]:
     """Returns (sbom_bytes, media_type)"""
     # CycloneDX JSON/XML → cyclonedx-python-lib
     # SPDX 2.3 JSON → lib4sbom
 ```
+
+`metadata` carries the FR-3.8 provenance fields (application_id, component_name,
+repository_url, source_branch) from the `ManifestUpload`, written into the SBOM's
+document metadata:
+
+- **CycloneDX 1.6**: `metadata.component` (`name` = component_name, `type` =
+  `application`); an `externalReference` of type `vcs` = repository_url;
+  `metadata.properties` `application:id` = application_id and `vcs:branch` =
+  source_branch.
+- **SPDX 2.3**: document / root package name = component_name; a VCS external
+  reference = repository_url; application_id and source_branch as annotations /
+  comments (best-effort — SPDX's metadata model is looser).
 
 ---
 

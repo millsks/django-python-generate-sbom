@@ -1,8 +1,12 @@
 # Story 3.1: Manifest Upload & Format Detection
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
+
+## Requirement Addition (2026-07-03) — provenance metadata (FR-3.8)
+
+The upload form/serializer captures **four REQUIRED provenance fields**, persisted on `ManifestUpload`: `application_id` (free-text), `component_name`, `repository_url` (URL-validated), `source_branch` (free text, placeholder "main"). All four required. They are carried through to SBOM generation and embedded in the document metadata (Story 3.4, FR-4.4). See PRD FR-3.8, solution-design §3.2/§3.3, and memory manifest-provenance-metadata.
 
 ## Story
 

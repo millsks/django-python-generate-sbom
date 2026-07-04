@@ -100,6 +100,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/distlib-0.4.3-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-6.0.6-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-environ-0.14.0-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/django-storages-1.14.6-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-5.2.9-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-ext-6.0.6-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-3.17.1-pyhd8ed1ab_0.conda
@@ -234,6 +235,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/distlib-0.4.3-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-6.0.6-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-environ-0.14.0-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/django-storages-1.14.6-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-5.2.9-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-ext-6.0.6-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-3.17.1-pyhd8ed1ab_0.conda
@@ -309,6 +311,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/distlib-0.4.3-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-6.0.6-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-environ-0.14.0-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/django-storages-1.14.6-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-5.2.9-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-ext-6.0.6-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-3.17.1-pyhd8ed1ab_0.conda
@@ -2485,6 +2488,24 @@ packages:
   run_exports: {}
   size: 26258
   timestamp: 1781829116726
+- conda: https://conda.anaconda.org/conda-forge/noarch/django-storages-1.14.6-pyhd8ed1ab_0.conda
+  sha256: 6b2c7b5a9b1a54cdf112b23f5cc9ea188a2ca9c9adfa2c01a7c80ce5cf685f2d
+  md5: 1add7ec715925a2bfe7b733dd7359e12
+  depends:
+  - django >=3.2
+  - python >=3.9
+  constrains:
+  - boto3 >=1.4.4
+  - dropbox >=7.2.1
+  - google-cloud-storage >=1.27.0
+  - azure-storage-blob >=12.0.0
+  license: BSD-3-Clause
+  license_family: BSD
+  purls:
+  - pkg:pypi/django-storages?source=hash-mapping
+  run_exports: {}
+  size: 31966
+  timestamp: 1743570868514
 - conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-5.2.9-pyhcf101f3_0.conda
   sha256: f12d352915b32f752ba3eac642ded00f0ae7fbc23eca436c8d04645235fec6c6
   md5: bb81e4af7da93d039d3cc43b9be01272

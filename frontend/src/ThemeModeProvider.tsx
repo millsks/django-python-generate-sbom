@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import CssBaseline from '@mui/material/CssBaseline'
 import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
@@ -14,6 +14,19 @@ function storedMode(): Mode | null {
   return value === 'light' || value === 'dark' ? value : null
 }
 
+interface ThemeModeValue {
+  mode: Mode
+  toggle: () => void
+}
+
+const ThemeModeContext = createContext<ThemeModeValue | null>(null)
+
+export function useThemeMode(): ThemeModeValue {
+  const value = useContext(ThemeModeContext)
+  if (!value) throw new Error('useThemeMode must be used within a ThemeModeProvider')
+  return value
+}
+
 export function ThemeModeProvider({ children }: { children: ReactNode }) {
   const prefersDark = useMediaQuery('(prefers-color-scheme: dark)')
   const [override, setOverride] = useState<Mode | null>(storedMode)
@@ -27,24 +40,30 @@ export function ThemeModeProvider({ children }: { children: ReactNode }) {
   }, [override])
 
   const theme = useMemo(() => (mode === 'dark' ? darkTheme : lightTheme), [mode])
-
-  function toggle() {
-    setOverride(mode === 'dark' ? 'light' : 'dark')
-  }
+  const value = useMemo<ThemeModeValue>(
+    () => ({ mode, toggle: () => setOverride(mode === 'dark' ? 'light' : 'dark') }),
+    [mode],
+  )
 
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Tooltip title={mode === 'dark' ? 'Switch to light' : 'Switch to dark'}>
-        <IconButton
-          onClick={toggle}
-          aria-label="Toggle light/dark theme"
-          sx={{ position: 'fixed', top: 8, right: 8, zIndex: 1300 }}
-        >
-          {mode === 'dark' ? '☀️' : '🌙'}
-        </IconButton>
-      </Tooltip>
-      {children}
-    </ThemeProvider>
+    <ThemeModeContext.Provider value={value}>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        {children}
+      </ThemeProvider>
+    </ThemeModeContext.Provider>
+  )
+}
+
+// The theme toggle, rendered in the app bar (Story 10.1) — previously a fixed
+// floating button inside the provider.
+export function ThemeToggle() {
+  const { mode, toggle } = useThemeMode()
+  return (
+    <Tooltip title={mode === 'dark' ? 'Switch to light' : 'Switch to dark'}>
+      <IconButton onClick={toggle} aria-label="Toggle light/dark theme" color="inherit">
+        {mode === 'dark' ? '☀️' : '🌙'}
+      </IconButton>
+    </Tooltip>
   )
 }

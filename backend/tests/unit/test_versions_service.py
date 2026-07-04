@@ -19,6 +19,14 @@ def _mock_latest(name: str, latest: str | None) -> None:
     responses.add(responses.GET, f"{versions_service.PYPI_JSON_URL}/{name}/json", json=body, status=200)
 
 
+def _mock_eol(product: str, cycles: object) -> None:
+    responses.add(responses.GET, f"{versions_service.EOL_API_URL}/{product}.json", json=cycles, status=200)
+
+
+def _mock_eol_missing(product: str) -> None:
+    responses.add(responses.GET, f"{versions_service.EOL_API_URL}/{product}.json", status=404)
+
+
 @responses.activate
 def test_currency_classes() -> None:
     _mock_latest("current-pkg", "5.2.5")  # installed 5.2.1 → same series → current
@@ -32,7 +40,7 @@ def test_currency_classes() -> None:
         PackageSpec(name="behind2-pkg", version="4.9.0"),
         PackageSpec(name="unknown-pkg", version="1.0.0"),
     ]
-    report = versions_service.classify(packages, session=_session(), lts_registry={})
+    report = versions_service.classify(packages, session=_session(), eol_session=_session(), lts_registry={})
 
     by_name = {e["name"]: e["currency"] for e in report["packages"]}
     assert by_name == {
@@ -47,14 +55,18 @@ def test_currency_classes() -> None:
 @responses.activate
 def test_two_minor_behind_is_behind_2plus() -> None:
     _mock_latest("pkg", "5.3.0")  # installed 5.1.0 → two minors behind → behind-2+
-    report = versions_service.classify([PackageSpec(name="pkg", version="5.1.0")], session=_session(), lts_registry={})
+    report = versions_service.classify(
+        [PackageSpec(name="pkg", version="5.1.0")], session=_session(), eol_session=_session(), lts_registry={}
+    )
     assert report["packages"][0]["currency"] == "behind-2+"
 
 
 @responses.activate
 def test_ahead_of_latest_is_current() -> None:
     _mock_latest("pkg", "1.0.0")  # installed newer than "latest" → current
-    report = versions_service.classify([PackageSpec(name="pkg", version="2.0.0")], session=_session(), lts_registry={})
+    report = versions_service.classify(
+        [PackageSpec(name="pkg", version="2.0.0")], session=_session(), eol_session=_session(), lts_registry={}
+    )
     assert report["packages"][0]["currency"] == "current"
 
 
@@ -89,19 +101,84 @@ def test_on_lts_flag_reflects_installed_series() -> None:
 
 @responses.activate
 def test_on_lts_is_none_when_untracked() -> None:
-    # No LTS tracked for the package → on_lts is None (untracked, not a "no").
+    # No registry entry and no endoflife.date data → on_lts is None (untracked, not "no").
     _mock_latest("pkg", "1.0.0")
-    report = versions_service.classify([PackageSpec(name="pkg", version="1.0.0")], session=_session(), lts_registry={})
+    _mock_eol_missing("pkg")
+    report = versions_service.classify(
+        [PackageSpec(name="pkg", version="1.0.0")], session=_session(), eol_session=_session(), lts_registry={}
+    )
     entry = report["packages"][0]
     assert entry["lts"] is None
     assert entry["on_lts"] is None
 
 
 @responses.activate
+def test_eol_lts_series_from_endoflife_date() -> None:
+    # No registry entry, but endoflife.date tracks the project → derive its LTS series.
+    _mock_latest("django", "5.2.0")
+    _mock_eol(
+        "django",
+        [
+            {"cycle": "5.2", "lts": False},
+            {"cycle": "4.2", "lts": "2023-04-03"},  # date-form LTS
+            {"cycle": "3.2", "lts": True},  # boolean-form LTS, older
+        ],
+    )
+    report = versions_service.classify(
+        [PackageSpec(name="django", version="4.2.11")], session=_session(), eol_session=_session(), lts_registry={}
+    )
+    entry = report["packages"][0]
+    assert entry["lts"] == "4.2"  # latest LTS cycle, not 3.2
+    assert entry["on_lts"] is True
+    assert entry["currency"] == "current"
+
+
+@responses.activate
+def test_registry_overrides_endoflife_date() -> None:
+    # An explicit registry entry wins over the API-derived series (operator authority).
+    _mock_latest("django", "5.2.0")
+    _mock_eol("django", [{"cycle": "4.2", "lts": True}])
+    report = versions_service.classify(
+        [PackageSpec(name="django", version="3.2.0")],
+        session=_session(),
+        eol_session=_session(),
+        lts_registry={"django": "3.2"},
+    )
+    entry = report["packages"][0]
+    assert entry["lts"] == "3.2"  # registry value, not endoflife.date's 4.2
+    assert entry["on_lts"] is True
+
+
+@responses.activate
+def test_endoflife_date_error_falls_through_to_untracked() -> None:
+    # endoflife.date unreachable / non-list body → untracked, never a fabricated LTS.
+    _mock_latest("pkg", "2.0.0")
+    responses.add(responses.GET, f"{versions_service.EOL_API_URL}/pkg.json", status=503)
+    report = versions_service.classify(
+        [PackageSpec(name="pkg", version="1.0.0")], session=_session(), eol_session=_session(), lts_registry={}
+    )
+    assert report["packages"][0]["lts"] is None
+
+
+@responses.activate
+def test_eol_product_name_mapping() -> None:
+    # A package whose slug differs from its PyPI name resolves via _EOL_PRODUCTS.
+    _mock_latest("opensearch-py", "2.0.0")
+    _mock_eol("opensearch", [{"cycle": "2.11", "lts": True}])
+    report = versions_service.classify(
+        [PackageSpec(name="opensearch-py", version="2.11.0")],
+        session=_session(),
+        eol_session=_session(),
+        lts_registry={},
+    )
+    assert report["packages"][0]["lts"] == "2.11"
+
+
+@responses.activate
 def test_pypi_failure_is_unknown() -> None:
     responses.add(responses.GET, f"{versions_service.PYPI_JSON_URL}/down-pkg/json", status=503)
     report = versions_service.classify(
-        [PackageSpec(name="down-pkg", version="1.0.0")], session=_session(), lts_registry={}
+        [PackageSpec(name="down-pkg", version="1.0.0")], session=_session(), eol_session=_session(), lts_registry={}
     )
     assert report["packages"][0]["currency"] == "unknown"
 
@@ -110,7 +187,7 @@ def test_pypi_failure_is_unknown() -> None:
 def test_unparseable_versions_are_unknown() -> None:
     _mock_latest("weird-pkg", "not-a-version")
     report = versions_service.classify(
-        [PackageSpec(name="weird-pkg", version="also-bad")], session=_session(), lts_registry={}
+        [PackageSpec(name="weird-pkg", version="also-bad")], session=_session(), eol_session=_session(), lts_registry={}
     )
     assert report["packages"][0]["currency"] == "unknown"
 

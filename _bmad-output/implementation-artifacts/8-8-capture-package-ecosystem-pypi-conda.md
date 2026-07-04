@@ -46,6 +46,13 @@ the real lock structure (`pixi_lock.py` currently reads only name/version) to fi
 the conda-vs-pypi discriminator (e.g. a `conda:`/`pypi:` URL field or `kind`).
 [Source: backend/generate_sbom/sbom/parsers/pixi_lock.py]
 
+### conda↔PyPI name mapping
+
+If a conda-tagged package needs its PyPI identity (or vice versa) — e.g. to reconcile
+`pytorch` (conda) with `torch` (PyPI) — reuse the **parselmouth** name-mapping service
+introduced in Story 8.10 (a locally-stored, periodically-refreshed
+`compressed_mapping.json`), rather than a new lookup. [Source: 8-10-conda-forge-latest-and-divergence.md]
+
 ### Relationship to Story 8.3
 
 8.3 adds `PackageSpec.relationship` and wires every resolver; this story adds

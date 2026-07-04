@@ -5,12 +5,16 @@ import userEvent from '@testing-library/user-event'
 import { LicensesTab } from './LicensesTab'
 import { ApiError } from '../api/client'
 import { getLicenses } from '../api/reports'
+import { downloadWorkbook } from '../excelExport'
 
 vi.mock('../api/reports', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/reports')>()
   return { ...actual, getLicenses: vi.fn() }
 })
 const mockGet = getLicenses as Mock
+
+vi.mock('../excelExport', () => ({ buildWorkbook: vi.fn(() => ({})), downloadWorkbook: vi.fn() }))
+const mockDownload = downloadWorkbook as Mock
 
 const REPORT = {
   tiers: [
@@ -126,5 +130,22 @@ describe('LicensesTab', () => {
     await screen.findByText(/could not be generated/i)
     expect(screen.queryByRole('button', { name: /expand all/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /collapse all/i })).not.toBeInTheDocument()
+  })
+
+  it('exports the license report to an .xlsx on demand (Story 8.14)', async () => {
+    mockGet.mockResolvedValue(REPORT)
+    render(<LicensesTab taskId="t" />)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Export to Excel' }))
+
+    expect(mockDownload).toHaveBeenCalledWith(expect.anything(), 'licenses.xlsx')
+  })
+
+  it('hides the export control when there are no tiers', async () => {
+    mockGet.mockResolvedValue({ tiers: [], summary: {} })
+    render(<LicensesTab taskId="t" />)
+
+    await waitFor(() => expect(screen.queryByLabelText('Loading licenses')).not.toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'Export to Excel' })).not.toBeInTheDocument()
   })
 })

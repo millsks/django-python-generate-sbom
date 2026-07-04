@@ -14,7 +14,7 @@ from rest_framework.test import APIClient
 
 from generate_sbom.manifests.models import ManifestUpload
 from generate_sbom.sbom.models import SBOMJob
-from generate_sbom.sbom.parsers import PackageSpec
+from generate_sbom.sbom.parsers import PackageSpec, ResolutionError
 from generate_sbom.tasks import sbom_pipeline as pipeline
 from generate_sbom.users.services import register_user
 
@@ -196,3 +196,39 @@ def test_status_before_hard_limit_is_untouched() -> None:
     response = _login().get(f"/api/v1/sbom/status/{job.task_id}/")
     assert response.data["status"] == SBOMJob.Status.PENDING
     assert response.data["failure_reason"] is None
+
+
+@pytest.mark.django_db
+def test_resolution_error_marks_failed_not_stuck() -> None:
+    # An unsatisfiable manifest (e.g. conflicting pins) must fail the job, not leave
+    # it stuck at PROGRESS with the UI polling forever.
+    job = _make_job()
+    prev = {"task_id": str(job.task_id), "detected_format": "requirements"}
+    with (
+        patch(_NO_UPDATE),
+        patch("generate_sbom.sbom.services.resolve_job_packages", side_effect=ResolutionError("unsatisfiable")),
+    ):
+        result = pipeline.resolve_transitive_deps.apply(args=(prev,))
+
+    assert result.failed()
+    job.refresh_from_db()
+    assert job.status == SBOMJob.Status.FAILED
+    assert job.failure_reason == "resolution_failed"
+
+
+@pytest.mark.django_db
+def test_unexpected_phase_error_falls_back_to_pipeline_error() -> None:
+    # Safety net: a phase that raises without setting its own reason still finalizes
+    # the job as FAILED rather than leaving it at PROGRESS.
+    job = _make_job()
+    prev = {"task_id": str(job.task_id), "detected_format": "requirements"}
+    with (
+        patch(_NO_UPDATE),
+        patch("generate_sbom.sbom.services.resolve_job_packages", side_effect=ValueError("boom")),
+    ):
+        result = pipeline.resolve_transitive_deps.apply(args=(prev,))
+
+    assert result.failed()
+    job.refresh_from_db()
+    assert job.status == SBOMJob.Status.FAILED
+    assert job.failure_reason == "pipeline_error"

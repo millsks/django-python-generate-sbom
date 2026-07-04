@@ -26,6 +26,20 @@ describe('buildWorkbook', () => {
     expect(worksheet.getRow(3).getCell(2).value).toBe(4)
   })
 
+  it('renders a hyperlink cell for a { text, hyperlink } value', () => {
+    const workbook = buildWorkbook([
+      {
+        name: 'Links',
+        columns: [{ key: 'pkg', header: 'Package' }],
+        rows: [{ pkg: { text: 'django', hyperlink: 'https://pypi.org/project/django/' } }],
+      },
+    ])
+
+    const cell = workbook.getWorksheet('Links')!.getRow(2).getCell(1)
+    expect(cell.value).toMatchObject({ text: 'django', hyperlink: 'https://pypi.org/project/django/' })
+    expect(cell.font?.underline).toBe(true)
+  })
+
   it('supports multiple sheets in one workbook', () => {
     const workbook = buildWorkbook([
       { name: 'One', columns: [{ key: 'x', header: 'X' }], rows: [{ x: 1 }] },

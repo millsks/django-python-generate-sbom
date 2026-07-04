@@ -8,10 +8,20 @@ export interface ExcelColumn {
   header: string
 }
 
+// A clickable cell: exceljs renders `{ text, hyperlink }` as a hyperlink.
+export interface HyperlinkCell {
+  text: string
+  hyperlink: string
+}
+
 export interface SheetSpec {
   name: string // Excel sheet name (keep ≤ 31 chars, no []:*?/\)
   columns: ExcelColumn[]
-  rows: Record<string, unknown>[]
+  rows: Record<string, unknown>[] // a value may be a HyperlinkCell for a linked cell
+}
+
+function isHyperlink(value: unknown): value is HyperlinkCell {
+  return typeof value === 'object' && value !== null && 'hyperlink' in value
 }
 
 // Build a workbook from one or more sheet specs (one sheet per report).
@@ -21,7 +31,13 @@ export function buildWorkbook(sheets: SheetSpec[]): ExcelJS.Workbook {
     const worksheet = workbook.addWorksheet(sheet.name)
     worksheet.columns = sheet.columns.map((column) => ({ key: column.key, header: column.header }))
     worksheet.getRow(1).font = { bold: true }
-    for (const row of sheet.rows) worksheet.addRow(row)
+    for (const row of sheet.rows) {
+      const added = worksheet.addRow(row)
+      // Style hyperlink cells like links (exceljs doesn't do this automatically).
+      added.eachCell((cell) => {
+        if (isHyperlink(cell.value)) cell.font = { color: { argb: 'FF0563C1' }, underline: true }
+      })
+    }
   }
   return workbook
 }

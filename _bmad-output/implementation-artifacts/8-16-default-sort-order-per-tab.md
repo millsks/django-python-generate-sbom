@@ -1,6 +1,6 @@
 # Story 8.16: Default Sort Order Per Tab
 
-Status: review
+Status: done
 
 ## Dev Agent Record
 

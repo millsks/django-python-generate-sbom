@@ -2,30 +2,38 @@
 // per-tab export and the Overview combined workbook produce identical sheets.
 import type { LicenseReport, VersionEntry, VulnerabilityReport } from './api/reports'
 import type { SheetSpec } from './excelExport'
+import { registryUrl } from './registryLinks'
 
 const onLtsCell = (onLts: boolean | null): string => (onLts === null ? '' : onLts ? 'yes' : 'no')
 
+// Mirrors the Version Currency tab's columns, including the conda-forge latest, and
+// links the package name to its registry page (PyPI / prefix.dev) in the sheet.
 export function versionCurrencySheet(packages: VersionEntry[]): SheetSpec {
   return {
     name: 'Version Currency',
     columns: [
       { key: 'name', header: 'Package' },
       { key: 'installed', header: 'Installed' },
-      { key: 'latest', header: 'Latest' },
+      { key: 'latest', header: 'Latest (PyPI)' },
+      { key: 'conda_latest', header: 'conda-forge Latest' },
       { key: 'currency', header: 'Status' },
       { key: 'lts', header: 'LTS' },
       { key: 'on_lts', header: 'On LTS' },
       { key: 'ecosystem', header: 'Source' },
     ],
-    rows: packages.map((pkg) => ({
-      name: pkg.name,
-      installed: pkg.installed,
-      latest: pkg.latest ?? '',
-      currency: pkg.currency,
-      lts: pkg.lts ?? '',
-      on_lts: onLtsCell(pkg.on_lts),
-      ecosystem: pkg.ecosystem ?? '',
-    })),
+    rows: packages.map((pkg) => {
+      const url = registryUrl({ name: pkg.name, version: pkg.installed, ecosystem: pkg.ecosystem })
+      return {
+        name: url ? { text: pkg.name, hyperlink: url } : pkg.name,
+        installed: pkg.installed,
+        latest: pkg.latest ?? '',
+        conda_latest: pkg.conda_latest ?? '',
+        currency: pkg.currency,
+        lts: pkg.lts ?? '',
+        on_lts: onLtsCell(pkg.on_lts),
+        ecosystem: pkg.ecosystem ?? '',
+      }
+    }),
   }
 }
 

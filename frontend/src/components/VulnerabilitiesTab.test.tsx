@@ -5,12 +5,16 @@ import userEvent from '@testing-library/user-event'
 import { VulnerabilitiesTab } from './VulnerabilitiesTab'
 import { ApiError } from '../api/client'
 import { getVulnerabilities } from '../api/reports'
+import { downloadWorkbook } from '../excelExport'
 
 vi.mock('../api/reports', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/reports')>()
   return { ...actual, getVulnerabilities: vi.fn() }
 })
 const mockGet = getVulnerabilities as Mock
+
+vi.mock('../excelExport', () => ({ buildWorkbook: vi.fn(() => ({})), downloadWorkbook: vi.fn() }))
+const mockDownload = downloadWorkbook as Mock
 
 function vuln(over: Record<string, unknown>) {
   return { id: 'GHSA', aliases: [], cve: null, cvss_score: null, severity: 'Low', advisory_url: 'http://a', cwe: [], ...over }
@@ -59,6 +63,18 @@ describe('VulnerabilitiesTab', () => {
     render(<VulnerabilitiesTab taskId="t" totalPackages={42} />)
 
     expect(await screen.findByText('No vulnerabilities found in 42 packages.')).toBeInTheDocument()
+    // No export control on an empty report.
+    expect(screen.queryByRole('button', { name: 'Export to Excel' })).not.toBeInTheDocument()
+  })
+
+  it('exports the full vulnerability report to an .xlsx on demand (Story 8.13)', async () => {
+    mockGet.mockResolvedValue(REPORT)
+    render(<VulnerabilitiesTab taskId="t" totalPackages={10} />)
+    await screen.findByRole('table')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Export to Excel' }))
+
+    expect(mockDownload).toHaveBeenCalledWith(expect.anything(), 'vulnerabilities.xlsx')
   })
 
   it('renders the failure notice when the report failed', async () => {
@@ -67,5 +83,7 @@ describe('VulnerabilitiesTab', () => {
 
     expect(await screen.findByText(/could not be generated/i)).toBeInTheDocument()
     expect(screen.getByText(/osv down/i)).toBeInTheDocument()
+    // No export control on a failed report.
+    expect(screen.queryByRole('button', { name: 'Export to Excel' })).not.toBeInTheDocument()
   })
 })

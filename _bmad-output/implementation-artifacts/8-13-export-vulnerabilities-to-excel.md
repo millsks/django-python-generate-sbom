@@ -1,6 +1,6 @@
 # Story 8.13: Export Vulnerabilities to Excel
 
-Status: ready-for-dev
+Status: review
 
 <!-- Reuses the shared Excel-export helper from Story 8.12. -->
 
@@ -39,8 +39,22 @@ Reuses the export mechanism and full-report semantics established in Story 8.12 
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
 
 ### Completion Notes List
 
+- Reused the Story 8.12 shared export helper (`excelExport.ts`, left untouched) and added a `vulnerabilitiesSheet(report)` builder to `reportSheets.ts` in the same style as `versionCurrencySheet`, keeping the mapping reusable by the future Overview combined workbook (8.15).
+- Added an "Export to Excel" button to `VulnerabilitiesTab.tsx` that calls `downloadWorkbook(buildWorkbook([vulnerabilitiesSheet(report)]), 'vulnerabilities.xlsx')`. The button lives in the loaded-report render path only, so it is absent on failed/empty reports (AC #4).
+- Columns: Package, Installed, CVE / GHSA, CVSS, Severity, CWE, Advisory URL. One row per finding across the FULL report (all severities, independent of the active severity filter). Multi-id cells dedupe id + aliases and multi-CWE cells comma-join, mirroring `VulnerabilitiesTab.toRows`. Null CVSS and empty CWE render as ''.
+- Tests: `vulnerabilitiesSheet` mapping test in `reportSheets.test.ts`; `VulnerabilitiesTab.test.tsx` verifies the button triggers `downloadWorkbook` with `vulnerabilities.xlsx` (mocking `../excelExport`) and that the button is absent on failed and empty reports.
+- `pixi run ci` exits 0.
+
 ### File List
+
+- frontend/src/reportSheets.ts (modified)
+- frontend/src/reportSheets.test.ts (modified)
+- frontend/src/components/VulnerabilitiesTab.tsx (modified)
+- frontend/src/components/VulnerabilitiesTab.test.tsx (modified)
+- _bmad-output/implementation-artifacts/8-13-export-vulnerabilities-to-excel.md (modified)

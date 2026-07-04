@@ -26,7 +26,7 @@ from django.core.files.storage import default_storage
 from generate_sbom.analysis.services.reports import write_report
 from generate_sbom.sbom import services
 from generate_sbom.sbom.models import SBOMJob
-from generate_sbom.sbom.parsers import PackageSpec
+from generate_sbom.sbom.parsers import PackageSpec, ResolutionError
 from generate_sbom.sbom.selectors import get_job_by_task_id
 from generate_sbom.tasks.analysis import (
     build_dependency_graph,
@@ -44,13 +44,31 @@ def _report(task: Any, task_id: str, progress: int, step: str) -> None:
     services.update_job_status(task_id, SBOMJob.Status.PROGRESS, progress=progress, current_step=step)
 
 
+def _fail_if_unfinished(task_id: str, *, failure_reason: str) -> None:
+    """Safety net: never leave a job stuck at PROGRESS when a phase raises.
+
+    Marks the job FAILED unless a phase already reached a terminal state (whose
+    reason we then preserve). Best-effort — a lookup failure must not mask the
+    original phase error.
+    """
+    try:
+        job = get_job_by_task_id(task_id)
+    except SBOMJob.DoesNotExist:
+        return
+    if job.status in (SBOMJob.Status.SUCCESS, SBOMJob.Status.FAILED):
+        return
+    services.update_job_status(task_id, SBOMJob.Status.FAILED, failure_reason=failure_reason)
+
+
 @contextmanager
 def _phase_guard(task_id: str, *, detected_format: str = "") -> Iterator[None]:
-    """Mark the job FAILED on a soft timeout, and log any failure with its manifest format.
+    """Mark the job FAILED on any phase failure, and log it with its manifest format.
 
     On ``SoftTimeLimitExceeded`` the job is failed with reason ``soft_timeout`` and no
-    partial SBOM is produced (FR-4.6). Other failures are logged with the full
-    traceback + manifest format (NFR-6.2), leaving any reason a phase already set intact.
+    partial SBOM is produced (FR-4.6). Any other failure is logged with the full
+    traceback + manifest format (NFR-6.2) and finalizes the job as FAILED — preserving
+    a specific reason a phase already set, else a generic ``pipeline_error`` — so a
+    phase error can never leave the job stuck at PROGRESS.
     """
     try:
         yield
@@ -60,6 +78,7 @@ def _phase_guard(task_id: str, *, detected_format: str = "") -> Iterator[None]:
         raise
     except Exception:
         logger.error("phase_failed", task_id=str(task_id), detected_format=detected_format, exc_info=True)
+        _fail_if_unfinished(task_id, failure_reason="pipeline_error")
         raise
 
 
@@ -111,7 +130,13 @@ def resolve_transitive_deps(self: Any, prev: dict[str, Any]) -> dict[str, Any]:
     task_id = prev["task_id"]
     with _phase_guard(task_id, detected_format=prev.get("detected_format", "")):
         _report(self, task_id, 20, "resolve dependencies")
-        packages = services.resolve_job_packages(task_id)
+        try:
+            packages = services.resolve_job_packages(task_id)
+        except ResolutionError:
+            # A bad/unsatisfiable manifest is a hard-fail for the job (not a crash) —
+            # give it a specific reason so the UI explains why instead of spinning.
+            services.update_job_status(task_id, SBOMJob.Status.FAILED, failure_reason="resolution_failed")
+            raise
         logger.info("phase_resolve", task_id=str(task_id), package_count=len(packages))
         return {"task_id": task_id, "packages": [asdict(pkg) for pkg in packages]}
 

@@ -1,6 +1,6 @@
 # Story 5.5: Dependency Graph Tab
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -99,8 +99,26 @@ Depends on Story 5.1 (shell + api layer) and consumes the Epic 4 Story 4.4 graph
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
+
+- `react-cytoscapejs` ships no types → added an ambient declaration (`src/react-cytoscapejs.d.ts`) so `tsc -b` (the production build) passes. `cytoscape` and `cytoscape-dagre` ship their own types.
+- Cytoscape needs a real canvas, unavailable in jsdom → tests mock `cytoscape`, `cytoscape-dagre`, and `react-cytoscapejs` (the mock keeps `normalizeElements` and captures `elements`/`layout` as data-attributes).
 
 ### Completion Notes List
 
+- **`DepGraph`** (new): registers `cytoscape.use(dagre)` once at module load, fetches `getGraph` (the inline `{nodes, edges}` JSON, AD-9), and renders `CytoscapeComponent` with `layout={{ name: 'dagre', rankDir: 'TB' }}`, a stylesheet, and `elements` from `normalizeElements`. **No PyVis HTML, no iframe** (AD-9).
+- **Interactions (AC #2):** zoom/pan/node-drag are Cytoscape defaults; **hover-to-highlight** is wired via the `cy` callback (`mouseover`/`mouseout` add/remove a `.highlight` class on the node + its connected edges). Interactive behavior isn't exercisable in jsdom — the wiring is in place; it's manual/e2e-verified.
+- **SVG download (AC #3):** a "Download SVG" button links to `graphSvgDownloadUrl(taskId)` → the graph SVG endpoint (303 → presigned, AD-11) — the one endpoint kept as a presigned download (5.3).
+- **Failure notice (AC #5):** shared `TabFailureNotice` on `report_failed`. Empty-graph guard renders an info alert.
+- Wired into `ResultsPage` (tab index 3). **Lazy-mounted** via the shell's `TabPanel` (graph render is outside the NFR-2.2 budget, AC/Task 4).
+- **Tests:** normalized elements + dagre layout reach Cytoscape, no iframe, SVG download link, failure notice.
+- Gate: `pixi run ci` exits 0 — backend 177 tests, frontend 19 tests.
+
 ### File List
+
+- frontend/src/components/DepGraph.tsx (new) + DepGraph.test.tsx (new)
+- frontend/src/react-cytoscapejs.d.ts (new — ambient types)
+- frontend/src/api/reports.ts (graphSvgDownloadUrl)
+- frontend/src/pages/ResultsPage.tsx (wires the Dependency Graph tab)

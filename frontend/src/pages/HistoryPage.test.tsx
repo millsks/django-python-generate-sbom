@@ -4,13 +4,28 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { HistoryPage } from './HistoryPage'
-import { listJobs } from '../api/jobs'
+import { getJobStatus, listJobs } from '../api/jobs'
 
 vi.mock('../api/jobs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/jobs')>()
-  return { ...actual, listJobs: vi.fn() }
+  return { ...actual, listJobs: vi.fn(), getJobStatus: vi.fn() }
 })
 const mockList = listJobs as Mock
+const mockJobStatus = getJobStatus as Mock
+
+function jobStatus(overrides: Record<string, unknown> = {}) {
+  return {
+    task_id: 'abc-123',
+    status: 'PROGRESS',
+    progress: 62,
+    current_phase: 'vulnerability scan',
+    failure_reason: null,
+    result_url: null,
+    created_at: '',
+    completed_at: null,
+    ...overrides,
+  }
+}
 
 function page(results: unknown[], count = results.length) {
   return { count, next: count > 25 ? '/api/v1/sbom/jobs/?page=2' : null, previous: null, results }
@@ -72,5 +87,31 @@ describe('HistoryPage', () => {
     renderPage()
 
     expect(await screen.findByText('No jobs yet.')).toBeInTheDocument()
+  })
+
+  it('does not poll rows that are already terminal (AC #5)', async () => {
+    mockList.mockResolvedValue(page([JOB])) // SUCCESS
+    renderPage()
+    await screen.findByRole('table')
+
+    expect(mockJobStatus).not.toHaveBeenCalled()
+  })
+
+  it('polls an in-progress row and shows live progress and phase', async () => {
+    mockList.mockResolvedValue(page([{ ...JOB, status: 'PROGRESS' }]))
+    mockJobStatus.mockResolvedValue(jobStatus())
+    renderPage()
+
+    expect(await screen.findByText(/vulnerability scan — 62%/)).toBeInTheDocument()
+    expect(mockJobStatus).toHaveBeenCalledWith('abc-123')
+  })
+
+  it('swaps an in-progress row to its final failed state on transition', async () => {
+    mockList.mockResolvedValue(page([{ ...JOB, status: 'PROGRESS' }]))
+    mockJobStatus.mockResolvedValue(jobStatus({ status: 'FAILED', failure_reason: 'soft_timeout' }))
+    renderPage()
+
+    expect(await screen.findByText('Failed')).toBeInTheDocument()
+    expect(screen.getByText('soft_timeout')).toBeInTheDocument()
   })
 })

@@ -1,6 +1,6 @@
 # Story 6.2: Live Progress Polling
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -87,8 +87,20 @@ The React SPA polls `GET /api/v1/sbom/status/{taskId}/` every 5 seconds via the 
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
 
 ### Completion Notes List
 
+- **Shared hook:** `frontend/src/hooks/useJobStatus.ts` — `useJobStatus(taskId, { enabled })` polls `GET /sbom/status/{taskId}/` (via `getJobStatus` in `api/jobs.ts`, no direct fetch — AD-5) every `POLL_MS` (5000). Stops when `status` is terminal (`SUCCESS`/`FAILED`), clears the timer on unmount, and issues no requests when `enabled` is false. Returns `{ status, error }`; 403/404 map to `'denied'` (no existence leak, AD-2), everything else to `'error'`.
+- **ResultsPage refactor:** dropped its bespoke poll loop and now consumes `useJobStatus(taskId)` — the hook is a general primitive reused by both pages, not HistoryPage-specific.
+- **HistoryPage rows:** extracted a `JobRow` component; rows that start non-terminal subscribe to `useJobStatus(taskId, { enabled: !terminal })`, rendering a live phase + `progress %` line and a `LinearProgress` bar, then swapping in place to the final badge (results link stays; failure reason on FAILED) when the terminal state arrives. Rows already terminal on load never poll (AC #5).
+- **Tests:** `useJobStatus.test.ts` (fake timers) — no requests when disabled, 5s polling cadence, stop on terminal, unmount cleanup, 403/404→denied. `HistoryPage.test.tsx` — terminal rows don't poll, in-progress row shows live phase/%, transition swaps to final failed state.
+- Gate: `pixi run ci` exits 0 — backend 183 tests (95.28%), frontend 34 tests (9 files). Frontend-only story; no backend changes.
+
 ### File List
+
+- frontend/src/hooks/useJobStatus.ts (new), useJobStatus.test.ts (new)
+- frontend/src/pages/ResultsPage.tsx (consume shared hook)
+- frontend/src/pages/HistoryPage.tsx (JobRow + live polling), HistoryPage.test.tsx (polling tests)

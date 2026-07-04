@@ -24,8 +24,10 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 
 OSV_TTL = timedelta(hours=24)
 PYPI_TTL = timedelta(hours=1)
+NVD_TTL = timedelta(hours=24)
 OSV_RATE_PER_SECOND = 1
 PYPI_RATE_PER_SECOND = 5
+NVD_RATE_PER_SECOND = 1  # NVD is strict without an API key; caching absorbs the rest
 
 
 class CachedLimiterSession(CacheMixin, LimiterMixin, requests.Session):
@@ -51,6 +53,7 @@ def build_session(cache_name: str, expire_after: timedelta, per_second: int) -> 
 
 _osv_session: CachedLimiterSession | None = None
 _pypi_session: CachedLimiterSession | None = None
+_nvd_session: CachedLimiterSession | None = None
 
 
 def osv_session() -> CachedLimiterSession:
@@ -67,6 +70,14 @@ def pypi_session() -> CachedLimiterSession:
     if _pypi_session is None:
         _pypi_session = build_session("pypi-cache", PYPI_TTL, PYPI_RATE_PER_SECOND)
     return _pypi_session
+
+
+def nvd_session() -> CachedLimiterSession:
+    """Return the shared NVD session (24h cache, 1 req/s) for CWE/CVSS enrichment."""
+    global _nvd_session
+    if _nvd_session is None:
+        _nvd_session = build_session("nvd-cache", NVD_TTL, NVD_RATE_PER_SECOND)
+    return _nvd_session
 
 
 # Retry wrapper for transient external-API errors (used by 4.2/4.5).

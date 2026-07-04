@@ -31,3 +31,36 @@ export const TERMINAL_STATUSES = ['SUCCESS', 'FAILED']
 export function getJobStatus(taskId: string, apiKey?: string): Promise<JobStatus> {
   return apiRequest<JobStatus>(`/sbom/status/${taskId}/`, { apiKey })
 }
+
+// A row in the dashboard jobs list.
+export interface JobListItem {
+  task_id: string
+  created_at: string
+  manifest_filename: string
+  manifest_format: string
+  output_format: string
+  status: string
+  failure_reason: string | null
+}
+
+export interface Paginated<T> {
+  count: number
+  next: string | null
+  previous: string | null
+  results: T[]
+}
+
+export interface JobsQuery {
+  page?: number
+  status?: string // All | In Progress | Completed | Failed
+  format?: string
+}
+
+export function listJobs(query: JobsQuery = {}): Promise<Paginated<JobListItem>> {
+  const params = new URLSearchParams()
+  if (query.page) params.set('page', String(query.page))
+  if (query.status && query.status !== 'All') params.set('status', query.status)
+  if (query.format) params.set('format', query.format)
+  const qs = params.toString()
+  return apiRequest<Paginated<JobListItem>>(`/sbom/jobs/${qs ? `?${qs}` : ''}`)
+}

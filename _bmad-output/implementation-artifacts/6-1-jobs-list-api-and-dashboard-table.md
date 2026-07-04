@@ -1,6 +1,6 @@
 # Story 6.1: Jobs List API & Dashboard Table
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -107,8 +107,19 @@ The UI exposes `All / In Progress / Completed / Failed`; `SBOMJob.status` values
 
 ### Agent Model Used
 
-### Debug Log References
+claude-opus-4-8[1m]
 
 ### Completion Notes List
 
+- **Backend:** `selectors.get_jobs(org, *, status_filter, format_filter)` — `for_org(org)` (AD-2), `-created_at`, with the UI status-label mapping (`In Progress`→PENDING/PROGRESS, `Completed`→SUCCESS, `Failed`→FAILED, `All`/None→none) and `manifest__detected_format` filter. `JobListSerializer` (ModelSerializer) exposes task_id, created_at, manifest_filename, manifest_format, output_format, status, failure_reason. `JobsListView` (`ListAPIView`) with `JobsPagination` (25/page, up to 100 via `?page_size=`); org from `get_request_org`, empty queryset when no org. Route `GET /api/v1/sbom/jobs/`.
+- **Frontend:** `listJobs({page, status, format})` in `api/jobs.ts` (typed `Paginated<JobListItem>` envelope; drops `status=All`). `JobStatusBadge` maps status → colored Chip (In Progress/Completed/Failed). `HistoryPage` (`/history`): MUI table with the six columns, status + manifest-format filter controls (reset to page 1 on change), MUI `Pagination` reflecting `count`, failure-reason text on FAILED rows, and a "View" link per row to `/results/:taskId`. Static status only (live polling is 6.2).
+- **Tests:** backend — selector org-scoping/order/filters + endpoint pagination-envelope/serialization/filters/cross-org exclusion; frontend — row columns + results link, failure reason on FAILED, status-filter re-query resets page, empty state.
+- **Still pending (flagged earlier):** the upload form still posts to `/manifests/upload/`; wiring it to `/sbom/generate/` (so a UI submission appears in this dashboard) remains a small follow-up — I'll do it after Epic 6.
+- Gate: `pixi run ci` exits 0 — backend 183 tests (95.28%), frontend 26 tests.
+
 ### File List
+
+- backend/generate_sbom/sbom/selectors.py (get_jobs), serializers.py (JobListSerializer), views.py (JobsPagination, JobsListView), urls.py (sbom/jobs/)
+- backend/tests/unit/test_jobs_list.py (new)
+- frontend/src/api/jobs.ts (listJobs + types), components/JobStatusBadge.tsx (new), pages/HistoryPage.tsx (new) + HistoryPage.test.tsx (new)
+- frontend/src/App.tsx (/history route)

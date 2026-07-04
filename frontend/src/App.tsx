@@ -7,6 +7,7 @@ import { MembersPage } from './pages/MembersPage'
 import { KeysPage } from './pages/KeysPage'
 import { UploadPage } from './pages/UploadPage'
 import { ResultsPage } from './pages/ResultsPage'
+import { HistoryPage } from './pages/HistoryPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 
 function App() {
@@ -53,6 +54,14 @@ function App() {
           element={
             <ProtectedRoute>
               <ResultsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/history"
+          element={
+            <ProtectedRoute>
+              <HistoryPage />
             </ProtectedRoute>
           }
         />

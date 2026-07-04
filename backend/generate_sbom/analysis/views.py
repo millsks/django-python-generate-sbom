@@ -58,3 +58,9 @@ class VulnerabilityReportView(_ReportView):
     """GET /api/v1/sbom/result/{task_id}/reports/vulnerabilities/ → 303 to vuln.json."""
 
     report_type = AnalysisReport.ReportType.VULN
+
+
+class LicenseReportView(_ReportView):
+    """GET /api/v1/sbom/result/{task_id}/reports/licenses/ → 303 to licenses.json."""
+
+    report_type = AnalysisReport.ReportType.LICENSE

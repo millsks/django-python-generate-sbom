@@ -1,6 +1,6 @@
 # Story 4.1: External API Caching, Rate Limiting & AnalysisReport Model
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -120,8 +120,30 @@ All four analysis tasks route to the `analysis` queue (phases 4–7), never `pip
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
+
+- Used `responses` (not `respx`) to intercept HTTP: `respx` is httpx-only, and this stack is `requests`-based (requests-cache / requests-ratelimiter). AC #7 allows "respx or equivalent".
+- Subclassing the untyped `CacheMixin`/`LimiterMixin` did NOT trip mypy's `disallow_subclassing_any` (unlike `S3Storage`), so no `type: ignore` is needed on `CachedLimiterSession`.
 
 ### Completion Notes List
 
+- **New `analysis` app** registered in INSTALLED_APPS with migration `0001_initial`. `AnalysisReport`: FK to `SBOMJob` (`related_name="reports"`, CASCADE), `report_type` (`vuln`/`license`/`graph`/`version`), `artifact_key`, `summary` (JSON), `generated_at`, `failed`, `failure_reason`; unique per `(job, report_type)`. **Not** org-scoped — org isolation is transitive via `SBOMJob.objects.for_org(org).reports` (AD-6).
+- **`analysis/services/http.py`**: `CachedLimiterSession` (requests-cache + requests-ratelimiter). Lazy singletons `osv_session()` (24h cache, 1 req/s) and `pypi_session()` (1h cache, 5 req/s); `build_session()` factory. Cache backend from `settings.REQUESTS_CACHE_BACKEND` — `memory` (tests/local, network-free) or `redis` (production, shared across workers). Cache keyed by URL only, so it is **safely shared across orgs** (FR-5.5). `external_retry` = tenacity 3 attempts, exponential backoff, on `requests.RequestException`.
+- **`analysis/services/reports.py`**: `make_envelope()` (the AD-4 chord envelope) and `write_report()` (persists an `AnalysisReport` from an envelope — used by the 4.6 callback).
+- **Service stubs** (`vulnerability.py`/`license.py`/`graph.py`/`versions.py`): pure-function modules, filled by 4.2–4.5. No Celery/HTTP coupling (AD-3).
+- **Canonical `report_type` values** are `vuln`/`license`/`graph`/`version`. The Epic 3 no-op stubs return longer names (`vulnerability`, etc.); Story 4.6 reconciles them when it wires the real tasks.
+- New deps (conda-forge): `requests`, `requests-cache`, `requests-ratelimiter`, `tenacity`; dev: `responses`.
+- Gate: `pixi run ci` exits 0 — 145 tests, 95.49% coverage.
+
 ### File List
+
+- backend/generate_sbom/analysis/{__init__,apps,models}.py (new app + AnalysisReport)
+- backend/generate_sbom/analysis/migrations/0001_initial.py (new)
+- backend/generate_sbom/analysis/services/{__init__,http,reports,vulnerability,license,graph,versions}.py (new)
+- backend/config/settings/base.py (analysis app + REQUESTS_CACHE_BACKEND=memory)
+- backend/config/settings/production.py (REQUESTS_CACHE_BACKEND=redis)
+- backend/pyproject.toml (mypy overrides for requests_cache/requests_ratelimiter)
+- backend/tests/unit/test_analysis_http.py, test_analysis_reports.py (new)
+- pixi.toml / pixi.lock (requests, requests-cache, requests-ratelimiter, tenacity, responses)

@@ -32,6 +32,10 @@ curl = ">=8"
 uv = ">=0.11.26,<0.12"
 cyclonedx-python-lib = ">=11.11,<12"
 lib4sbom = ">=0.10.4,<0.11"
+requests = ">=2.32,<3"
+requests-cache = ">=1.2,<2"
+requests-ratelimiter = ">=0.7,<1"
+tenacity = ">=9,<10"
 
 [pypi-dependencies]
 generate-sbom = { path = "./backend", editable = true }
@@ -48,6 +52,7 @@ djangorestframework-stubs = ">=3.15,<4"
 git-cliff = ">=2,<3"
 python-build = ">=1.2,<2"
 hatchling = ">=1.25,<2"
+responses = ">=0.25,<1"
 
 [environments]
 default = { features = ["dev"], solve-group = "default" }

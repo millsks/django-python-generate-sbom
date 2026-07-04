@@ -16,6 +16,9 @@ CSRF_COOKIE_SECURE = True
 # JSON structured logs in production.
 configure_structlog(json_logs=True)
 
+# Shared Redis-backed external-API cache across analysis workers (FR-5.5).
+REQUESTS_CACHE_BACKEND = "redis"
+
 # Object storage: manifests/artifacts go to S3/MinIO via django-storages (AD-6).
 AWS_STORAGE_BUCKET_NAME = env.str("AWS_STORAGE_BUCKET_NAME", default="")
 AWS_S3_ENDPOINT_URL = env.str("AWS_S3_ENDPOINT_URL", default="")

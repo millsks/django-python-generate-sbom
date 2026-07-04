@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     "generate_sbom.users",
     "generate_sbom.manifests",
     "generate_sbom.sbom",
+    "generate_sbom.analysis",
 ]
 
 AUTH_USER_MODEL = "users.User"
@@ -122,6 +123,11 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 REDIS_URL = env.str("REDIS_URL", default="redis://localhost:6379/0")
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL
+
+# External-API HTTP cache backend for the analysis subsystem (requests-cache).
+# "memory" is per-process and network-free (tests/local); production uses "redis"
+# so the cache is shared across analysis workers (FR-5.5).
+REQUESTS_CACHE_BACKEND = env.str("REQUESTS_CACHE_BACKEND", default="memory")
 CELERY_TASK_DEFAULT_QUEUE = "pipeline"
 CELERY_TASK_SOFT_TIME_LIMIT = env.int("CELERY_TASK_SOFT_TIME_LIMIT", default=1800)
 CELERY_TASK_TIME_LIMIT = env.int("CELERY_TASK_TIME_LIMIT", default=2100)

@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_api_key",
     "generate_sbom.users",
+    "generate_sbom.manifests",
 ]
 
 AUTH_USER_MODEL = "users.User"
@@ -95,6 +96,12 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# Uploaded manifests / artifacts. Local dev + tests use the filesystem
+# (FileSystemStorage → MEDIA_ROOT); production.py swaps the default to S3/MinIO
+# via django-storages (AD-6). Storage paths are org-scoped (NFR-1.2).
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     # Non-manifest: Vite already content-hashes SPA assets, so Django's manifest

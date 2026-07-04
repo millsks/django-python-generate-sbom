@@ -5,6 +5,7 @@ import { LoginPage } from './pages/LoginPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { MembersPage } from './pages/MembersPage'
 import { KeysPage } from './pages/KeysPage'
+import { UploadPage } from './pages/UploadPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 
 function App() {
@@ -35,6 +36,14 @@ function App() {
           element={
             <ProtectedRoute>
               <KeysPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/upload"
+          element={
+            <ProtectedRoute>
+              <UploadPage />
             </ProtectedRoute>
           }
         />

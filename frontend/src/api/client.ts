@@ -43,3 +43,23 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   }
   return (await response.json()) as T
 }
+
+// Multipart POST for file uploads. The browser sets the multipart Content-Type
+// (with boundary), so we must not set it ourselves; the CSRF token still applies.
+export async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
+  const headers: Record<string, string> = {}
+  const csrf = getCookie('csrftoken')
+  if (csrf) {
+    headers['X-CSRFToken'] = csrf
+  }
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers,
+    credentials: 'include',
+    body: formData,
+  })
+  if (!response.ok) {
+    throw new Error(`Upload failed with status ${response.status}`)
+  }
+  return (await response.json()) as T
+}

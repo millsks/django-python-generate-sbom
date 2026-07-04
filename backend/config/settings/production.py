@@ -15,3 +15,15 @@ CSRF_COOKIE_SECURE = True
 
 # JSON structured logs in production.
 configure_structlog(json_logs=True)
+
+# Object storage: manifests/artifacts go to S3/MinIO via django-storages (AD-6).
+AWS_STORAGE_BUCKET_NAME = env.str("AWS_STORAGE_BUCKET_NAME", default="")
+AWS_S3_ENDPOINT_URL = env.str("AWS_S3_ENDPOINT_URL", default="")
+AWS_ACCESS_KEY_ID = env.str("AWS_ACCESS_KEY_ID", default="")
+AWS_SECRET_ACCESS_KEY = env.str("AWS_SECRET_ACCESS_KEY", default="")
+AWS_S3_FILE_OVERWRITE = False
+
+STORAGES = {
+    "default": {"BACKEND": "storages.backends.s3.S3Boto3Storage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+}

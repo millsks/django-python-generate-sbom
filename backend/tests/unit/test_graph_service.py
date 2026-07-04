@@ -48,7 +48,12 @@ def test_build_produces_cytoscape_json_and_svg() -> None:
     node_ids = {n["data"]["id"] for n in cytoscape["nodes"]}
     assert node_ids == {"requests==2.32.3", "urllib3==2.3.0", "certifi==2024.2.2"}
     a_node = next(n for n in cytoscape["nodes"] if n["data"]["id"] == "requests==2.32.3")
-    assert a_node["data"] == {"id": "requests==2.32.3", "label": "requests", "version": "2.32.3"}
+    assert a_node["data"] == {
+        "id": "requests==2.32.3",
+        "label": "requests",
+        "version": "2.32.3",
+        "relationship": "unknown",  # PKGS carry no relationship → default (Story 8.5)
+    }
 
     edges = {(e["data"]["source"], e["data"]["target"]) for e in cytoscape["edges"]}
     assert edges == {("requests==2.32.3", "urllib3==2.3.0"), ("requests==2.32.3", "certifi==2024.2.2")}
@@ -69,3 +74,21 @@ def test_build_degrades_when_pypi_fails() -> None:
 
     assert len(cytoscape["nodes"]) == 3  # all nodes still present
     assert cytoscape["edges"] == []  # requests' deps couldn't be fetched → no edges
+
+
+@responses.activate
+def test_node_data_carries_relationship() -> None:
+    # Story 8.5: each node exposes its direct/transitive relationship for the graph tab.
+    _mock("requests", "2.32.3", [])
+    _mock("urllib3", "2.3.0", [])
+    _mock("certifi", "2024.2.2", [])
+    pkgs = [
+        PackageSpec(name="requests", version="2.32.3", relationship="direct"),
+        PackageSpec(name="urllib3", version="2.3.0", relationship="transitive"),
+        PackageSpec(name="certifi", version="2024.2.2", relationship="transitive"),
+    ]
+
+    cytoscape, _svg = graph.build(pkgs, session=_session())
+
+    rels = {n["data"]["label"]: n["data"]["relationship"] for n in cytoscape["nodes"]}
+    assert rels == {"requests": "direct", "urllib3": "transitive", "certifi": "transitive"}

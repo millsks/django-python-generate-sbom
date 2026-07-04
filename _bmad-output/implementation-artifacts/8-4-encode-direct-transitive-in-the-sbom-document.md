@@ -1,6 +1,6 @@
 # Story 8.4: Encode Direct/Transitive in the SBOM Document
 
-Status: review
+Status: done
 
 <!-- Contexted from the 8.2 spike: planning-artifacts/research/direct-vs-transitive-design.md -->
 

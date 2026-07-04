@@ -38,7 +38,7 @@ export interface LicenseReport {
 }
 
 export interface GraphNode {
-  data: { id: string; label: string; version: string }
+  data: { id: string; label: string; version: string; relationship?: string | null }
 }
 
 export interface GraphEdge {

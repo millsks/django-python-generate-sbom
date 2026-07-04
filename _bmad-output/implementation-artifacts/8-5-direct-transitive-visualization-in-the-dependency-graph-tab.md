@@ -1,6 +1,6 @@
 # Story 8.5: Direct/Transitive Visualization in the Dependency Graph Tab
 
-Status: ready-for-dev
+Status: review
 
 <!-- Contexted from the 8.2 spike: planning-artifacts/research/direct-vs-transitive-design.md -->
 
@@ -64,8 +64,20 @@ Requires `PackageSpec.relationship` (Story 8.3). Independent of 8.4 (SBOM encodi
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
 
 ### Completion Notes List
 
+- **Backend:** `graph.build` now stores `pkg.relationship` as a node attribute and `_to_cytoscape` exposes it in each node's `data` (`direct`/`transitive`/`unknown`). Verified the Graphviz SVG still renders with the extra attribute.
+- **Frontend:** `DepGraph` styles nodes by relationship via Cytoscape data selectors — **direct** = green + bold border (rooted/highlighted), **transitive** = faded grey, **unknown/missing** = neutral blue (base style). A legend (Direct / Transitive) shows only when relationship data is present.
+- **Graceful degradation (AC #4):** older graphs whose nodes lack `relationship` match no relationship selector → neutral base style, and the legend is hidden — no crash.
+- **Tests:** backend — node data carries the relationship; frontend — legend shows with data, hidden without.
+- Gate: `pixi run ci` exits 0 — backend 242 (93.95%), frontend 46.
+
 ### File List
+
+- backend/generate_sbom/analysis/services/graph.py (relationship in node data)
+- backend/tests/unit/test_graph_service.py (relationship test + updated exact-node assertion)
+- frontend/src/api/reports.ts (GraphNode.relationship), components/DepGraph.tsx (styling + legend), DepGraph.test.tsx

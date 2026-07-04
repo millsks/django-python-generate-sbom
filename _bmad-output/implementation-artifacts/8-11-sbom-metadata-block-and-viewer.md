@@ -1,6 +1,6 @@
 # Story 8.11: SBOM Metadata Block — Document Ordering & Viewer Display
 
-Status: review
+Status: done
 
 ## Story
 

@@ -1,6 +1,6 @@
 # Story 8.10: Capture conda-forge Latest & Flag PyPI/conda-forge Divergence
 
-Status: ready-for-dev
+Status: review
 
 <!-- Refines 8.8's "conda currency stays PyPI-derived" note: we now capture conda-forge latest for comparison. -->
 
@@ -118,8 +118,23 @@ repeat runs and untracked packages cheap.
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
 
 ### Completion Notes List
 
+- **Data source: prefix.dev only** (never Anaconda). `_conda_forge_latest` maps the PyPI name → conda-forge name via parselmouth, then POSTs prefix.dev's GraphQL `package(channelName:"conda-forge", name){ variants { page { version } } }` (verified live: variable-form query works; a missing package returns `data.package: null`). Picks the latest **stable** version (falls back to highest overall); network/parse errors and not-on-conda-forge → `None`.
+- **Session:** new `http.prefix_dev_session()` (24h cache, 3 req/s); `build_session` gained `allowed_methods` so POST (GraphQL) responses are cached (keyed by URL+body) — repeated/shared lookups don't re-hit.
+- **parselmouth mapping** (`analysis/services/parselmouth.py`): loads prefix-dev/parselmouth's `compressed_mapping.json` (conda→pypi) from a locally-stored copy (`default_storage`), inverts it for pypi→conda, with a built-in seed of common renames (pytorch↔torch) and same-name fallback when unavailable (graceful). A weekly Celery **beat task** `refresh_parselmouth_mapping` refreshes the stored copy (`config/celery_app.py` schedule; `PARSELMOUTH_MAPPING_URL` setting).
+- **Report:** `classify` adds `conda_latest` + `latest_mismatch` (`bool(latest and conda_latest and latest != conda_latest)`). Currency classification stays **PyPI-based** (out of scope to reclassify).
+- **Frontend:** `VersionEntry` gains `conda_latest`/`latest_mismatch`; VersionsTab adds a **conda-forge** column rendering the value in an **error color** (with a hint title) when it diverges from the PyPI latest, `—` when not on conda-forge.
+- **Tests:** conda divergence flag / match / not-on-conda-forge; `_latest_stable` prefers stable; parselmouth load/invert/seed/same-name/refresh; beat task delegates; frontend divergence highlight. An autouse fixture gives the existing version tests a fresh (non-throttled) prefix.dev session.
+- Gate: `pixi run ci` exits 0 — backend 262 (93.90%), frontend 66.
+
 ### File List
+
+- backend/generate_sbom/analysis/services/parselmouth.py (new), http.py (prefix_dev_session + allowed_methods), versions.py (conda-forge lookup + report fields)
+- backend/generate_sbom/tasks/maintenance.py (new — beat task), config/celery_app.py (schedule), config/settings/base.py (PARSELMOUTH_MAPPING_URL)
+- backend/tests/unit/test_parselmouth.py (new), test_maintenance_task.py (new), test_versions_service.py (conda tests + isolation fixture)
+- frontend/src/api/reports.ts (VersionEntry fields), components/VersionsTab.tsx (conda-forge column) + VersionsTab.test.tsx

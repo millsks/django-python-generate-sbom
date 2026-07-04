@@ -139,6 +139,12 @@ SBOM_MAX_CONCURRENT_JOBS_PER_ORG = env.int("SBOM_MAX_CONCURRENT_JOBS_PER_ORG", d
 # package name → LTS version string. Extends/overrides the built-in defaults.
 SBOM_LTS_REGISTRY = env.str("SBOM_LTS_REGISTRY", default="")
 
+# parselmouth conda↔PyPI name mapping source (Story 8.10), refreshed by a beat task.
+PARSELMOUTH_MAPPING_URL = env.str(
+    "PARSELMOUTH_MAPPING_URL",
+    default="https://raw.githubusercontent.com/prefix-dev/parselmouth/main/files/compressed_mapping.json",
+)
+
 # --- Structured logging (NFR-5.3) ---
 # JSON by default (production); local.py overrides to the console renderer.
 LOG_JSON = env.bool("LOG_JSON", default=True)

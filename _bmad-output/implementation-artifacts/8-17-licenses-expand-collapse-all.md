@@ -1,6 +1,6 @@
 # Story 8.17: Expand All / Collapse All on the Licenses Tab
 
-Status: review
+Status: done
 
 ## Story
 

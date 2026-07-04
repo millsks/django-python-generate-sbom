@@ -1,6 +1,6 @@
 # Story 4.5: Version Currency Report — Phase 7
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -97,8 +97,21 @@ On failure (after `tenacity` retries), envelope `failed=True` + `failure_reason`
 
 ### Agent Model Used
 
-### Debug Log References
+claude-opus-4-8[1m]
 
 ### Completion Notes List
 
+- **`analysis/services/versions.py::classify(packages)`** — pure (AD-3). Fetches each package's latest stable version from PyPI JSON (`info.version`) and classifies currency (PEP 440 via `packaging`): **current** (same `major.minor` series, or installed ≥ latest), **behind-1** (one minor behind, same major), **behind-2+** (two+ minors behind, or any major-version gap), **unknown** (no data / unparseable version). Returns `{packages, summary}` where summary is counts per class.
+- **LTS-aware (AC #3/#4):** a package on its tracked LTS series is classified **current** even when a newer non-LTS release exists. `load_lts_registry()` merges built-in defaults (`django` 4.2, `python` 3.12) with `SBOM_LTS_REGISTRY` — a **JSON file path OR inline JSON** mapping name→LTS version; operator keys are PEP 503-normalized and extend/override defaults. Malformed input keeps defaults. Added the `SBOM_LTS_REGISTRY` setting.
+- **Phase 7 task** `tasks/analysis.py::check_version_currency` (analysis queue, 93→97%) via the shared `_run_phase` helper; failure → `failed` envelope (FR-4.5).
+- **Endpoint** `GET /api/v1/sbom/result/{task_id}/reports/versions/` via `VersionReportView(_ReportView)` → 303 presigned; cross-org → 404.
+- **Epic 4 milestone:** all four analysis phases (4.2–4.5) now exist as real tasks in `tasks/analysis.py`. **Story 4.6** wires them into the pipeline chord (replacing the Epic 3 stubs) and reconciles the `report_type` naming.
+- Gate: `pixi run ci` exits 0 — 179 tests, 95.43% coverage (versions.py 100%).
+
 ### File List
+
+- backend/generate_sbom/analysis/services/versions.py (classify + LTS registry)
+- backend/generate_sbom/tasks/analysis.py (check_version_currency task)
+- backend/generate_sbom/analysis/views.py, urls.py (VersionReportView + route)
+- backend/config/settings/base.py (SBOM_LTS_REGISTRY)
+- backend/tests/unit/test_versions_service.py, test_versions_task_api.py (new)

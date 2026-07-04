@@ -6,6 +6,7 @@ from .views import (
     GraphReportView,
     GraphSvgDownloadView,
     LicenseReportView,
+    VersionReportView,
     VulnerabilityReportView,
 )
 
@@ -29,5 +30,10 @@ urlpatterns = [
         "sbom/result/<uuid:task_id>/reports/graph/download/",
         GraphSvgDownloadView.as_view(),
         name="report-graph-download",
+    ),
+    path(
+        "sbom/result/<uuid:task_id>/reports/versions/",
+        VersionReportView.as_view(),
+        name="report-versions",
     ),
 ]

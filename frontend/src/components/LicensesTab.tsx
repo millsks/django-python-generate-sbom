@@ -19,6 +19,8 @@ import TableRow from '@mui/material/TableRow'
 import Typography from '@mui/material/Typography'
 import { ApiError } from '../api/client'
 import { getLicenses, type LicenseReport } from '../api/reports'
+import { buildWorkbook, downloadWorkbook } from '../excelExport'
+import { licensesSheet } from '../reportSheets'
 import { TabFailureNotice } from './TabFailureNotice'
 
 const SIGNALS: Record<string, string> = {
@@ -69,6 +71,7 @@ export function LicensesTab({ taskId }: { taskId: string }) {
   }
   const expandAll = () => setExpanded(new Set(report.tiers.map((tier) => tier.tier)))
   const collapseAll = () => setExpanded(new Set())
+  const exportExcel = () => downloadWorkbook(buildWorkbook([licensesSheet(report)]), 'licenses.xlsx')
 
   return (
     <Box>
@@ -79,6 +82,9 @@ export function LicensesTab({ taskId }: { taskId: string }) {
           </Button>
           <Button size="small" onClick={collapseAll}>
             Collapse all
+          </Button>
+          <Button size="small" variant="outlined" onClick={exportExcel} sx={{ ml: 'auto' }}>
+            Export to Excel
           </Button>
         </Stack>
       )}

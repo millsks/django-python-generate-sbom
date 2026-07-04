@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { versionCurrencySheet, vulnerabilitiesSheet } from './reportSheets'
+import { licensesSheet, versionCurrencySheet, vulnerabilitiesSheet } from './reportSheets'
 
 describe('versionCurrencySheet', () => {
   it('maps version-currency entries to a sheet with normalized cells', () => {
@@ -72,5 +72,26 @@ describe('vulnerabilitiesSheet', () => {
     })
     // null CVSS → '' ; empty CWE → ''.
     expect(sheet.rows[1]).toMatchObject({ name: 'django', ids: 'GHSA-b', cvss: '', cwe: '', advisory: 'http://b' })
+  })
+})
+
+describe('licensesSheet', () => {
+  it('flattens one row per package across all tiers with the risk tier', () => {
+    const sheet = licensesSheet({
+      tiers: [
+        { tier: 'Strong Copyleft', packages: [{ name: 'agpl-pkg', version: '1.0', license: 'AGPL-3.0-only' }] },
+        { tier: 'Weak Copyleft', packages: [] },
+        { tier: 'Permissive', packages: [{ name: 'mit-pkg', version: '3.0', license: 'MIT' }] },
+      ],
+      summary: { 'Strong Copyleft': 1, 'Weak Copyleft': 0, Permissive: 1 },
+    })
+
+    expect(sheet.name).toBe('Licenses')
+    expect(sheet.columns.map((c) => c.header)).toEqual(['Package', 'Installed', 'License', 'Risk Tier'])
+    // Empty tiers contribute no rows; one row per package, carrying its tier.
+    expect(sheet.rows).toEqual([
+      { name: 'agpl-pkg', version: '1.0', license: 'AGPL-3.0-only', tier: 'Strong Copyleft' },
+      { name: 'mit-pkg', version: '3.0', license: 'MIT', tier: 'Permissive' },
+    ])
   })
 })

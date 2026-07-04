@@ -1,6 +1,6 @@
 // Report → Excel sheet specs (Stories 8.12–8.15). One builder per report so the
 // per-tab export and the Overview combined workbook produce identical sheets.
-import type { VersionEntry, VulnerabilityReport } from './api/reports'
+import type { LicenseReport, VersionEntry, VulnerabilityReport } from './api/reports'
 import type { SheetSpec } from './excelExport'
 
 const onLtsCell = (onLts: boolean | null): string => (onLts === null ? '' : onLts ? 'yes' : 'no')
@@ -53,6 +53,28 @@ export function vulnerabilitiesSheet(report: VulnerabilityReport): SheetSpec {
         severity: v.severity,
         cwe: v.cwe.join(', '),
         advisory: v.advisory_url,
+      })),
+    ),
+  }
+}
+
+// One row per package across every legal-risk tier (the FULL report). The tier name
+// is carried alongside the license so a flat spreadsheet keeps the risk grouping.
+export function licensesSheet(report: LicenseReport): SheetSpec {
+  return {
+    name: 'Licenses',
+    columns: [
+      { key: 'name', header: 'Package' },
+      { key: 'version', header: 'Installed' },
+      { key: 'license', header: 'License' },
+      { key: 'tier', header: 'Risk Tier' },
+    ],
+    rows: report.tiers.flatMap((tier) =>
+      tier.packages.map((pkg) => ({
+        name: pkg.name,
+        version: pkg.version,
+        license: pkg.license,
+        tier: tier.tier,
       })),
     ),
   }

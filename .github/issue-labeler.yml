@@ -1,0 +1,21 @@
+# .github/issue-labeler.yml — Labels applied automatically to issues and PRs by
+# keyword regexes against the title/body. Consumed by github/issue-labeler@v3.4.
+
+bug:
+  - ".*\\bbug\\b.*"
+  - ".*\\berror\\b.*"
+  - ".*\\bfail(ed|ure)?\\b.*"
+  - ".*\\bbroken\\b.*"
+
+enhancement:
+  - ".*\\bfeat(ure)?\\b.*"
+  - ".*\\benhancement\\b.*"
+  - ".*\\bimprovement\\b.*"
+  - ".*\\badd\\b.*"
+
+documentation:
+  - ".*\\bdoc(s|umentation)?\\b.*"
+  - ".*\\breadme\\b.*"
+
+question:
+  - ".*\\b(question|help|how to|how do)\\b.*"

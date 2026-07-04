@@ -76,7 +76,7 @@ A React SPA (served as static assets) is the UI layer. It communicates exclusive
 
 ### AD-7 — Per-org concurrency gate at enqueue
 
-- **Binds:** `POST /api/v1/sbom/generate/`, `manifests/views.py` — this view owns the generate endpoint and creates both the `ManifestUpload` and `SBOMJob` records before dispatching the pipeline task
+- **Binds:** `POST /api/v1/sbom/generate/`, `sbom/views.py` — this view owns the generate endpoint and creates both the `ManifestUpload` and `SBOMJob` records before dispatching the pipeline task. (Build-time correction: the view lives in `sbom/views.py`, not `manifests/views.py`, because it creates `SBOMJob` and imports the manifest upload service — the `sbom → manifests` dependency direction (AD-1) requires `sbom` to be the importer. AD-7's invariant is the atomic gate-then-create, not the file location; both records + the gate run in one transaction regardless.)
 - **Prevents:** one org exhausting all Celery worker slots
 - **Rule:** Before enqueuing, execute `SBOMJob.objects.for_org(org).filter(status__in=['PENDING', 'PROGRESS']).count()`. If the result meets or exceeds `settings.SBOM_MAX_CONCURRENT_JOBS_PER_ORG` (default `5`, set via env var), return `429` with a `Retry-After` header. The count check is not atomic; the occasional over-admission (one extra job) is acceptable at target scale.
 

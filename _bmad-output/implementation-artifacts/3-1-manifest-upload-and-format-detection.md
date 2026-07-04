@@ -1,6 +1,6 @@
 # Story 3.1: Manifest Upload & Format Detection
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

@@ -4,6 +4,10 @@ Every model that owns org data extends :class:`OrgScopedModel`, which adds an
 ``org`` foreign key and the :class:`OrgScopedQuerySet` manager exposing
 ``.for_org(org)``. All queries against org-owned data must go through
 ``.for_org(org)`` so that org isolation is explicit and enforceable.
+
+Note: ``.for_org()`` is typed over the abstract base; concrete callers that then
+filter on concrete fields cast the result to ``QuerySet[TheModel]`` (the
+django-stubs plugin currently crashes on a generic queryset TypeVar).
 """
 
 from __future__ import annotations

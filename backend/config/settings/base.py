@@ -31,6 +31,7 @@ INSTALLED_APPS = [
     "rest_framework_api_key",
     "generate_sbom.users",
     "generate_sbom.manifests",
+    "generate_sbom.sbom",
 ]
 
 AUTH_USER_MODEL = "users.User"

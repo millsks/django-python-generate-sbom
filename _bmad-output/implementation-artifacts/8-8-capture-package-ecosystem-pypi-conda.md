@@ -65,9 +65,9 @@ labeling where resolution has already flattened provenance.
 
 ### Out of scope
 
-Conda `latest`/currency stays PyPI-derived (product decision) — this story only
-adds the source flag, not a Conda version data source. [Source: epics.md#Epic 8
-addendum]
+This story only adds the source flag. Capturing the conda-forge *latest version* and
+flagging PyPI/conda-forge divergence is **Story 8.10**; currency classification stays
+PyPI-based there too. [Source: epics.md#Story 8.10]
 
 ### References
 

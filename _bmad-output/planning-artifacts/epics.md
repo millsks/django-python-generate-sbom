@@ -1595,3 +1595,43 @@ So that I can jump straight to the package details.
 **Given** the link targets,
 **When** they are built,
 **Then** the URL is constructed from the report's `ecosystem` + name/version (no new network call; AD-5).
+
+### Story 8.10: Capture conda-forge Latest & Flag PyPI/conda-forge Divergence
+
+As a user,
+I want the version-currency report to show the latest version on both PyPI and conda-forge and highlight when they differ,
+So that I can see when conda-forge packaging is behind the PyPI release.
+
+Refines the earlier "flag + link only" decision: we now capture conda-forge's latest
+version for comparison. The currency *classification* (current/behind) stays
+PyPI-based; conda-forge latest is an additional informational value with divergence
+highlighting.
+
+- FR-E8: For each package the report captures the latest conda-forge version
+  alongside the PyPI latest, and flags when the two known latests differ.
+
+**Acceptance Criteria:**
+
+**Given** a package in the version-currency report,
+**When** it is built,
+**Then** the entry includes `conda_latest` (the latest conda-forge version) in addition to the existing PyPI `latest` (FR-E8).
+
+**Given** a package not published on conda-forge (or the API is unreachable/returns bad JSON),
+**When** conda-forge latest is looked up,
+**Then** `conda_latest` is `null` and the phase never crashes (matches the PyPI-latest fallback behavior).
+
+**Given** both the PyPI `latest` and `conda_latest` are known,
+**When** they are not equal,
+**Then** the entry flags divergence (e.g. `latest_mismatch: true`).
+
+**Given** conda-forge lookups,
+**When** performed,
+**Then** they go through the shared cached, rate-limited session (like PyPI/endoflife.date), caching misses so untracked packages don't re-hit the API.
+
+**Given** the Version Currency tab,
+**When** a row renders,
+**Then** it shows the conda-forge latest; and when it diverges from the PyPI latest, the conda-forge value is visually signified (e.g. rendered in an error/warning color) to indicate conda-forge is out of step.
+
+**Given** the currency classification (current/behind-1/behind-2+),
+**When** it is computed,
+**Then** it remains PyPI-based — this story does not reclassify currency against conda-forge (out of scope; candidate future story).

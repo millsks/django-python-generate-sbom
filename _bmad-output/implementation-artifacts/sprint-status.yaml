@@ -65,3 +65,4 @@ development_status:
   8-7-fix-lts-currency-honor-eol-and-current-lts: done
   8-8-capture-package-ecosystem-pypi-conda: ready-for-dev
   8-9-link-packages-to-pypi-prefix-dev: ready-for-dev
+  8-10-conda-forge-latest-and-divergence: ready-for-dev

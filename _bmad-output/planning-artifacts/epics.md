@@ -1693,6 +1693,7 @@ the operator supplies the secrets.
   security audit.
 - FR-CI5: Stale issues and PRs are managed automatically.
 - FR-CI6: Issues and PRs are auto-labeled (by keyword, changed paths, and PR size).
+- FR-CI7: Beneficial pixi tasks from idp-app (quality, security, Docker, hooks, changelog) are adopted.
 
 ### Story 9.1: Comprehensive CI Workflow
 
@@ -1830,3 +1831,19 @@ question) — adapted to this repo.
 **When** implemented,
 **Then** the referenced labels exist (documented as a one-time label bootstrap).
 
+
+### Story 9.7: Adopt Beneficial Pixi Tasks from idp-app
+
+As a maintainer,
+I want the useful pixi tasks idp-app defines but we lack,
+So that quality/security/Docker/release ergonomics match and the CI workflows have the tasks they call.
+
+**Acceptance Criteria:**
+
+**Given** `idp-app/pixi.toml`'s task set compared to ours,
+**When** the beneficial tasks are adopted (adapted to our ruff/mypy/pytest/oxlint/vitest/Django/Celery/Docker stack),
+**Then** we gain: `fmt-check` (ruff format --check) + `lint-fix`; `security` (bandit) + `fe-security` (npm audit); standalone `fe-typecheck` (tsc); `cov-html`; Docker convenience tasks (`docker-build/up/down/down-v/logs/ps/migrate/shell`); `flower` (Celery monitoring); `hooks-update` + commit-msg hook install; and `changelog-unreleased` — with new dev deps (bandit, flower) flagged, and `pixi run ci` still green (FR-CI7).
+
+**Given** stack differences,
+**When** adapting,
+**Then** Prettier-based tasks are omitted (we use oxlint) and Alembic tasks are replaced by our Django `migrate`. Complements Story 9.1 (CI calls `fmt-check`/`security`/`fe-typecheck`).

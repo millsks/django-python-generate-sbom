@@ -6,6 +6,7 @@ import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
+import Link from '@mui/material/Link'
 import Table from '@mui/material/Table'
 import TableBody from '@mui/material/TableBody'
 import TableCell from '@mui/material/TableCell'
@@ -15,6 +16,7 @@ import TableRow from '@mui/material/TableRow'
 import TableSortLabel from '@mui/material/TableSortLabel'
 import { ApiError } from '../api/client'
 import { getVersions, type VersionEntry, type VersionReport } from '../api/reports'
+import { ecosystemLabel, registryUrl } from '../registryLinks'
 import { TabFailureNotice } from './TabFailureNotice'
 
 // Descending outdatedness: behind-2+ first, then behind-1, current, unknown.
@@ -44,6 +46,25 @@ function LtsCell({ lts, onLts }: { lts: string | null; onLts: boolean | null }) 
   ) : (
     <Chip size="small" variant="outlined" color="info" label={`LTS ${lts} (target)`} />
   )
+}
+
+// The package name links to its registry detail page (PyPI project page or
+// prefix.dev's conda-forge channel explorer); plain text when the ecosystem is
+// unknown (Story 8.9).
+function NameCell({ pkg }: { pkg: VersionEntry }) {
+  const url = registryUrl({ name: pkg.name, version: pkg.installed, ecosystem: pkg.ecosystem })
+  return url ? (
+    <Link href={url} target="_blank" rel="noopener noreferrer">
+      {pkg.name}
+    </Link>
+  ) : (
+    <>{pkg.name}</>
+  )
+}
+
+function SourceCell({ ecosystem }: { ecosystem?: string }) {
+  const label = ecosystemLabel(ecosystem)
+  return label ? <Chip size="small" variant="outlined" label={label} /> : <>—</>
 }
 
 function compare(a: VersionEntry, b: VersionEntry, orderBy: Column): number {
@@ -110,6 +131,7 @@ export function VersionsTab({ taskId }: { taskId: string }) {
                 </TableCell>
               ))}
               <TableCell>LTS</TableCell>
+              <TableCell>Source</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -117,7 +139,9 @@ export function VersionsTab({ taskId }: { taskId: string }) {
               const b = badge(row.currency)
               return (
                 <TableRow key={row.name}>
-                  <TableCell>{row.name}</TableCell>
+                  <TableCell>
+                    <NameCell pkg={row} />
+                  </TableCell>
                   <TableCell>{row.installed}</TableCell>
                   <TableCell>{row.latest ?? '—'}</TableCell>
                   <TableCell>
@@ -125,6 +149,9 @@ export function VersionsTab({ taskId }: { taskId: string }) {
                   </TableCell>
                   <TableCell>
                     <LtsCell lts={row.lts} onLts={row.on_lts} />
+                  </TableCell>
+                  <TableCell>
+                    <SourceCell ecosystem={row.ecosystem} />
                   </TableCell>
                 </TableRow>
               )

@@ -1,6 +1,6 @@
 # Story 8.5: Direct/Transitive Visualization in the Dependency Graph Tab
 
-Status: review
+Status: done
 
 <!-- Contexted from the 8.2 spike: planning-artifacts/research/direct-vs-transitive-design.md -->
 

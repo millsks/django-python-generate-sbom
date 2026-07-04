@@ -76,6 +76,34 @@ describe('VersionsTab', () => {
     expect(within(rowFor('requests')).queryByText(/LTS/)).not.toBeInTheDocument()
   })
 
+  it('links package names to their registry and shows a source badge (Story 8.9)', async () => {
+    mockGet.mockResolvedValue({
+      packages: [
+        { name: 'django', installed: '5.2.1', latest: '5.2.1', currency: 'current', lts: null, on_lts: null, ecosystem: 'pypi' },
+        { name: 'numpy', installed: '1.26.0', latest: '1.26.4', currency: 'behind-1', lts: null, on_lts: null, ecosystem: 'conda' },
+        { name: 'mystery', installed: '1.0', latest: '1.0', currency: 'current', lts: null, on_lts: null },
+      ],
+      summary: { current: 2, 'behind-1': 1, 'behind-2+': 0, unknown: 0 },
+    })
+    render(<VersionsTab taskId="t" />)
+
+    const table = await screen.findByRole('table')
+    expect(within(table).getByRole('link', { name: 'django' })).toHaveAttribute(
+      'href',
+      'https://pypi.org/project/django/5.2.1/',
+    )
+    expect(within(table).getByRole('link', { name: 'numpy' })).toHaveAttribute(
+      'href',
+      'https://prefix.dev/channels/conda-forge/packages/numpy',
+    )
+    // Unknown ecosystem → plain text, no link.
+    expect(within(table).queryByRole('link', { name: 'mystery' })).not.toBeInTheDocument()
+    expect(within(table).getByText('mystery')).toBeInTheDocument()
+    // Source badges.
+    expect(within(table).getByText('PyPI')).toBeInTheDocument()
+    expect(within(table).getByText('Conda')).toBeInTheDocument()
+  })
+
   it('renders the failure notice when the report failed', async () => {
     mockGet.mockRejectedValue(new ApiError('failed', 404, 'report_failed', 'pypi down'))
     render(<VersionsTab taskId="t" />)

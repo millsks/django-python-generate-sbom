@@ -55,6 +55,22 @@ export function SbomTab({ taskId }: { taskId: string }) {
     return order === 'asc' ? sorted : sorted.reverse()
   }, [doc, order])
 
+  // Provenance + document info shown above the table; absent fields are omitted (Story 8.11).
+  const metadataRows = useMemo<[string, string][]>(() => {
+    const meta = doc?.metadata
+    if (!meta) return []
+    const specLabel = meta.format && meta.spec_version ? `${meta.format} ${meta.spec_version}` : meta.format
+    const entries: [string, string | undefined][] = [
+      ['Component', meta.component_name],
+      ['Application ID', meta.application_id],
+      ['Repository', meta.repository_url],
+      ['Branch', meta.source_branch],
+      ['Format', specLabel],
+      ['Generated', meta.generated],
+    ]
+    return entries.filter((entry): entry is [string, string] => Boolean(entry[1]))
+  }, [doc])
+
   if (unavailable)
     return <Alert severity="info">The SBOM document is not available for this job (not generated or expired).</Alert>
   if (error) return <Alert severity="error">Could not load the SBOM document.</Alert>
@@ -79,7 +95,37 @@ export function SbomTab({ taskId }: { taskId: string }) {
       </Box>
 
       {view === 'components' ? (
-        <TableContainer sx={{ maxHeight: 600 }}>
+        <>
+          {metadataRows.length > 0 && (
+            <Box
+              component="dl"
+              aria-label="SBOM metadata"
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: 'max-content 1fr',
+                columnGap: 2,
+                rowGap: 0.5,
+                m: 0,
+                mb: 2,
+                p: 2,
+                bgcolor: 'action.hover',
+                borderRadius: 1,
+                fontSize: '0.875rem',
+              }}
+            >
+              {metadataRows.map(([label, value]) => (
+                <Box key={label} sx={{ display: 'contents' }}>
+                  <Box component="dt" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                    {label}
+                  </Box>
+                  <Box component="dd" sx={{ m: 0, wordBreak: 'break-word' }}>
+                    {value}
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+          )}
+          <TableContainer sx={{ maxHeight: 600 }}>
           <Table size="small" stickyHeader aria-label="sbom components">
             <TableHead>
               <TableRow>
@@ -111,6 +157,7 @@ export function SbomTab({ taskId }: { taskId: string }) {
             </TableBody>
           </Table>
         </TableContainer>
+        </>
       ) : (
         <Box
           component="pre"

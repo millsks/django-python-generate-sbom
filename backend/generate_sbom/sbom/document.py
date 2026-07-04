@@ -27,6 +27,179 @@ def normalize_components(raw: bytes, output_format: str) -> list[dict[str, Any]]
     return []
 
 
+def parse_metadata(raw: bytes, output_format: str) -> dict[str, Any]:
+    """Return the SBOM's document metadata for the viewer header (Story 8.11).
+
+    Reads back the provenance already embedded at generation — CycloneDX root-component
+    ``application:id``/``vcs:branch`` properties plus a VCS external reference; SPDX a
+    root-package comment plus external reference — together with the format, spec version,
+    and generated timestamp. Absent fields are omitted so the viewer renders no blank rows.
+    """
+    text = raw.decode("utf-8")
+    if output_format == CYCLONEDX_JSON:
+        return _metadata_from_cyclonedx_json(text)
+    if output_format == CYCLONEDX_XML:
+        return _metadata_from_cyclonedx_xml(text)
+    if output_format == SPDX_JSON:
+        return _metadata_from_spdx_json(text)
+    return {}
+
+
+def _metadata(**fields: str | None) -> dict[str, Any]:
+    """Drop absent (falsy) fields so the endpoint omits them gracefully (AC #5)."""
+    return {name: value for name, value in fields.items() if value}
+
+
+def _metadata_from_cyclonedx_json(text: str) -> dict[str, Any]:
+    doc = json.loads(text)
+    meta = doc.get("metadata") or {}
+    component = meta.get("component") or {}
+    props = {
+        prop.get("name"): prop.get("value") for prop in component.get("properties", []) or [] if isinstance(prop, dict)
+    }
+    repository_url: str | None = None
+    for ref in component.get("externalReferences", []) or []:
+        if isinstance(ref, dict) and ref.get("type") == "vcs":
+            repository_url = ref.get("url")
+            break
+    return _metadata(
+        component_name=component.get("name"),
+        application_id=props.get("application:id"),
+        repository_url=repository_url,
+        source_branch=props.get("vcs:branch"),
+        format=doc.get("bomFormat"),
+        spec_version=doc.get("specVersion"),
+        generated=meta.get("timestamp"),
+    )
+
+
+def _metadata_from_cyclonedx_xml(text: str) -> dict[str, Any]:
+    # Parses our own trusted, already-generated CycloneDX document (not user input).
+    root = ElementTree.fromstring(text)
+    spec_version = _cyclonedx_xml_spec_version(root.tag)
+    metadata_el = next((el for el in root if _local(el.tag) == "metadata"), None)
+    if metadata_el is None:
+        return _metadata(format="CycloneDX", spec_version=spec_version)
+    timestamp: str | None = None
+    component_el: ElementTree.Element | None = None
+    for child in metadata_el:
+        local = _local(child.tag)
+        if local == "timestamp" and child.text:
+            timestamp = child.text.strip()
+        elif local == "component":
+            component_el = child
+    name: str | None = None
+    repository_url: str | None = None
+    props: dict[str, str] = {}
+    if component_el is not None:
+        for child in component_el:
+            local = _local(child.tag)
+            if local == "name" and child.text:
+                name = child.text.strip()
+            elif local == "externalReferences":
+                repository_url = _cyclonedx_xml_vcs_url(child) or repository_url
+            elif local == "properties":
+                props = _cyclonedx_xml_properties(child)
+    return _metadata(
+        component_name=name,
+        application_id=props.get("application:id"),
+        repository_url=repository_url,
+        source_branch=props.get("vcs:branch"),
+        format="CycloneDX",
+        spec_version=spec_version,
+        generated=timestamp,
+    )
+
+
+def _cyclonedx_xml_spec_version(root_tag: str) -> str | None:
+    """Extract ``1.6`` from a namespaced ``{http://cyclonedx.org/schema/bom/1.6}bom`` tag."""
+    if "}" not in root_tag:
+        return None
+    namespace = root_tag[1:].split("}", 1)[0]
+    return namespace.rsplit("/", 1)[-1] or None
+
+
+def _cyclonedx_xml_vcs_url(external_refs_el: ElementTree.Element) -> str | None:
+    """Read the VCS reference URL from a CycloneDX XML ``<externalReferences>`` node."""
+    for ref in external_refs_el:
+        if _local(ref.tag) != "reference" or ref.get("type") != "vcs":
+            continue
+        for node in ref:
+            if _local(node.tag) == "url" and node.text:
+                return node.text.strip()
+    return None
+
+
+def _cyclonedx_xml_properties(properties_el: ElementTree.Element) -> dict[str, str]:
+    """Collect ``name → value`` pairs from a CycloneDX XML ``<properties>`` node."""
+    props: dict[str, str] = {}
+    for node in properties_el:
+        if _local(node.tag) == "property":
+            name = node.get("name")
+            if name and node.text:
+                props[name] = node.text.strip()
+    return props
+
+
+def _metadata_from_spdx_json(text: str) -> dict[str, Any]:
+    doc = json.loads(text)
+    root_pkg = _spdx_root_package(doc)
+    application_id: str | None = None
+    repository_url: str | None = None
+    source_branch: str | None = None
+    if root_pkg is not None:
+        repository_url = _spdx_vcs_url(root_pkg.get("externalRefs"))
+        provenance = _spdx_comment_provenance(root_pkg.get("comment"))
+        application_id = provenance.get("application:id")
+        source_branch = provenance.get("vcs:branch")
+    spec_version = doc.get("spdxVersion")
+    if isinstance(spec_version, str):
+        spec_version = spec_version.removeprefix("SPDX-")
+    created = (doc.get("creationInfo") or {}).get("created")
+    return _metadata(
+        component_name=doc.get("name"),
+        application_id=application_id,
+        repository_url=repository_url,
+        source_branch=source_branch,
+        format="SPDX",
+        spec_version=spec_version,
+        generated=created,
+    )
+
+
+def _spdx_root_package(doc: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the root application package that carries the provenance (Story 8.11)."""
+    for pkg in doc.get("packages", []) or []:
+        if isinstance(pkg, dict) and pkg.get("primaryPackagePurpose") == "APPLICATION":
+            return pkg
+    return None
+
+
+def _spdx_vcs_url(external_refs: Any) -> str | None:
+    if not isinstance(external_refs, list):
+        return None
+    for ref in external_refs:
+        if isinstance(ref, dict) and ref.get("referenceType") == "vcs":
+            return str(ref.get("referenceLocator", "")) or None
+    return None
+
+
+def _spdx_comment_provenance(comment: Any) -> dict[str, str]:
+    """Parse ``application:id=...; vcs:branch=...`` from an SPDX package comment."""
+    result: dict[str, str] = {}
+    if not isinstance(comment, str):
+        return result
+    for part in comment.split(";"):
+        if "=" not in part:
+            continue
+        key, _, value = part.partition("=")
+        key = key.strip()
+        value = value.strip()
+        if key and value:
+            result[key] = value
+    return result
+
+
 def _component(
     name: str,
     version: str,

@@ -1,6 +1,6 @@
 # Story 8.11: SBOM Metadata Block — Document Ordering & Viewer Display
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -50,8 +50,25 @@ CycloneDX JSON schema orders `metadata` before `components` already in most seri
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
+
+- `pixi run ci` → exit 0: backend 252 passed (coverage 93.89%, gate 90%), frontend 56 passed, build green.
 
 ### Completion Notes List
 
+- Task 1 (AC #2): CycloneDX XML and SPDX already lead with metadata/creation info before components/packages; only CycloneDX **JSON** emitted `metadata` after `components`, so `generation._order_metadata_before_components` reorders the top-level JSON keys so `metadata` precedes `components`. A parametrized generation test asserts the metadata marker precedes the component marker for all three formats.
+- Task 2 (AC #3, #5): added `document.parse_metadata(raw, output_format)` which reads back the already-embedded provenance (CycloneDX root-component `application:id`/`vcs:branch` properties + VCS external reference; SPDX root-package comment + external ref) plus component name, human format name, spec version (CycloneDX `specVersion` / namespace, SPDX `spdxVersion` minus the `SPDX-` prefix), and generated timestamp (CycloneDX `metadata.timestamp`, SPDX `creationInfo.created`). Absent/empty fields are dropped so the endpoint omits them. `SbomDocumentView` now returns `metadata` alongside `format`, `components`, `raw`.
+- Task 3 (AC #1, #4, #5): `SbomTab` renders a metadata definition-list block (`aria-label="SBOM metadata"`) above the component table in the Components view, showing only present fields; format+spec version combine into one line (e.g. "CycloneDX 1.6"). Added `SbomMetadata` (all-optional) to the `SbomDocument` type. The Raw view is unchanged and already leads with metadata via AC #2.
+- Task 4: backend tests cover metadata parsing for cdx-json/cdx-xml/spdx, omission of absent fields, unknown-format empty dict, ordering, and the endpoint returning metadata; frontend tests cover the block rendering provenance, omitting absent fields, and rendering nothing when metadata is absent.
+
 ### File List
+
+- backend/generate_sbom/sbom/generation.py (metadata-before-components JSON reorder)
+- backend/generate_sbom/sbom/document.py (new `parse_metadata` + helpers)
+- backend/generate_sbom/sbom/views.py (`SbomDocumentView` returns `metadata`)
+- backend/tests/unit/test_sbom_document.py (metadata + ordering tests)
+- frontend/src/api/sbom.ts (`SbomMetadata` type + `metadata` on `SbomDocument`)
+- frontend/src/components/SbomTab.tsx (metadata block above the table)
+- frontend/src/components/SbomTab.test.tsx (metadata block tests)

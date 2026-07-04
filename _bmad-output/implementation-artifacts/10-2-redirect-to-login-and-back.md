@@ -49,6 +49,7 @@ claude-opus-4-8[1m]
 
 - **ProtectedRoute** now captures the current `useLocation()` and redirects anonymous users with `<Navigate to="/login" state={{ from: location }} replace />` (router state, not a query param) — preserving pathname/search/hash.
 - **LoginPage** reads `location.state.from` and, on successful login, calls the shared `refresh()` (from 10.1) then `navigate(target, { replace: true })` — returning to the intended page; falls back to `/dashboard` when there is no origin. An already-authenticated visit to `/login` short-circuits with `<Navigate>` (to the origin if present, else the default) instead of showing the form.
+- **Bounce-loop regression (core symptom):** `pages/login-flow.test.tsx` uses the REAL AuthProvider + ProtectedRoute + LoginPage (mocking only the API) to prove that after a successful login the user lands on the protected target and is NOT bounced back to the login form. Verified it fails if `await refresh()` is removed before `navigate`.
 - **Tests:** ProtectedRoute carries `from` on redirect; LoginPage round-trip (returns to `/upload`), default fallback, already-authed guard, and failed-login stays on the form. The LoginPage test avoids `beforeEach(mockReset)` on the login mock (vitest false unhandled-rejection footgun).
 - Gate: `pixi run ci` exits 0 — backend 262, frontend 90 (18 files).
 
@@ -56,3 +57,4 @@ claude-opus-4-8[1m]
 
 - frontend/src/components/ProtectedRoute.tsx (capture `from`) + ProtectedRoute.test.tsx
 - frontend/src/pages/LoginPage.tsx (return-to + already-authed guard) + LoginPage.test.tsx (new)
+- frontend/src/pages/login-flow.test.tsx (new — bounce-loop integration regression)

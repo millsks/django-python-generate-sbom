@@ -36,8 +36,8 @@ development_status:
   4-6-analysis-group-integration-and-partial-failure-handling: done
 
   epic-5: in-progress
-  5-1-results-page-shell-tab-navigation-and-access-control: review
-  5-2-overview-tab: ready-for-dev
+  5-1-results-page-shell-tab-navigation-and-access-control: done
+  5-2-overview-tab: review
   5-3-vulnerabilities-tab: ready-for-dev
   5-4-licenses-tab: ready-for-dev
   5-5-dependency-graph-tab: ready-for-dev

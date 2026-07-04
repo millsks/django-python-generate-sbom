@@ -109,24 +109,42 @@ def test_run_sbom_pipeline_dispatches_chain() -> None:
 
 
 @pytest.mark.django_db
-def test_aggregate_writes_reports_and_proceeds() -> None:
+def test_aggregate_writes_reports_and_merges_summaries() -> None:
     from generate_sbom.analysis.models import AnalysisReport
 
     job = _make_job()
     envelopes = [
-        {"report_type": "vuln", "artifact_key": "k", "summary": {"total": 1}, "failed": False, "failure_reason": None},
+        {
+            "report_type": "vuln",
+            "artifact_key": "k",
+            "summary": {"vulnerable_package_count": 1},
+            "failed": False,
+            "failure_reason": None,
+        },
         {"report_type": "license", "artifact_key": None, "summary": {}, "failed": True, "failure_reason": "pypi down"},
+        {
+            "report_type": "graph",
+            "artifact_key": "g",
+            "summary": {"node_count": 3, "edge_count": 2, "nodes": [1, 2, 3], "edges": [1, 2]},
+            "failed": False,
+            "failure_reason": None,
+        },
     ]
     out = pipeline.aggregate_analysis_results.apply(args=(envelopes, str(job.task_id))).get()
 
     assert out == {"task_id": str(job.task_id), "analysis": envelopes}
     job.refresh_from_db()
     assert job.progress == 95
+
     reports = {r.report_type: r for r in AnalysisReport.objects.filter(job=job)}
-    assert reports["vuln"].failed is False
-    assert reports["vuln"].artifact_key == "k"
-    assert reports["license"].failed is True
-    assert reports["license"].failure_reason == "pypi down"
+    assert reports["vuln"].failed is False and reports["vuln"].artifact_key == "k"
+    assert reports["license"].failed is True and reports["license"].failure_reason == "pypi down"
+
+    # summary_stats.reports carries the counts + failed flags; graph's node/edge lists are stripped.
+    merged = job.summary_stats["reports"]
+    assert merged["vuln"] == {"failed": False, "failure_reason": None, "vulnerable_package_count": 1}
+    assert merged["license"] == {"failed": True, "failure_reason": "pypi down"}
+    assert merged["graph"] == {"failed": False, "failure_reason": None, "node_count": 3, "edge_count": 2}
 
 
 # --- Timeout handling (AC #4, #5, #6) ------------------------------------------------

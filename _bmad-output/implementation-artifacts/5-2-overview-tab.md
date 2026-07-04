@@ -1,6 +1,6 @@
 # Story 5.2: Overview Tab
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -76,8 +76,22 @@ Depends on Story 5.1 (shell + page state + api layer). Consumes job `summary_sta
 
 ### Agent Model Used
 
-### Debug Log References
+claude-opus-4-8[1m]
 
 ### Completion Notes List
 
+- **Backend — summary source (NFR-2.2):** `services.record_analysis_summaries(task_id, envelopes)` merges the four report summaries into `SBOMJob.summary_stats["reports"]` at the aggregate callback (counts + `failed`/`failure_reason`; the graph's `nodes`/`edges` lists are stripped to avoid DB bloat). The status endpoint now returns `summary_stats` + `output_format`, so Overview needs **no per-report fetch**.
+- **`OverviewTab`** (new component): metric cards sourced entirely from `summary_stats` — total packages; vulnerabilities; license breakdown (permissive / copyleft [strong+weak] / unknown); version currency (current / behind [behind-1 + behind-2+] / unknown). A **SBOM download** button (303-to-presigned flow, labels the `output_format`).
+- **Deep-links (AC #3):** clicking the Vulnerabilities/Licenses/Version cards drives the shell's active-tab state via `onNavigate` (`ResultsPage` passes `setTab`) — the URL stays `/results/:taskId`.
+- **Failed-phase handling (AC #4):** a metric whose backing report `failed` renders **"Unavailable"**, never a misleading `0`.
+- **Tests:** backend — aggregate merges summaries + strips graph lists; frontend — the four metric groups render, the download link reflects the format, a failed report shows "Unavailable", and a card deep-links to its tab.
+- Gate: `pixi run ci` exits 0 — backend 177 tests (95.39%), frontend 8 tests.
+
 ### File List
+
+- backend/generate_sbom/sbom/services.py (record_analysis_summaries)
+- backend/generate_sbom/tasks/sbom_pipeline.py (aggregate calls it)
+- backend/generate_sbom/sbom/views.py (status returns summary_stats + output_format)
+- backend/tests/unit/test_pipeline_orchestration.py, tests/integration/test_pipeline_orchestration.py (updated)
+- frontend/src/components/OverviewTab.tsx (new) + OverviewTab.test.tsx (new)
+- frontend/src/pages/ResultsPage.tsx (wires OverviewTab), src/api/jobs.ts (SummaryStats types)

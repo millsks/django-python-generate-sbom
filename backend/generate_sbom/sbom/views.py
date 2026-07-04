@@ -128,6 +128,8 @@ class StatusJobView(APIView):
                 "current_phase": job.current_step,
                 "failure_reason": job.failure_reason,
                 "result_url": result_url,
+                "output_format": job.output_format,
+                "summary_stats": job.summary_stats,
                 "created_at": job.created_at.isoformat(),
                 "completed_at": job.completed_at.isoformat() if job.completed_at else None,
             }

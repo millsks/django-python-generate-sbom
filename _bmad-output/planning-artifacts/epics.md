@@ -2260,23 +2260,26 @@ against the real data before fixing.
 
 **Acceptance Criteria:**
 
-**Given** parselmouth's authoritative "reports PyPI metadata" mapping,
-**When** `pypi_to_conda(name)` resolves a PyPI name,
-**Then** it returns the conda-forge package that reports that project's metadata (PyPI `xxhash` →
-`python-xxhash`), driven by the real `compressed_mapping.json` data — not by assuming a `python-` prefix.
+**Given** parselmouth's `compressed_mapping.json` (33,415 entries) is loaded as a baseline from first boot
+— not just the 3-entry seed,
+**When** `pypi_to_conda(name)` resolves an unambiguous PyPI name,
+**Then** it returns the correct conda-forge package (e.g. `xxhash → python-xxhash`, since the map has
+`python-xxhash → xxhash` and `xxhash → None`); this fixes the ~19,700 single-match names that previously
+same-name-fell-back because the weekly refresh hadn't populated the map.
 
-**Given** the two possible root causes,
-**When** investigated,
-**Then** the fix is chosen from the actual mapping data: either the mapping isn't loaded (so it must be
-made available from first boot, e.g. a bundled snapshot / eager refresh, instead of silently
-same-name-falling-back), or the inverted map is genuinely ambiguous (so the tiebreak follows parselmouth's
-reports-metadata relationship in the data). The curated `_PYPI_TO_CONDA_OVERRIDES` stays highest authority.
+**Given** a PyPI name with more than one conda candidate (~297 of ~20,000, e.g. `build → build` AND
+`python-build → build`),
+**When** it is resolved,
+**Then** parselmouth's authoritative per-package data (`pypi-to-conda-v1/conda-forge/<name>.json`, latest
+release) decides it (`build → python-build`) — a cached lookup only for ambiguous names — with
+`_PYPI_TO_CONDA_OVERRIDES` as the highest-precedence fast path and a deterministic fallback if the
+per-package lookup fails.
 
 **Given** existing behavior,
 **When** the fix lands,
 **Then** renames still resolve (`torch → pytorch`) and single-match names are unchanged
-(`requests → requests`); unit tests cover `xxhash`, a rename, a passthrough, and override precedence, and
-`pixi run ci` is green.
+(`requests → requests`); unit tests (no live network; per-package mocked) cover xxhash, an ambiguous name,
+a passthrough, override precedence, and per-package failure, and `pixi run ci` is green.
 
 ---
 

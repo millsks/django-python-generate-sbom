@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Container from '@mui/material/Container'
+import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import { logout } from '../api/auth'
 import { OrgSwitcher } from '../components/OrgSwitcher'
@@ -25,7 +26,11 @@ export function DashboardPage() {
       <Typography variant="h4" component="h1" gutterBottom>
         Dashboard
       </Typography>
-      <Typography variant="body1">Your SBOM jobs will appear here.</Typography>
+      <Paper variant="outlined" sx={{ p: 4 }}>
+        <Typography variant="body1" color="text.secondary">
+          Your SBOM jobs will appear here.
+        </Typography>
+      </Paper>
     </Container>
   )
 }

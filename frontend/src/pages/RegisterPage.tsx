@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from 'react'
 import Alert from '@mui/material/Alert'
-import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Container from '@mui/material/Container'
+import Paper from '@mui/material/Paper'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { register } from '../api/auth'
@@ -32,10 +32,11 @@ export function RegisterPage() {
       {orgSlug ? (
         <Alert severity="success">Account created. Your personal org is “{orgSlug}”.</Alert>
       ) : (
-        <Box
+        <Paper
           component="form"
+          variant="outlined"
           onSubmit={handleSubmit}
-          sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
+          sx={{ display: 'flex', flexDirection: 'column', gap: 2, p: 3 }}
         >
           {error && <Alert severity="error">{error}</Alert>}
           <TextField
@@ -55,7 +56,7 @@ export function RegisterPage() {
           <Button type="submit" variant="contained">
             Register
           </Button>
-        </Box>
+        </Paper>
       )}
     </Container>
   )

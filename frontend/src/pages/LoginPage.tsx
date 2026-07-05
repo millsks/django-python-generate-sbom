@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useLocation, useNavigate, type Location } from 'react-router-dom'
 import Alert from '@mui/material/Alert'
-import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Container from '@mui/material/Container'
+import Paper from '@mui/material/Paper'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { login } from '../api/auth'
@@ -46,10 +46,11 @@ export function LoginPage() {
       <Typography variant="h4" component="h1" gutterBottom>
         Log in
       </Typography>
-      <Box
+      <Paper
         component="form"
+        variant="outlined"
         onSubmit={handleSubmit}
-        sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
+        sx={{ display: 'flex', flexDirection: 'column', gap: 2, p: 3 }}
       >
         {error && <Alert severity="error">{error}</Alert>}
         <TextField
@@ -69,7 +70,7 @@ export function LoginPage() {
         <Button type="submit" variant="contained">
           Log in
         </Button>
-      </Box>
+      </Paper>
     </Container>
   )
 }

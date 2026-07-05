@@ -525,6 +525,151 @@ So that developers and CI pipelines can authenticate against the REST API progra
 **When** the page renders,
 **Then** the "Create key" button and "Revoke" controls are absent.
 
+<!-- Epic 2 reopened (org membership model). Confirmed decisions: new users start with
+     zero orgs; a system ADMIN org confers global-admin; global admins are FULL admins in
+     ALL orgs (existing + future); existing global admins can grant global-admin; admins
+     add EXISTING users by email. Story 2.6 is the anchor (the model change). -->
+
+### Story 2.5: Create Organization from the UI
+
+As a user,
+I want to create a new organization from the app,
+So that I can start a workspace without hitting the API directly.
+
+**Acceptance Criteria:**
+
+**Given** the backend `POST /api/v1/orgs/create/` (`CreateOrgView`) and `createOrg()`
+already exist but are not exposed in the UI,
+**When** a user creates an org,
+**Then** a "Create organization" control (e.g. a "+ New organization" item in the org
+switcher menu and/or a button on the Members page) opens a small dialog (org name),
+calls `createOrg()`, and on success switches into the new org (FR — org creation UI).
+
+**Given** a newly created org,
+**When** it is created,
+**Then** the creating user is its admin, and **all global admins are auto-added as
+admins** of it (Story 2.8 provisioning) so oversight is preserved.
+
+**Given** the org switcher,
+**When** the new org exists,
+**Then** it appears in the switcher and the user is scoped to it. Covered by a test.
+
+### Story 2.6: Zero-Org Users & Identity Decoupled from the Active Org
+
+As a newly registered user with no organization,
+I want to be logged in and told what to do next,
+So that I can create or join an org rather than hitting errors.
+
+**Acceptance Criteria:**
+
+**Given** registration currently auto-creates a "personal org" for every user,
+**When** a normal user registers,
+**Then** they start with **zero** orgs (no personal org is created); the **initial/
+superuser** is instead seeded into the system **ADMIN** org (Story 2.8).
+
+**Given** the app currently infers "logged in" from successfully fetching the active
+org,
+**When** a user has zero orgs,
+**Then** authentication/identity is **decoupled from org membership** — a zero-org user
+is still authenticated (via a user-identity signal, e.g. an `auth/me` endpoint / session
+check, not `getActiveOrg`), so `AuthProvider`/`ProtectedRoute` no longer treat a no-org
+user as anonymous.
+
+**Given** the org-scoped pages (dashboard, upload, history, results, API keys),
+**When** a user has no active org,
+**Then** each shows a friendly **"You're not in an organization yet — create one or ask
+an admin to add you"** empty state (with a create-org affordance) instead of erroring,
+and the org switcher reflects the no-org state.
+
+**Given** the change,
+**When** complete,
+**Then** tests cover: zero-org registration, a zero-org user staying authenticated, and
+the no-org empty state; `pixi run ci` green.
+
+### Story 2.7: Admin Adds/Removes Existing Users by Email
+
+As an org admin,
+I want to add existing users to my org by email and remove them,
+So that I control who is a member.
+
+**Acceptance Criteria:**
+
+**Given** the current "Add member" creates a brand-new user with a temp password,
+**When** an admin adds a member,
+**Then** the primary flow **adds an existing user by email** to the org (looked up by
+email); if no registered user matches, it returns a clear error (no auto-create for now).
+Admin-gated (403 for non-admins / non-global-admins).
+
+**Given** membership control,
+**When** an admin removes a member,
+**Then** the user is removed from that org (existing remove flow), respecting the edge
+rules in Story 2.9; removing a user from their only org drops them to the zero-org state
+(Story 2.6).
+
+**Given** the Members page,
+**When** used,
+**Then** it exposes add-existing-by-email + remove for admins, with tests (add existing,
+add-nonexistent error, remove, permission-gating).
+
+### Story 2.8: Global Admin Org & Cross-Org Provisioning
+
+As the platform owner,
+I want a global-admin tier that oversees every organization,
+So that platform admins can manage all orgs.
+
+**Acceptance Criteria:**
+
+**Given** the need for a global-admin tier,
+**When** the model is defined,
+**Then** a system **ADMIN** org exists (a distinguished `Org`, e.g. a flag/slug); its
+members are **global admins**; the initial/superuser is seeded into it.
+
+**Given** the confirmed provisioning rule,
+**When** membership changes,
+**Then** every global admin is a **full admin of ALL orgs, existing and future**: (a)
+creating any org auto-adds all global admins as admins; (b) granting global-admin
+(adding a user to the ADMIN org) **back-fills** that user as an admin into **all existing
+orgs**.
+
+**Given** who may grant global-admin,
+**When** the ADMIN org is managed,
+**Then** **existing global admins can add other users to the ADMIN org** (growing the
+set), starting from the seeded superuser.
+
+**Given** this is a cross-org superuser tier that bypasses normal org isolation,
+**When** implemented,
+**Then** the elevated access is deliberate and documented, permission checks treat global
+admins as org admins everywhere, and tests cover: seeding, auto-add on org create,
+back-fill on grant, and global-admin-only management of the ADMIN org.
+
+### Story 2.9: Membership Edge Cases
+
+As a maintainer,
+I want membership edge cases handled safely,
+So that orgs can't be left in a broken or orphaned state.
+
+**Acceptance Criteria:**
+
+**Given** an org's last admin,
+**When** they try to leave or be removed,
+**Then** it is prevented unless another admin (or a global admin) remains — or admin is
+transferred first (existing `transfer-admin`).
+
+**Given** an org with no members,
+**When** the last member leaves/is removed,
+**Then** the defined behavior applies (documented — delete the org, or leave it
+admin-owned by global admins), consistently for normal orgs vs the system ADMIN org.
+
+**Given** a global admin auto-added to every org,
+**When** membership is edited,
+**Then** a global admin isn't accidentally strandable (e.g. can't be the "last admin"
+that blocks removal, since global admins are always present), and removing them from a
+single org is handled per the global model (Story 2.8).
+
+**Given** the rules,
+**When** complete,
+**Then** they are covered by tests and `pixi run ci` is green.
+
 ---
 
 ## Epic 3: Manifest Upload, Job Submission & SBOM Generation

@@ -22,9 +22,9 @@ development_status:
   2-3-org-administration-and-membership-management: done
   2-4-api-key-management: done
   2-5-create-organization-from-the-ui: ready-for-dev
-  2-6-zero-org-users-and-identity-decoupling: ready-for-dev
+  2-6-zero-org-users-and-identity-decoupling: in-progress
   2-7-admin-add-remove-existing-users-by-email: ready-for-dev
-  2-8-global-admin-org-and-cross-org-provisioning: ready-for-dev
+  2-8-global-admin-org-and-cross-org-provisioning: in-progress
   2-9-membership-edge-cases: ready-for-dev
 
   epic-3: done
@@ -125,11 +125,11 @@ development_status:
   # shell + Story 5.7 theme). 12-1 (theme/design system) is the foundation; 12-2 icons
   # (@mui/icons-material) + 12-3 layout build on it; 12-4 page polish applies it all;
   # 12-5 branding lands last. Story files contexted just-in-time.
-  epic-12: in-progress
+  epic-12: done
   12-1-theme-and-design-system-foundation: done
   12-2-material-icons-adoption: done
   12-3-application-layout-header-footer-side-navigation: done
-  12-4-page-level-visual-polish-and-states: in-progress
+  12-4-page-level-visual-polish-and-states: done
   12-5-branding-and-visual-identity: done
   12-6-set-the-spa-document-title: done
   12-7-update-the-site-favicon: done

@@ -18,7 +18,11 @@ development_status:
   # admin-managed membership by email, a global-admin ADMIN org, and edge cases).
   # Reopened (bugfix): 2.16 fixes "Make admin" (promote, don't transfer; protect global admins);
   # 2.17 enforces admin-only pages at the route + API (not just the nav).
-  epic-2: done
+  # Reopened again (bugfix): user-reported access-control gaps. 2.18 restricts zero-org users to the
+  # home page and stops the ADMIN org acting as a workspace (session path now excludes it); 2.19 hides
+  # the org switcher unless there is >1 org; 2.20 adds demote-admin-to-member (the inverse of 2.16's
+  # promote). All three overlap Story 13.1 and are implemented AFTER 13.1.
+  epic-2: in-progress
   2-1-user-and-org-data-models-and-registration: done
   2-2-login-session-auth-and-org-switcher: done
   2-3-org-administration-and-membership-management: done
@@ -42,6 +46,9 @@ development_status:
   2-15-reorder-side-navigation: done
   2-16-fix-make-admin-and-protect-global-admin: done
   2-17-admin-route-and-api-authorization: done
+  2-18-restrict-zero-org-users-to-home: ready-for-dev
+  2-19-hide-org-switcher-for-single-org: ready-for-dev
+  2-20-demote-admin-to-member: ready-for-dev
 
   epic-3: done
   3-1-manifest-upload-and-format-detection: done

@@ -5,6 +5,7 @@ import InputLabel from '@mui/material/InputLabel'
 import MenuItem from '@mui/material/MenuItem'
 import Select, { type SelectChangeEvent } from '@mui/material/Select'
 import { getOrgs, switchOrg, type OrgListItem } from '../api/orgs'
+import { useAuth } from '../auth/AuthProvider'
 import { CreateOrgDialog } from './CreateOrgDialog'
 import { AddActionIcon } from '../icons'
 
@@ -13,6 +14,7 @@ import { AddActionIcon } from '../icons'
 const CREATE_ORG_VALUE = '__create-org__'
 
 export function OrgSwitcher() {
+  const { isGlobalAdmin } = useAuth()
   const [orgs, setOrgs] = useState<OrgListItem[]>([])
   const [active, setActive] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
@@ -40,7 +42,9 @@ export function OrgSwitcher() {
   }
 
   if (orgs.length === 0) {
-    // A user with no orgs still sees a way forward instead of an invisible switcher.
+    // A non-global-admin with no orgs waits to be added — no create affordance (Story 2.12).
+    if (!isGlobalAdmin) return null
+    // A global admin still sees a way forward instead of an invisible switcher.
     return (
       <>
         <Button
@@ -85,10 +89,12 @@ export function OrgSwitcher() {
               {org.name}
             </MenuItem>
           ))}
-          <MenuItem value={CREATE_ORG_VALUE} sx={{ borderTop: 1, borderColor: 'divider', gap: 1 }}>
-            <AddActionIcon fontSize="small" />
-            New organization
-          </MenuItem>
+          {isGlobalAdmin && (
+            <MenuItem value={CREATE_ORG_VALUE} sx={{ borderTop: 1, borderColor: 'divider', gap: 1 }}>
+              <AddActionIcon fontSize="small" />
+              New organization
+            </MenuItem>
+          )}
         </Select>
       </FormControl>
       <CreateOrgDialog open={createOpen} onClose={() => setCreateOpen(false)} />

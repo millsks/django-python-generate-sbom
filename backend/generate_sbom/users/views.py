@@ -113,14 +113,14 @@ class AuthMeView(APIView):
 
     The identity signal for the SPA (Story 2.6): a logged-in user with zero orgs
     is still authenticated. Requires authentication (default classes), so an
-    anonymous request receives a 403. Global-admin info is deliberately omitted
-    here (deferred to a later story).
+    anonymous request receives a 403. Includes ``is_global_admin`` (Story 2.12) so
+    the SPA can gate global-admin-only affordances such as creating an org.
     """
 
     def get(self, request: Request) -> Response:
-        """Return the current user's ``id`` and ``email``."""
+        """Return the current user's ``id``, ``email``, and global-admin flag."""
         user = cast(User, request.user)
-        return Response({"id": user.pk, "email": user.email})
+        return Response({"id": user.pk, "email": user.email, "is_global_admin": is_global_admin(user)})
 
 
 class GrantGlobalAdminView(APIView):
@@ -237,14 +237,17 @@ class OrgMeView(APIView):
 
 
 class CreateOrgView(APIView):
-    """Create a new org with the caller as admin (POST /orgs/create/)."""
+    """Create a new org — global admins only (POST /orgs/create/, Story 2.12)."""
 
     def post(self, request: Request) -> Response:
-        """Create the org and add the caller as its admin (FR-1.2)."""
+        """Create the org (global-admin only); 403 for anyone else (Story 2.12)."""
+        user = cast(User, request.user)
+        if not is_global_admin(user):
+            return Response(_NOT_GLOBAL_ADMIN, status=status.HTTP_403_FORBIDDEN)
         serializer = CreateOrgSerializer(data=request.data)
         if not serializer.is_valid():
             return _validation_error(serializer.errors)
-        org = create_org(name=serializer.validated_data["name"], admin_user=cast(User, request.user))
+        org = create_org(name=serializer.validated_data["name"], admin_user=user)
         return Response({"slug": org.slug, "name": org.name}, status=status.HTTP_201_CREATED)
 
 

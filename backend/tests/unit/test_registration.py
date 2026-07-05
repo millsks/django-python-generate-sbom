@@ -69,7 +69,7 @@ def test_auth_me_returns_identity_for_zero_org_user() -> None:
     response = client.get("/api/v1/auth/me/")
 
     assert response.status_code == 200
-    assert response.data == {"id": user.pk, "email": "alice@example.com"}
+    assert response.data == {"id": user.pk, "email": "alice@example.com", "is_global_admin": False}
 
 
 @pytest.mark.django_db

@@ -30,16 +30,31 @@ def _add_member(client: APIClient, email: str, password: str = "pw12345678") -> 
 
 
 @pytest.mark.django_db
-def test_create_org_adds_caller_as_admin() -> None:
-    _register_with_org("alice@example.com", "Alice")
+def test_create_org_by_global_admin_adds_caller_as_admin() -> None:
+    """A global admin creating an org is added as its admin (Story 2.12)."""
+    alice = _register_with_org("alice@example.com", "Alice")
+    grant_global_admin(alice)
     client = _client("alice@example.com")
 
     response = client.post("/api/v1/orgs/create/", {"name": "New Team"}, format="json")
 
     assert response.status_code == 201
     assert response.data["slug"] == "new-team"
-    alice = User.objects.get(email="alice@example.com")
     assert OrgMembership.objects.filter(org__slug="new-team", user=alice, role="admin").exists()
+
+
+@pytest.mark.django_db
+def test_create_org_forbidden_for_non_global_admin() -> None:
+    """A non-global-admin cannot create an org — 403, no org created (Story 2.12)."""
+    _register_with_org("alice@example.com", "Alice")
+    client = _client("alice@example.com")
+    before = Org.objects.count()
+
+    response = client.post("/api/v1/orgs/create/", {"name": "New Team"}, format="json")
+
+    assert response.status_code == 403
+    assert response.data["code"] == "not_global_admin"
+    assert Org.objects.count() == before
 
 
 @pytest.mark.django_db

@@ -18,7 +18,7 @@ import { NoOrgState } from '../components/NoOrgState'
 import { AddActionIcon, NavIcon } from '../icons'
 
 export function OrganizationPage() {
-  const { activeOrg } = useAuth()
+  const { activeOrg, isGlobalAdmin } = useAuth()
   const [createOpen, setCreateOpen] = useState(false)
 
   if (!activeOrg) {
@@ -69,25 +69,27 @@ export function OrganizationPage() {
           </CardActions>
         </Card>
 
-        <Card variant="outlined">
-          <CardContent>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <NavIcon.organization fontSize="small" />
-              <Typography variant="h6">New organization</Typography>
-            </Box>
-            <Typography variant="body2" color="text.secondary">
-              Create another organization and switch into it.
-            </Typography>
-          </CardContent>
-          <CardActions>
-            <Button startIcon={<AddActionIcon />} onClick={() => setCreateOpen(true)}>
-              Create organization
-            </Button>
-          </CardActions>
-        </Card>
+        {isGlobalAdmin && (
+          <Card variant="outlined">
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <NavIcon.organization fontSize="small" />
+                <Typography variant="h6">New organization</Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary">
+                Create another organization and switch into it.
+              </Typography>
+            </CardContent>
+            <CardActions>
+              <Button startIcon={<AddActionIcon />} onClick={() => setCreateOpen(true)}>
+                Create organization
+              </Button>
+            </CardActions>
+          </Card>
+        )}
       </Stack>
 
-      <CreateOrgDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+      {isGlobalAdmin && <CreateOrgDialog open={createOpen} onClose={() => setCreateOpen(false)} />}
     </Container>
   )
 }

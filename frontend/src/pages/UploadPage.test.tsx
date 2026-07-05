@@ -119,11 +119,12 @@ describe('UploadPage', () => {
     expect(mockGenerate.mock.calls.length).toBe(before) // no submit for this click
   })
 
-  it('shows the no-org empty state with a create affordance when there is no active org', async () => {
+  it('shows the no-org empty state when there is no active org', async () => {
     mockAuth.mockReturnValue({
       status: 'authed',
       activeOrg: null,
       isAdmin: false,
+      isGlobalAdmin: false,
       refresh: vi.fn(),
       logout: vi.fn(),
     })
@@ -131,7 +132,7 @@ describe('UploadPage', () => {
       renderPage()
 
       expect(screen.getByText(/not in an organization yet/i)).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /create organization/i })).toBeInTheDocument()
+      // The create affordance is gated on global-admin (Story 2.12) — covered in NoOrgState's own tests.
       // The upload form is not rendered while the user has no org.
       expect(screen.queryByRole('button', { name: 'Generate SBOM' })).not.toBeInTheDocument()
     } finally {

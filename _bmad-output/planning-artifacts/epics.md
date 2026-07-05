@@ -2196,3 +2196,175 @@ row, not an exhaustive wall).
 **When** the README is written,
 **Then** it links to (rather than duplicates) the User Guide, Developer docs, and API
 reference, and includes the License section.
+
+---
+
+## Epic 12: UI/UX Visual Design & Professional Polish
+
+The SPA is functional but visually utilitarian — default MUI styling, ad-hoc spacing,
+few icons, and no consistent visual identity. This epic makes the application **look
+professional**: a deliberate theme (color palette, typography, component defaults),
+consistent **Material iconography**, a polished **layout** (refined header, a persistent
+side navigation with contextual side information, and a footer), page-level polish
+(cards, spacing, empty/loading/error states, responsiveness), and light branding.
+
+Frontend-only. It builds on the existing MUI foundation — `ThemeModeProvider`
+(Story 5.7, light/dark) and the `Layout` app shell + auth-aware nav (Epic 10) — and
+**refines** them rather than replacing them; existing routes, auth behavior, and the
+org switcher/theme toggle stay intact. Accessibility (color contrast, focus states,
+`aria` labels on icon-only controls) is a cross-cutting requirement, not a separate
+story.
+
+**New dependency (user-approved):** `@mui/icons-material` for Material icons (the user
+explicitly requested Material icons since the app already uses MUI). Any other addition
+is flagged and confirmed before use.
+
+**Sequencing:** Story 12.1 (theme/design-system foundation) comes first — everything
+else consumes its tokens. 12.2 (icons) and 12.3 (layout) build on 12.1; 12.4 (page
+polish) applies 12.1–12.3 across the pages; 12.5 (branding) is light and can land last.
+
+- FR-UI1: A centralized, professional MUI theme defines the palette, typography,
+  spacing, shape, and component default styling for both light and dark modes.
+- FR-UI2: Material icons (`@mui/icons-material`) are used consistently across
+  navigation, actions, status indicators, and report tabs — icon-only controls carry
+  accessible labels.
+- FR-UI3: The application layout is professional and consistent: a refined header/app
+  bar, a persistent side navigation (drawer) with contextual side information, a main
+  content region, and a footer.
+- FR-UI4: Every page applies the design system consistently — cards/sections, spacing,
+  and first-class empty, loading (skeletons), and error states — and is responsive
+  down to small screens.
+- FR-UI5: The app has a light visual identity — app name/logo treatment, favicon, and
+  accent usage — that reads as a cohesive product.
+- FR-UI6: The UI meets baseline accessibility — sufficient contrast in both themes,
+  visible focus, and labels on icon-only controls.
+
+### Story 12.1: Theme & Design System Foundation
+
+As a user,
+I want the app to have a deliberate, consistent visual style,
+So that it feels like a polished professional product rather than default components.
+
+**Acceptance Criteria:**
+
+**Given** the current default-ish MUI setup,
+**When** the theme is established,
+**Then** a centralized theme (extending `ThemeModeProvider`) defines a professional
+**palette** (primary/secondary/error/warning/info/success + background/surface) for
+**both light and dark** modes, a **typography** scale (font family, headings, body,
+captions), and **shape/spacing** tokens (FR-UI1).
+
+**Given** repeated component styling,
+**When** the theme is authored,
+**Then** it sets sensible **component defaults** (e.g. `MuiButton`, `MuiCard`,
+`MuiAppBar`, `MuiTable`, `MuiChip`, `MuiTextField`) via `theme.components` so pages
+don't restyle ad-hoc, and the existing light/dark toggle (Story 5.7) keeps working.
+
+**Given** accessibility,
+**When** colors are chosen,
+**Then** text/background contrast meets WCAG AA in both themes and interactive
+elements have a visible focus state (FR-UI6).
+
+**Given** the theme is the single source of truth,
+**When** implemented,
+**Then** hard-coded colors/spacing in existing components are migrated to theme tokens
+where practical, and a short developer note documents the palette/typography choices.
+
+### Story 12.2: Material Icons Adoption
+
+As a user,
+I want meaningful icons throughout the UI,
+So that actions and information are quicker to scan and the app looks finished.
+
+**Acceptance Criteria:**
+
+**Given** the app uses MUI,
+**When** icons are adopted,
+**Then** `@mui/icons-material` is added as a dependency (**user-approved**) and icons
+are applied consistently: navigation items, primary actions (upload, export, download,
+delete, add), status/severity indicators (vulnerability severity, currency badges, job
+status), and the report tabs (FR-UI2).
+
+**Given** icon-only controls (e.g. theme toggle, overflow menus, close buttons),
+**When** rendered,
+**Then** each has an accessible label (`aria-label`/tooltip) so it is usable by screen
+readers (FR-UI6).
+
+**Given** consistency,
+**When** icons are chosen,
+**Then** a single icon vocabulary is used for a given concept across the app (the same
+icon means the same thing everywhere), and icon sizing/color follows the theme.
+
+### Story 12.3: Application Layout — Header, Footer & Side Navigation
+
+As a user,
+I want a professional, consistent page layout,
+So that navigation and context are always where I expect them.
+
+**Acceptance Criteria:**
+
+**Given** the Epic 10 app shell,
+**When** the layout is refined,
+**Then** it presents a polished structure: a refined **header/app bar** (brand, primary
+nav, org switcher, theme toggle, user menu), a **persistent side navigation** (drawer,
+collapsible/responsive) for the primary destinations with the active item indicated,
+a **main content region**, and a **footer** (app name, version, links to docs/repo/
+license) (FR-UI3).
+
+**Given** the request for "side information",
+**When** the layout is built,
+**Then** the side region can surface contextual information (e.g. active org, quick
+status, or contextual help) alongside primary navigation, without crowding the content.
+
+**Given** smaller screens,
+**When** the layout renders,
+**Then** the side navigation collapses to a temporary drawer (hamburger) and the header
+adapts, so the layout is usable on mobile widths (FR-UI4).
+
+**Given** the existing behavior,
+**When** the shell is refined,
+**Then** routes, auth-aware/role-aware nav, the org switcher, theme toggle, and logout
+continue to work unchanged (a refinement of Epic 10, not a rewrite).
+
+### Story 12.4: Page-Level Visual Polish & States
+
+As a user,
+I want every page to look consistent and handle all states gracefully,
+So that the whole app feels cohesive and considered.
+
+**Acceptance Criteria:**
+
+**Given** the design system (12.1–12.3),
+**When** each page is polished,
+**Then** the pages (Upload/New job, Results tabs, Job History, API Keys, Login/
+Register, Org/Members) use consistent **cards/sections, spacing, and headings**, and
+tables/lists share a consistent treatment (FR-UI4).
+
+**Given** asynchronous data,
+**When** a page loads, is empty, or errors,
+**Then** it shows first-class **loading** (skeletons/spinners), **empty**, and
+**error** states rather than blank or abrupt UI — reusing shared state components.
+
+**Given** varying viewports,
+**When** pages render,
+**Then** layouts are **responsive** (usable from mobile to desktop), with no horizontal
+overflow of primary content.
+
+### Story 12.5: Branding & Visual Identity
+
+As a visitor,
+I want the app to have a recognizable identity,
+So that it reads as a real product.
+
+**Acceptance Criteria:**
+
+**Given** the app currently has no distinct identity,
+**When** branding is added,
+**Then** an app name/logo treatment appears in the header, a **favicon** and page
+`<title>` are set, and accent color usage is applied consistently per the theme
+(FR-UI5).
+
+**Given** the docs and README (Epic 11),
+**When** branding assets exist,
+**Then** any logo/screenshots produced here are reusable by the README/docs, keeping
+the product identity consistent across the repo and the app.

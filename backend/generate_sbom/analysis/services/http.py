@@ -27,11 +27,13 @@ PYPI_TTL = timedelta(hours=1)
 NVD_TTL = timedelta(hours=24)
 EOL_TTL = timedelta(days=7)  # endoflife.date product data changes slowly
 PREFIX_DEV_TTL = timedelta(hours=24)  # conda-forge latest via prefix.dev
+PARSELMOUTH_TTL = timedelta(hours=24)  # parselmouth per-package PyPI→conda lookup
 OSV_RATE_PER_SECOND = 1
 PYPI_RATE_PER_SECOND = 5
 NVD_RATE_PER_SECOND = 1  # NVD is strict without an API key; caching absorbs the rest
 EOL_RATE_PER_SECOND = 2
 PREFIX_DEV_RATE_PER_SECOND = 3
+PARSELMOUTH_RATE_PER_SECOND = 3
 
 
 class CachedLimiterSession(CacheMixin, LimiterMixin, requests.Session):
@@ -68,6 +70,7 @@ _pypi_session: CachedLimiterSession | None = None
 _nvd_session: CachedLimiterSession | None = None
 _eol_session: CachedLimiterSession | None = None
 _prefix_dev_session: CachedLimiterSession | None = None
+_parselmouth_session: CachedLimiterSession | None = None
 
 
 def osv_session() -> CachedLimiterSession:
@@ -122,6 +125,21 @@ def prefix_dev_session() -> CachedLimiterSession:
             allowed_methods=("GET", "POST"),
         )
     return _prefix_dev_session
+
+
+def parselmouth_session() -> CachedLimiterSession:
+    """Return the shared parselmouth per-package session (24h cache, 3 req/s).
+
+    Used only to disambiguate the ~1.5% of PyPI names with multiple conda-forge
+    candidates (Story 8.24). Caches 404s so an ambiguous name without a per-package
+    file doesn't re-hit the API every run.
+    """
+    global _parselmouth_session
+    if _parselmouth_session is None:
+        _parselmouth_session = build_session(
+            "parselmouth-cache", PARSELMOUTH_TTL, PARSELMOUTH_RATE_PER_SECOND, allowable_codes=(200, 404)
+        )
+    return _parselmouth_session
 
 
 # Retry wrapper for transient external-API errors (used by 4.2/4.5).

@@ -106,7 +106,7 @@ development_status:
   8-21-fix-pypi-to-conda-forge-reverse-lookup: done
   8-22-version-currency-excel-conda-forge-color: done
   8-23-version-currency-pypi-latest-column: done
-  8-24-fix-pypi-conda-forge-python-name-disambiguation: ready-for-dev
+  8-24-fix-pypi-conda-forge-python-name-disambiguation: review
 
   # Epic 9 — Project Management & CI/CD Workflows (ported from millsks/idp-app,
   # excluding renovate + disabled workflows). External secrets are operator-supplied.

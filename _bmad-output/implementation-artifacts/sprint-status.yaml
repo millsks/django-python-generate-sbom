@@ -162,7 +162,8 @@ development_status:
   # shell + Story 5.7 theme). 12-1 (theme/design system) is the foundation; 12-2 icons
   # (@mui/icons-material) + 12-3 layout build on it; 12-4 page polish applies it all;
   # 12-5 branding lands last. Story files contexted just-in-time.
-  epic-12: done
+  # Reopened: 12.8 builds a real landing page for the home route (was app name + one line).
+  epic-12: in-progress
   12-1-theme-and-design-system-foundation: done
   12-2-material-icons-adoption: done
   12-3-application-layout-header-footer-side-navigation: done
@@ -170,3 +171,4 @@ development_status:
   12-5-branding-and-visual-identity: done
   12-6-set-the-spa-document-title: done
   12-7-update-the-site-favicon: done
+  12-8-landing-page-front-page: review

@@ -3495,3 +3495,34 @@ the browser tab.
 **Then** the favicon matches the app's Material icon vocabulary (Story 12.2) and the
 app-name/logo treatment (coordinated with Story 12.5, which owns the broader visual
 identity; 12.7 owns the favicon specifically).
+
+<!-- Epic 12 reopened: the home page (`/`) was nearly empty (app name + one line). Story 12.8
+     builds a real landing page — hero + CTA, feature grid, and a how-it-works section — on the
+     12.1 design system, theme-aware and responsive. -->
+
+### Story 12.8: Landing Page (App Home)
+
+As a visitor,
+I want the home page to explain what the app does and how to start,
+So that I understand the product and can jump straight into generating an SBOM.
+
+**Acceptance Criteria:**
+
+**Given** the `/` route (public, in the app shell),
+**When** it renders,
+**Then** `HomePage` shows a **hero** — the app name (`APP_NAME`), a headline and short supporting
+line, a primary CTA **"Upload a manifest"** linking to `/upload` (anonymous users are routed to login
+by `ProtectedRoute`), and a secondary **"Read the docs"** link to `DOCS_URL`.
+
+**Given** the hero,
+**When** the page continues,
+**Then** a responsive **"What you get"** grid presents the real features (SBOM document, vulnerability
+report, license compliance, dependency graph, version currency, Excel export), each an icon (reusing the
+`TabIcon`/action-icon vocabulary from Story 12.2) + title + one-line blurb, and a **"How it works"**
+section lays out the upload → resolve/analyze → review → export flow.
+
+**Given** the design system (Story 12.1),
+**When** complete,
+**Then** the page uses MUI theme components and palette colors only (no hard-coded colors), reads well in
+both light and dark, is responsive down to mobile, and is covered by a test (headline, the `/upload` CTA,
+the docs link, and the feature tiles). `pixi run ci` is green.

@@ -34,6 +34,9 @@ class JobListSerializer(serializers.ModelSerializer[SBOMJob]):
 
     manifest_filename = serializers.CharField(source="manifest.original_filename", read_only=True)
     manifest_format = serializers.CharField(source="manifest.detected_format", read_only=True)
+    # Total wall-clock time to complete: created_at -> completed_at (Story 6.3);
+    # null while the job is still running / has no completion timestamp.
+    elapsed_seconds = serializers.SerializerMethodField()
 
     class Meta:
         model = SBOMJob
@@ -45,4 +48,11 @@ class JobListSerializer(serializers.ModelSerializer[SBOMJob]):
             "output_format",
             "status",
             "failure_reason",
+            "elapsed_seconds",
         ]
+
+    def get_elapsed_seconds(self, obj: SBOMJob) -> float | None:
+        """Wall-clock seconds from creation to completion, or None if unfinished."""
+        if obj.completed_at is None:
+            return None
+        return (obj.completed_at - obj.created_at).total_seconds()

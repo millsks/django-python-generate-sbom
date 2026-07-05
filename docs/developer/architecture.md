@@ -60,6 +60,45 @@ These are the load-bearing rules from the spine. Respect them when adding code.
 - **AD-13 — Monorepo layout.** `backend/` and `frontend/` are project-root peers under
   a pixi umbrella (see [Project Layout](project-layout.md)).
 
+## Accounts, orgs, and the global-admin tier
+
+Identity and tenancy are deliberately **decoupled**. A `User` is a standalone
+account; an `Org` is a tenant boundary; an `OrgMembership` links the two with a
+role (`admin` or `member`). See the [Data Model](data-model.md) for the fields.
+
+- **Zero-org identity.** A freshly registered user has **no** memberships —
+  registration creates the account only, never a "personal" org. Authentication
+  is therefore independent of org membership: the SPA establishes identity through
+  `GET /auth/me/`, which succeeds for a user with no orgs. Anything org-scoped
+  resolves the active org separately (`get_request_org`), and returns `None` when
+  the user belongs to no org.
+
+- **The system ADMIN org.** Exactly one org is distinguished by
+  `Org.is_admin_org=True` (seeded by a data migration). Its members are **global
+  admins** — a deliberate, documented cross-org superuser tier.
+
+- **Global admins are real memberships everywhere.** Rather than special-casing
+  authorization, a global admin is provisioned as a genuine
+  `OrgMembership(role=ADMIN)` row in **every** non-admin org, existing and future.
+  `create_org` auto-provisions all current global admins into any new org, and
+  `grant_global_admin` back-fills a newly promoted admin into every existing org.
+  Because the rows are real, the permission checks in `users/auth.py`
+  (`get_request_org` / `get_admin_org`) treat a global admin as an ordinary admin
+  of each org with **no** extra branching — the isolation model does not need to
+  know the tier exists.
+
+- **Superuser seeding.** `UserManager.create_superuser` calls
+  `grant_global_admin`, so any Django superuser becomes a global admin as soon as
+  the ADMIN org exists. The `bootstrap_admin_org` management command is the
+  idempotent catch-up path: it ensures the ADMIN org row is present and back-fills
+  every existing superuser (covering superusers created before the hook, or before
+  migrations ran). See [Setup](setup.md).
+
+- **Non-stranding guards.** Because global admins are real memberships,
+  membership-removal services (`remove_member` / `leave_org`) guard the tier: the
+  ADMIN org can never lose its last member, and a global admin cannot be removed
+  from a single normal org (they belong to all of them).
+
 ## Dependency direction
 
 The app dependency direction is one-way: `sbom → manifests`, and both depend on

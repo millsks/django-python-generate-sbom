@@ -67,9 +67,9 @@ Contributions are welcome — see **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
 ## Screenshots
 
-<!-- Screenshots land with the UI polish work (Epic 12); placeholders until then. -->
+<!-- TODO: capture web-UI screenshots for the README/docs (documentation follow-up). -->
 
-_Screenshots of the web UI are coming with the UI/visual-design work._
+_Screenshots of the web UI are a pending documentation addition._
 
 ## Architecture
 
@@ -115,9 +115,11 @@ Wait until the `web` service is healthy, then open:
 | <http://localhost:8000/health/> | Health check (JSON) |
 | <http://localhost:9001> | MinIO console (login with `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` from `.env`) |
 
-Then **register** at `/register` (this creates your account and a personal
-organization), **sign in** at `/login`, and **upload** a manifest at `/upload`.
-All SBOM data is scoped to your active organization. See the
+Then **register** at `/register` — new accounts start **without** an organization,
+so you'll be sent to **sign in** at `/login` and then either **create an
+organization** or ask an admin to add you to one. Once you have an active org,
+**upload** a manifest at `/upload`; all SBOM data is scoped to your active
+organization. See the
 [User Guide](https://millsks.github.io/django-python-generate-sbom/user-guide/)
 for the full walkthrough.
 
@@ -127,6 +129,11 @@ container:
 ```sh
 docker compose exec web pixi run python backend/manage.py createsuperuser
 ```
+
+The first superuser is seeded into the system **ADMIN** organization, making them
+a _global admin_ with oversight of every organization. See the
+[Developer Docs](https://millsks.github.io/django-python-generate-sbom/developer/)
+for the org-membership and global-admin model.
 
 ## Development
 

@@ -2236,6 +2236,49 @@ conditional red font on the conda-forge-latest cells is unaffected; tests assert
 "PyPI Latest" immediately before "conda-forge Latest" and the export sheet has that order + label, and
 `pixi run ci` is green.
 
+<!-- Epic 8 reopened (bugfix): 8.24 fixes a CLASS of wrong conda-forge lookups where a PyPI package
+     has both a same-named conda-forge package (often a C library) AND a python-<name> variant (the
+     actual Python binding). E.g. PyPI xxhash → conda-forge python-xxhash, not xxhash. Extends 8.21's
+     reverse lookup; prefer the python-<name> candidate during inversion so it's not curated one-by-one. -->
+
+### Story 8.24: Fix PyPI → conda-forge python-<name> Disambiguation (Bugfix)
+
+As a user reading the version-currency report,
+I want the conda-forge column to resolve to the correct package when a PyPI name collides with a
+non-Python conda-forge package,
+So that version mismatches aren't reported against the wrong conda-forge package.
+
+**Context:** `parselmouth.pypi_to_conda` (`backend/generate_sbom/analysis/services/parselmouth.py`)
+resolves a PyPI name to a conda-forge name via a curated override map, then the inverted parselmouth map
+with **"first mapping wins"**. When conda-forge has BOTH a same-named package (often a C library) AND a
+`python-<name>` variant (the Python binding), the inversion can pick the wrong one. Example: PyPI
+**xxhash** → conda-forge **python-xxhash** (correct), but the lookup can return **xxhash** (the C
+library). Only `build → python-build` is currently curated (Story 8.21) — this is a recurring class, not
+a one-off.
+
+**Acceptance Criteria:**
+
+**Given** a PyPI package whose conda-forge equivalent is `python-<name>` while a same-named conda-forge
+package also exists,
+**When** `pypi_to_conda(name)` resolves it,
+**Then** it returns the `python-<name>` variant — implemented by **preferring a `python-<pypi_name>`
+candidate during map inversion** (fixing the whole class, not curating one-by-one). Both
+`xxhash → python-xxhash` and `build → python-build` resolve correctly.
+
+**Given** a PyPI package with no `python-<name>` conda variant (e.g. `requests → requests`,
+`torch → pytorch`),
+**When** resolved,
+**Then** behavior is unchanged — no false `python-` prefixing and no regression to existing renames.
+
+**Given** genuine exceptions the heuristic can't cover,
+**When** found,
+**Then** the curated `_PYPI_TO_CONDA_OVERRIDES` map stays the highest-precedence authority.
+
+**Given** the fix,
+**When** complete,
+**Then** unit tests cover `xxhash`, `build`, an unchanged non-python case, and override precedence, and
+`pixi run ci` is green.
+
 ---
 
 ## Epic 9: Project Management & CI/CD Workflows

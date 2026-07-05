@@ -3,7 +3,7 @@ import type { Mock } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MembersPage } from './MembersPage'
-import { addMember, getMembers } from '../api/orgs'
+import { addMember, createMemberUser, getMembers } from '../api/orgs'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthProvider'
 import { NO_ORG_MESSAGE } from '../components/NoOrgState'
@@ -14,6 +14,7 @@ vi.mock('../api/orgs', async (importOriginal) => {
     ...actual,
     getMembers: vi.fn().mockResolvedValue({ members: [], is_admin: false }),
     addMember: vi.fn(),
+    createMemberUser: vi.fn(),
     removeMember: vi.fn(),
     transferAdmin: vi.fn(),
   }
@@ -22,10 +23,12 @@ vi.mock('../auth/AuthProvider', () => ({ useAuth: vi.fn() }))
 const mockAuth = useAuth as Mock
 const mockGetMembers = getMembers as Mock
 const mockAddMember = addMember as Mock
+const mockCreateMemberUser = createMemberUser as Mock
 
 beforeEach(() => {
   mockGetMembers.mockResolvedValue({ members: [], is_admin: false })
   mockAddMember.mockReset()
+  mockCreateMemberUser.mockReset()
   mockAuth.mockReturnValue({ status: 'authed', activeOrg: { slug: 'acme', name: 'Acme' }, isAdmin: true, refresh: vi.fn(), logout: vi.fn() })
 })
 
@@ -84,5 +87,34 @@ describe('MembersPage', () => {
     await user.click(screen.getByRole('button', { name: /add member/i }))
 
     expect(await screen.findByText(/could not add member/i)).toBeInTheDocument()
+  })
+
+  it('creates a new user with a temp password (Story 2.10)', async () => {
+    mockGetMembers.mockResolvedValue({ members: [], is_admin: true })
+    mockCreateMemberUser.mockResolvedValue({ user_id: 3, email: 'newbie@example.com', role: 'member', joined_at: '' })
+    const user = userEvent.setup()
+    render(<MembersPage />)
+
+    await user.click(await screen.findByRole('button', { name: /create new user/i }))
+    await user.type(screen.getByLabelText(/email/i), 'newbie@example.com')
+    await user.type(screen.getByLabelText(/temp password/i), 'temp12345')
+    await user.click(screen.getByRole('button', { name: /create user/i }))
+
+    await waitFor(() => expect(mockCreateMemberUser).toHaveBeenCalledWith('newbie@example.com', 'temp12345'))
+    expect(mockAddMember).not.toHaveBeenCalled()
+  })
+
+  it('surfaces the email-taken error on the create path (Story 2.10)', async () => {
+    mockGetMembers.mockResolvedValue({ members: [], is_admin: true })
+    mockCreateMemberUser.mockRejectedValue(new ApiError('A user with that email already exists.', 400, 'email_taken'))
+    const user = userEvent.setup()
+    render(<MembersPage />)
+
+    await user.click(await screen.findByRole('button', { name: /create new user/i }))
+    await user.type(screen.getByLabelText(/email/i), 'bob@example.com')
+    await user.type(screen.getByLabelText(/temp password/i), 'temp12345')
+    await user.click(screen.getByRole('button', { name: /create user/i }))
+
+    expect(await screen.findByText(/already exists/i)).toBeInTheDocument()
   })
 })

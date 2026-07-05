@@ -45,6 +45,15 @@ export function addMember(email: string): Promise<Member> {
   })
 }
 
+// Create a brand-new user account and add them to the active org (Story 2.10),
+// distinct from addMember (which only adds an already-registered user).
+export function createMemberUser(email: string, tempPassword: string): Promise<Member> {
+  return apiRequest<Member>('/orgs/members/create-user/', {
+    method: 'POST',
+    body: { email, temp_password: tempPassword },
+  })
+}
+
 export function removeMember(userId: number): Promise<void> {
   return apiRequest<void>(`/orgs/members/${userId}/`, { method: 'DELETE' })
 }

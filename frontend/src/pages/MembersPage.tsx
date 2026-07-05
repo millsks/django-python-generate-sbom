@@ -10,8 +10,10 @@ import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import TextField from '@mui/material/TextField'
+import ToggleButton from '@mui/material/ToggleButton'
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Typography from '@mui/material/Typography'
-import { addMember, getMembers, removeMember, transferAdmin, type Member } from '../api/orgs'
+import { addMember, createMemberUser, getMembers, removeMember, transferAdmin, type Member } from '../api/orgs'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthProvider'
 import { NoOrgState } from '../components/NoOrgState'
@@ -24,6 +26,8 @@ export function MembersPage() {
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [mode, setMode] = useState<'existing' | 'create'>('existing')
   const [error, setError] = useState<string | null>(null)
 
   function load() {
@@ -41,20 +45,27 @@ export function MembersPage() {
     load()
   }, [])
 
-  async function handleAdd(event: FormEvent) {
+  async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     setError(null)
     try {
-      await addMember(email)
+      if (mode === 'create') {
+        await createMemberUser(email, password)
+      } else {
+        await addMember(email)
+      }
       setEmail('')
+      setPassword('')
       load()
     } catch (err) {
       if (err instanceof ApiError && err.code === 'no_such_user') {
-        setError('No registered user with that email.')
+        setError('No registered user with that email. Use "Create new user" to provision an account.')
       } else if (err instanceof ApiError && err.code === 'already_member') {
         setError('That user is already a member of this org.')
+      } else if (err instanceof ApiError && err.code === 'email_taken') {
+        setError('A user with that email already exists — add them as an existing member instead.')
       } else {
-        setError('Could not add member.')
+        setError(mode === 'create' ? 'Could not create the user.' : 'Could not add member.')
       }
     }
   }
@@ -142,9 +153,25 @@ export function MembersPage() {
           <Typography variant="subtitle1" gutterBottom>
             Add a member
           </Typography>
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={mode}
+            onChange={(_event, next: 'existing' | 'create' | null) => {
+              if (next) {
+                setMode(next)
+                setError(null)
+              }
+            }}
+            aria-label="add member mode"
+            sx={{ mb: 2 }}
+          >
+            <ToggleButton value="existing">Add existing</ToggleButton>
+            <ToggleButton value="create">Create new user</ToggleButton>
+          </ToggleButtonGroup>
           <Box
             component="form"
-            onSubmit={handleAdd}
+            onSubmit={handleSubmit}
             sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, alignItems: { sm: 'center' } }}
           >
             <TextField
@@ -156,10 +183,27 @@ export function MembersPage() {
               required
               sx={{ flexGrow: 1 }}
             />
+            {mode === 'create' && (
+              <TextField
+                size="small"
+                label="Temp password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                slotProps={{ htmlInput: { minLength: 8 } }}
+                sx={{ flexGrow: 1 }}
+              />
+            )}
             <Button type="submit" variant="contained">
-              Add member
+              {mode === 'create' ? 'Create user' : 'Add member'}
             </Button>
           </Box>
+          {mode === 'create' && (
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+              Creates a new account with this temporary password — share it with the new member out of band.
+            </Typography>
+          )}
         </Paper>
       )}
     </Container>

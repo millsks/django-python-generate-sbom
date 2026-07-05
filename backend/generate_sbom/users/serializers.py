@@ -47,6 +47,13 @@ class AddMemberSerializer(serializers.Serializer[User]):
     email = serializers.EmailField()
 
 
+class CreateMemberUserSerializer(serializers.Serializer[User]):
+    """Validates the create-new-user-and-add request (Story 2.10)."""
+
+    email = serializers.EmailField()
+    temp_password = serializers.CharField(write_only=True, min_length=8)
+
+
 class TransferAdminSerializer(serializers.Serializer[User]):
     """Validates the transfer-admin request."""
 

@@ -1,20 +1,18 @@
 name: Docs
 
-# Builds the MkDocs Material site and deploys it to GitHub Pages on pushes to main
-# that touch the docs (or on demand). Also exposed as a reusable workflow so the
-# release workflow can rebuild + republish the docs when a release is cut (Story
-# 11.10). Operator prerequisite: in repo Settings → Pages, set Source = "GitHub
-# Actions" (Pages requires a public repo or a paid plan).
+# Builds the MkDocs Material site and deploys it to GitHub Pages. The published site
+# is refreshed **only when a release is cut** (release.yml calls this as a reusable
+# workflow — Story 11.10) or on demand via workflow_dispatch. It intentionally does NOT
+# deploy on every push to main; docs build validation on push/PR is handled by the CI
+# gate (`pixi run docs-build --strict` inside `pixi run ci`). Operator prerequisite: in
+# repo Settings → Pages, set Source = "GitHub Actions" (Pages requires a public repo or
+# a paid plan).
 
 on:
-  push:
-    branches: ["main"]
-    paths:
-      - "docs/**"
-      - "mkdocs.yml"
-      - ".github/workflows/docs.yml"
+  # Manual redeploy on demand.
   workflow_dispatch:
-  # Reusable: invoked by release.yml after a release is published (Story 11.10).
+  # Reusable: invoked by release.yml after a release is published (Story 11.10) — this
+  # is the primary publish path, so docs track releases, not every push to main.
   workflow_call:
 
 # Least-privilege token for the Pages deployment.

@@ -42,10 +42,9 @@ class CreateOrgSerializer(serializers.Serializer[User]):
 
 
 class AddMemberSerializer(serializers.Serializer[User]):
-    """Validates the add-member request."""
+    """Validates the add-existing-user-by-email request (Story 2.7)."""
 
     email = serializers.EmailField()
-    temp_password = serializers.CharField(write_only=True, min_length=8)
 
 
 class TransferAdminSerializer(serializers.Serializer[User]):

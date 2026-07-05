@@ -99,14 +99,11 @@ def test_revoke_other_orgs_key_returns_404() -> None:
 @pytest.mark.django_db
 def test_non_admin_cannot_create_key() -> None:
     _register_with_org("alice@example.com")
+    register_user(email="bob@example.com", password="pw12345678")
     admin = _login("alice@example.com")
-    admin.post(
-        "/api/v1/orgs/members/",
-        {"email": "bob@example.com", "temp_password": "temp12345"},
-        format="json",
-    )
+    admin.post("/api/v1/orgs/members/", {"email": "bob@example.com"}, format="json")
 
-    response = _login("bob@example.com", "temp12345").post("/api/v1/keys/", {"name": "x"}, format="json")
+    response = _login("bob@example.com").post("/api/v1/keys/", {"name": "x"}, format="json")
 
     assert response.status_code == 403
     assert response.data["code"] == "not_admin"

@@ -21,11 +21,11 @@ development_status:
   2-2-login-session-auth-and-org-switcher: done
   2-3-org-administration-and-membership-management: done
   2-4-api-key-management: done
-  2-5-create-organization-from-the-ui: ready-for-dev
-  2-6-zero-org-users-and-identity-decoupling: review
-  2-7-admin-add-remove-existing-users-by-email: ready-for-dev
-  2-8-global-admin-org-and-cross-org-provisioning: review
-  2-9-membership-edge-cases: ready-for-dev
+  2-5-create-organization-from-the-ui: review
+  2-6-zero-org-users-and-identity-decoupling: done
+  2-7-admin-add-remove-existing-users-by-email: review
+  2-8-global-admin-org-and-cross-org-provisioning: done
+  2-9-membership-edge-cases: review
 
   epic-3: done
   3-1-manifest-upload-and-format-detection: done
@@ -105,7 +105,7 @@ development_status:
   epic-10: in-progress
   10-1-app-shell-and-auth-aware-navigation: done
   10-2-redirect-to-login-and-back: done
-  10-3-auto-redirect-to-login-after-registration: ready-for-dev
+  10-3-auto-redirect-to-login-after-registration: review
 
   # Epic 11 — Project Documentation (MkDocs Material → GitHub Pages; markdown).
   # 11-1 (site scaffold) is the foundation; 11-2..11-5 add pages/nav to mkdocs.yml;

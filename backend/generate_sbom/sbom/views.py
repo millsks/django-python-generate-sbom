@@ -156,7 +156,15 @@ class StatusJobView(APIView):
         # A hard timeout force-kills the worker, so the poll detects the stale job (FR-4.6).
         if mark_stale_job_timed_out(job):
             job = get_job(org, task_id)
-        result_url = f"/api/v1/sbom/result/{job.task_id}/" if job.status == SBOMJob.Status.SUCCESS else None
+        # Artifacts are gone once the blob is deleted (expiry sweep or manual delete),
+        # which nulls result_key while the job record + summary metadata are kept
+        # (Story 7.1/7.2). Don't advertise a download URL that would 404 (Story 7.3).
+        artifacts_available = bool(job.result_key)
+        result_url = (
+            f"/api/v1/sbom/result/{job.task_id}/"
+            if job.status == SBOMJob.Status.SUCCESS and artifacts_available
+            else None
+        )
         return Response(
             {
                 "task_id": str(job.task_id),
@@ -169,6 +177,8 @@ class StatusJobView(APIView):
                 "summary_stats": job.summary_stats,
                 "created_at": job.created_at.isoformat(),
                 "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+                "artifacts_available": artifacts_available,
+                "artifacts_expire_at": job.artifacts_expire_at.isoformat() if job.artifacts_expire_at else None,
             }
         )
 

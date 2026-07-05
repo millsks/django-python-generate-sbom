@@ -7,6 +7,7 @@ import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
+import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
 import Container from '@mui/material/Container'
 import Dialog from '@mui/material/Dialog'
@@ -69,6 +70,10 @@ function JobRow({
   const status = live?.status ?? job.status
   const failureReason = live?.failure_reason ?? job.failure_reason
   const inProgress = !TERMINAL_STATUSES.includes(status)
+  // A completed job whose artifacts were cleaned (expiry sweep or manual delete):
+  // record + metadata are kept, but there's nothing left to download or delete (Story 7.3).
+  const artifactsAvailable = live?.artifacts_available ?? job.artifacts_available
+  const expired = status === 'SUCCESS' && !artifactsAvailable
 
   // Elapsed: the serialized value for jobs already finished at list time; the live
   // completion for jobs that finish while polling; and a live created→now duration
@@ -111,6 +116,23 @@ function JobRow({
             {failureReason}
           </Typography>
         )}
+        {expired && (
+          <Tooltip
+            title={
+              job.artifacts_expire_at
+                ? `Stored artifacts removed (expiry ${new Date(job.artifacts_expire_at).toLocaleDateString()})`
+                : 'Stored artifacts removed'
+            }
+          >
+            <Chip
+              size="small"
+              color="warning"
+              variant="outlined"
+              label="Artifacts removed"
+              sx={{ mt: 0.5, width: 'fit-content' }}
+            />
+          </Tooltip>
+        )}
       </TableCell>
       <TableCell>{formatDuration(elapsedSeconds)}</TableCell>
       <TableCell>
@@ -119,15 +141,18 @@ function JobRow({
         </Link>
       </TableCell>
       <TableCell padding="checkbox">
-        <Tooltip title="Delete artifacts">
-          <IconButton
-            size="small"
-            color="error"
-            aria-label={`Delete artifacts for ${job.manifest_filename}`}
-            onClick={() => onDelete(job.task_id)}
-          >
-            <DeleteActionIcon fontSize="small" />
-          </IconButton>
+        <Tooltip title={expired ? 'Artifacts already removed' : 'Delete artifacts'}>
+          <span>
+            <IconButton
+              size="small"
+              color="error"
+              aria-label={`Delete artifacts for ${job.manifest_filename}`}
+              onClick={() => onDelete(job.task_id)}
+              disabled={expired}
+            >
+              <DeleteActionIcon fontSize="small" />
+            </IconButton>
+          </span>
         </Tooltip>
       </TableCell>
     </TableRow>

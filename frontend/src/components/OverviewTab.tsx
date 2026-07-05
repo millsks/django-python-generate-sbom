@@ -98,7 +98,7 @@ export function OverviewTab({ status, onNavigate }: { status: JobStatus; onNavig
         ) : (
           <Alert severity="warning">The SBOM artifact is not available for this job.</Alert>
         )}
-        {anyReportAvailable && (
+        {anyReportAvailable && status.artifacts_available && (
           <Button variant="outlined" onClick={exportAll} disabled={exporting} startIcon={<ExportIcon />}>
             {exporting ? 'Exporting…' : 'Export all to Excel'}
           </Button>

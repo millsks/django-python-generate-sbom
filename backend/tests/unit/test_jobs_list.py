@@ -106,6 +106,20 @@ def test_serializer_elapsed_seconds_for_completed_and_running_jobs() -> None:
 
 
 @pytest.mark.django_db
+def test_serializer_artifacts_available_reflects_result_key() -> None:
+    alice, org = _org("alice@example.com")
+    stored = _job(org, alice, status="SUCCESS")
+    stored.result_key = "sbom/stored.json"
+    stored.save(update_fields=["result_key"])
+    cleaned = _job(org, alice, status="SUCCESS")  # result_key null -> artifacts expired/deleted
+
+    assert JobListSerializer(stored).data["artifacts_available"] is True
+    assert JobListSerializer(cleaned).data["artifacts_available"] is False
+    # The retained expiry timestamp is exposed for the UI to show.
+    assert "artifacts_expire_at" in JobListSerializer(cleaned).data
+
+
+@pytest.mark.django_db
 def test_endpoint_page_size_25() -> None:
     alice, org = _org("alice@example.com")
     for _ in range(30):

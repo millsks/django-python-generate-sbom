@@ -37,6 +37,9 @@ class JobListSerializer(serializers.ModelSerializer[SBOMJob]):
     # Total wall-clock time to complete: created_at -> completed_at (Story 6.3);
     # null while the job is still running / has no completion timestamp.
     elapsed_seconds = serializers.SerializerMethodField()
+    # False once the artifacts have been cleaned (expiry sweep or manual delete),
+    # which nulls result_key while the job record + metadata are retained (Story 7.3).
+    artifacts_available = serializers.SerializerMethodField()
 
     class Meta:
         model = SBOMJob
@@ -49,6 +52,8 @@ class JobListSerializer(serializers.ModelSerializer[SBOMJob]):
             "status",
             "failure_reason",
             "elapsed_seconds",
+            "artifacts_available",
+            "artifacts_expire_at",
         ]
 
     def get_elapsed_seconds(self, obj: SBOMJob) -> float | None:
@@ -56,3 +61,7 @@ class JobListSerializer(serializers.ModelSerializer[SBOMJob]):
         if obj.completed_at is None:
             return None
         return (obj.completed_at - obj.created_at).total_seconds()
+
+    def get_artifacts_available(self, obj: SBOMJob) -> bool:
+        """True while the stored artifacts still exist (result_key set)."""
+        return bool(obj.result_key)

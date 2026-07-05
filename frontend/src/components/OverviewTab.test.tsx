@@ -46,6 +46,8 @@ function makeStatus(overrides: Partial<JobStatus> = {}): JobStatus {
     },
     created_at: '',
     completed_at: null,
+    artifacts_available: true,
+    artifacts_expire_at: null,
     ...overrides,
   }
 }

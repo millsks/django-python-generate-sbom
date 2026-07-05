@@ -60,6 +60,8 @@ export interface JobStatus {
   summary_stats?: SummaryStats
   created_at: string
   completed_at: string | null
+  artifacts_available: boolean // false once artifacts were cleaned (expiry/manual delete) (Story 7.3)
+  artifacts_expire_at: string | null // when the artifacts are/were scheduled to expire
 }
 
 export const TERMINAL_STATUSES = ['SUCCESS', 'FAILED']
@@ -78,6 +80,8 @@ export interface JobListItem {
   status: string
   failure_reason: string | null
   elapsed_seconds: number | null // wall-clock time to complete; null while running (Story 6.3)
+  artifacts_available: boolean // false once artifacts were cleaned (expiry/manual delete) (Story 7.3)
+  artifacts_expire_at: string | null // when the artifacts are/were scheduled to expire
 }
 
 export interface Paginated<T> {

@@ -42,6 +42,8 @@ function jobStatus(overrides: Record<string, unknown> = {}) {
     result_url: null,
     created_at: '',
     completed_at: null,
+    artifacts_available: true,
+    artifacts_expire_at: null,
     ...overrides,
   }
 }
@@ -59,6 +61,8 @@ const JOB = {
   status: 'SUCCESS',
   failure_reason: null,
   elapsed_seconds: 83,
+  artifacts_available: true,
+  artifacts_expire_at: '2026-02-01T00:00:00Z',
 }
 
 function renderPage() {
@@ -98,6 +102,17 @@ describe('HistoryPage', () => {
 
     expect(await screen.findByText('Failed')).toBeInTheDocument()
     expect(screen.getByText('soft_timeout')).toBeInTheDocument()
+  })
+
+  it('marks a job whose artifacts were removed (distinct from failed) and disables its delete', async () => {
+    mockList.mockResolvedValue(page([{ ...JOB, artifacts_available: false }])) // SUCCESS, artifacts gone
+    renderPage()
+
+    const table = await screen.findByRole('table')
+    const row = within(table).getAllByRole('row')[1]
+    expect(within(row).getByText('Completed')).toBeInTheDocument() // still shows the success status
+    expect(within(row).getByText('Artifacts removed')).toBeInTheDocument() // expired chip
+    expect(within(row).getByRole('button', { name: /Delete artifacts for/ })).toBeDisabled()
   })
 
   it('re-queries with the status filter and resets to page 1', async () => {

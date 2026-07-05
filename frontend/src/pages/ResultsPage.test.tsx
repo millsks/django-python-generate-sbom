@@ -32,6 +32,8 @@ const SUCCESS = {
   result_url: '/api/v1/sbom/result/abc-123/',
   created_at: '2026-01-01T00:00:00Z',
   completed_at: '2026-01-01T00:01:00Z',
+  artifacts_available: true,
+  artifacts_expire_at: null,
 }
 
 describe('ResultsPage', () => {
@@ -67,5 +69,22 @@ describe('ResultsPage', () => {
 
     expect(await screen.findByText(/don't have access/i)).toBeInTheDocument()
     expect(screen.queryByRole('tab')).not.toBeInTheDocument()
+  })
+
+  it('shows an expired-artifacts notice with retained metadata (no tabs) when artifacts are gone', async () => {
+    mockStatus.mockResolvedValue({
+      ...SUCCESS,
+      result_url: null,
+      artifacts_available: false,
+      artifacts_expire_at: '2026-02-01T00:00:00Z',
+    })
+    renderPage()
+
+    expect(await screen.findByText(/no longer available/i)).toBeInTheDocument()
+    // The retained summary metadata (Overview) stays visible…
+    expect(screen.getByText('Total packages')).toBeInTheDocument()
+    // …but the artifact-backed tabs and the download are gone.
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Download SBOM' })).not.toBeInTheDocument()
   })
 })

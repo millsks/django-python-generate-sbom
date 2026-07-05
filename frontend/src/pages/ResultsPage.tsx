@@ -87,6 +87,26 @@ export function ResultsPage() {
     )
   }
 
+  // A completed job whose artifacts were cleaned (expiry sweep or manual delete):
+  // the SBOM + reports are gone, but the summary metadata is retained (Story 7.3).
+  // Distinct from a FAILED job (which shows its failure reason above).
+  if (status.status === 'SUCCESS' && !status.artifacts_available) {
+    const removedOn = status.artifacts_expire_at ? new Date(status.artifacts_expire_at).toLocaleDateString() : null
+    return (
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        <Typography variant="h4" component="h1" gutterBottom>
+          SBOM Results
+        </Typography>
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          The SBOM and analysis reports for this job are no longer available
+          {removedOn ? ` — the stored artifacts were removed on ${removedOn}` : ''}. Only the job summary below is
+          retained; downloads and per-report views are unavailable.
+        </Alert>
+        <OverviewTab status={status} onNavigate={() => {}} />
+      </Container>
+    )
+  }
+
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Typography variant="h4" component="h1" gutterBottom>

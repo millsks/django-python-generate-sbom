@@ -21,6 +21,8 @@ function status(overrides: Partial<JobStatus> = {}): JobStatus {
     result_url: null,
     created_at: '',
     completed_at: null,
+    artifacts_available: true,
+    artifacts_expire_at: null,
     ...overrides,
   }
 }

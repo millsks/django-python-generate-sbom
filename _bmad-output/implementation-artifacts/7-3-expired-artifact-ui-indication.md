@@ -1,6 +1,6 @@
 # Story 7.3: Expired-Artifact UI Indication
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -80,8 +80,39 @@ Render these with distinct affordances so a user is never confused about which h
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
 
 ### Completion Notes List
 
+- "Expired" is derived, not stored: a job is expired when `status == SUCCESS` and
+  `result_key` is null (nulled by the 7.1 expiry sweep or 7.2 manual/bulk delete), with
+  the record + `summary_stats` retained. No model field/migration added.
+- Backend exposes `artifacts_available` (bool) + the existing `artifacts_expire_at` on
+  both the `JobListSerializer` (history) and the `/sbom/status/` shape (results). The
+  status view also nulls `result_url` when artifacts are gone so the UI never advertises
+  a 404 download.
+- History: an "Artifacts removed" chip (warning, with the expiry date in a tooltip) on
+  expired rows — distinct from the FAILED row's failure reason (AC #4) — and the delete
+  action is disabled (nothing left to delete).
+- Results: an expired job renders a warning `Alert` (with the removal date) plus the
+  retained Overview metadata, and drops the artifact-backed tabs + download/export.
+  OverviewTab's export button is hidden when `!artifacts_available`.
+- Existing frontend job fixtures updated to carry `artifacts_available: true` so normal
+  jobs aren't misread as expired.
+
 ### File List
+
+- backend/generate_sbom/sbom/serializers.py
+- backend/generate_sbom/sbom/views.py
+- backend/tests/unit/test_jobs_list.py
+- backend/tests/unit/test_jobs.py
+- frontend/src/api/jobs.ts
+- frontend/src/components/OverviewTab.tsx
+- frontend/src/pages/HistoryPage.tsx
+- frontend/src/pages/HistoryPage.test.tsx
+- frontend/src/pages/ResultsPage.tsx
+- frontend/src/pages/ResultsPage.test.tsx
+- frontend/src/components/OverviewTab.test.tsx
+- frontend/src/hooks/useJobStatus.test.ts

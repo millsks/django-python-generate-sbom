@@ -103,6 +103,19 @@ def test_status_poll_returns_shape_and_reflects_updates() -> None:
     done = client.get(f"/api/v1/sbom/status/{task_id}/")
     assert done.data["status"] == "SUCCESS"
     assert done.data["result_url"] is not None
+    assert done.data["artifacts_available"] is True
+    assert done.data["artifacts_expire_at"] is not None  # finalize sets the retention window
+
+    # Once artifacts are cleaned (expiry sweep / manual delete) result_key is nulled: the
+    # status still reports SUCCESS + retained metadata, but advertises no download (Story 7.3).
+    job = SBOMJob.objects.get(task_id=task_id)
+    job.result_key = None
+    job.save(update_fields=["result_key"])
+    expired = client.get(f"/api/v1/sbom/status/{task_id}/")
+    assert expired.data["status"] == "SUCCESS"
+    assert expired.data["artifacts_available"] is False
+    assert expired.data["result_url"] is None
+    assert expired.data["summary_stats"]["total_packages"] == 2  # metadata retained
 
 
 @pytest.mark.django_db

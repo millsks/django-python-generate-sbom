@@ -1,5 +1,4 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Container from '@mui/material/Container'
@@ -8,19 +7,23 @@ import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogContentText from '@mui/material/DialogContentText'
 import DialogTitle from '@mui/material/DialogTitle'
+import Paper from '@mui/material/Paper'
 import Table from '@mui/material/Table'
 import TableBody from '@mui/material/TableBody'
 import TableCell from '@mui/material/TableCell'
+import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { createKey, getKeys, revokeKey, type ApiKey } from '../api/keys'
 import { getMembers } from '../api/orgs'
-import { AddActionIcon, DeleteActionIcon } from '../icons'
+import { EmptyState, ErrorState, LoadingState } from '../components/PageState'
+import { AddActionIcon, DeleteActionIcon, NavIcon } from '../icons'
 
 export function KeysPage() {
   const [keys, setKeys] = useState<ApiKey[]>([])
+  const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [name, setName] = useState('')
   const [plaintext, setPlaintext] = useState<string | null>(null)
@@ -28,8 +31,12 @@ export function KeysPage() {
 
   function load() {
     getKeys()
-      .then(setKeys)
+      .then((result) => {
+        setKeys(result)
+        setError(null)
+      })
       .catch(() => setError('Failed to load API keys.'))
+      .finally(() => setLoading(false))
     getMembers()
       .then((response) => setIsAdmin(response.is_admin))
       .catch(() => {})
@@ -67,59 +74,90 @@ export function KeysPage() {
       <Typography variant="h4" component="h1" gutterBottom>
         API keys
       </Typography>
+
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-      <Table>
-        <TableHead>
-          <TableRow>
-            <TableCell>Name</TableCell>
-            <TableCell>Prefix</TableCell>
-            <TableCell>Created</TableCell>
-            <TableCell>Last used</TableCell>
-            {isAdmin && <TableCell>Actions</TableCell>}
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {keys.map((key) => (
-            <TableRow key={key.id}>
-              <TableCell>{key.name}</TableCell>
-              <TableCell>{key.prefix}&hellip;</TableCell>
-              <TableCell>{new Date(key.created_at).toLocaleDateString()}</TableCell>
-              <TableCell>
-                {key.last_used_at ? new Date(key.last_used_at).toLocaleDateString() : 'never'}
-              </TableCell>
-              {isAdmin && (
-                <TableCell>
-                  <Button size="small" color="error" onClick={() => handleRevoke(key.id)} startIcon={<DeleteActionIcon />}>
-                    Revoke
-                  </Button>
-                </TableCell>
-              )}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      {isAdmin && (
-        <Box
-          component="form"
-          onSubmit={handleCreate}
-          sx={{ display: 'flex', gap: 2, mt: 3, alignItems: 'center' }}
-        >
-          <TextField
-            size="small"
-            label="Key name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-          />
-          <Button type="submit" variant="contained" startIcon={<AddActionIcon />}>
-            Create key
-          </Button>
+        <Box sx={{ mb: 2 }}>
+          <ErrorState message={error} />
         </Box>
       )}
+
+      {loading ? (
+        <LoadingState label="Loading API keys" />
+      ) : keys.length === 0 ? (
+        <EmptyState
+          icon={NavIcon.keys}
+          title="No API keys yet"
+          message={
+            isAdmin
+              ? 'Create a key below to authenticate programmatic access to the API.'
+              : 'An organization admin can create API keys for programmatic access.'
+          }
+        />
+      ) : (
+        <TableContainer component={Paper} variant="outlined">
+          <Table aria-label="API keys">
+            <TableHead>
+              <TableRow>
+                <TableCell>Name</TableCell>
+                <TableCell>Prefix</TableCell>
+                <TableCell>Created</TableCell>
+                <TableCell>Last used</TableCell>
+                {isAdmin && <TableCell align="right">Actions</TableCell>}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {keys.map((key) => (
+                <TableRow key={key.id} hover>
+                  <TableCell>{key.name}</TableCell>
+                  <TableCell>{key.prefix}&hellip;</TableCell>
+                  <TableCell>{new Date(key.created_at).toLocaleDateString()}</TableCell>
+                  <TableCell>
+                    {key.last_used_at ? new Date(key.last_used_at).toLocaleDateString() : 'never'}
+                  </TableCell>
+                  {isAdmin && (
+                    <TableCell align="right">
+                      <Button
+                        size="small"
+                        color="error"
+                        onClick={() => handleRevoke(key.id)}
+                        startIcon={<DeleteActionIcon />}
+                      >
+                        Revoke
+                      </Button>
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+
+      {isAdmin && (
+        <Paper variant="outlined" sx={{ p: 2, mt: 3 }}>
+          <Typography variant="subtitle1" gutterBottom>
+            Create a new key
+          </Typography>
+          <Box
+            component="form"
+            onSubmit={handleCreate}
+            sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, alignItems: { sm: 'center' } }}
+          >
+            <TextField
+              size="small"
+              label="Key name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              sx={{ flexGrow: 1 }}
+            />
+            <Button type="submit" variant="contained" startIcon={<AddActionIcon />}>
+              Create key
+            </Button>
+          </Box>
+        </Paper>
+      )}
+
       <Dialog open={plaintext !== null} onClose={() => setPlaintext(null)}>
         <DialogTitle>Copy your API key now</DialogTitle>
         <DialogContent>

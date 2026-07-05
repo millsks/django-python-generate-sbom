@@ -3,12 +3,10 @@
 // Artifacts can be deleted per-job or in bulk (org-wide, admin) on demand (Story 7.2).
 import { useEffect, useState } from 'react'
 import { Link as RouterLink } from 'react-router-dom'
-import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
 import Chip from '@mui/material/Chip'
-import CircularProgress from '@mui/material/CircularProgress'
 import Container from '@mui/material/Container'
 import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
@@ -20,6 +18,7 @@ import LinearProgress from '@mui/material/LinearProgress'
 import Link from '@mui/material/Link'
 import MenuItem from '@mui/material/MenuItem'
 import Pagination from '@mui/material/Pagination'
+import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
 import Table from '@mui/material/Table'
 import TableBody from '@mui/material/TableBody'
@@ -40,9 +39,10 @@ import {
 } from '../api/jobs'
 import { useAuth } from '../auth/AuthProvider'
 import { JobStatusBadge } from '../components/JobStatusBadge'
+import { EmptyState, ErrorState, LoadingState } from '../components/PageState'
 import { formatDuration } from '../duration'
 import { useJobStatus } from '../hooks/useJobStatus'
-import { DeleteActionIcon } from '../icons'
+import { DeleteActionIcon, NavIcon } from '../icons'
 
 const PAGE_SIZE = 25
 const STATUS_OPTIONS = ['All', 'In Progress', 'Completed', 'Failed']
@@ -297,14 +297,18 @@ export function HistoryPage() {
       </Box>
 
       {error ? (
-        <Alert severity="error">Could not load your jobs.</Alert>
+        <ErrorState message="Could not load your jobs." />
       ) : !data ? (
-        <CircularProgress aria-label="Loading jobs" />
+        <LoadingState label="Loading jobs" />
       ) : data.count === 0 ? (
-        <Alert severity="info">No jobs yet.</Alert>
+        <EmptyState
+          icon={NavIcon.history}
+          title="No jobs yet."
+          message="Upload a manifest to generate your first SBOM."
+        />
       ) : (
         <>
-          <TableContainer>
+          <TableContainer component={Paper} variant="outlined">
             <Table size="small" aria-label="jobs">
               <TableHead>
                 <TableRow>

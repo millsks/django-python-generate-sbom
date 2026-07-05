@@ -1,0 +1,6 @@
+{
+    "sonarlint.connectedMode.project": {
+        "connectionId": "millsks_pyrattler-recipe-autogen",
+        "projectKey": "millsks_django-python-generate-sbom"
+    }
+}

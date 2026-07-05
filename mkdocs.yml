@@ -60,7 +60,14 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - User Guide: user-guide/index.md
+  - User Guide:
+      - user-guide/index.md
+      - Accounts & Organizations: user-guide/accounts-and-organizations.md
+      - Generating an SBOM: user-guide/generating-an-sbom.md
+      - Reading the Results: user-guide/reading-the-results.md
+      - Exporting & Downloading: user-guide/exporting-and-downloading.md
+      - Job History: user-guide/job-history.md
+      - API Keys: user-guide/api-keys.md
   - How-To: how-to/index.md
   - Developer: developer/index.md
   - API Reference: api/index.md

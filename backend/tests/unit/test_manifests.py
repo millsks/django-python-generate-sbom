@@ -6,7 +6,7 @@ from rest_framework.test import APIClient
 
 from generate_sbom.manifests.detection import UnsupportedFormatError, detect_format
 from generate_sbom.manifests.models import ManifestUpload
-from generate_sbom.users.services import register_user
+from generate_sbom.users.services import create_org, register_user
 
 META = {
     "application_id": "APP-1",
@@ -23,7 +23,8 @@ def _tmp_media(settings: pytest.FixtureRequest, tmp_path: object) -> None:
 
 
 def _login() -> APIClient:
-    register_user(email="alice@example.com", password="pw12345678")
+    user = register_user(email="alice@example.com", password="pw12345678")
+    create_org(name="alice", admin_user=user)
     client = APIClient()
     client.post(
         "/api/v1/auth/login/",
@@ -139,7 +140,7 @@ def test_upload_manifest_allows_no_user() -> None:
     from generate_sbom.manifests.services import upload_manifest
 
     user = register_user(email="alice@example.com", password="pw12345678")
-    org = user.org_memberships.select_related("org").get().org
+    org = create_org(name=user.email.split("@")[0], admin_user=user)
     upload = upload_manifest(
         org,
         None,  # API-key upload: no user

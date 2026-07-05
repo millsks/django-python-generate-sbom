@@ -11,7 +11,7 @@ from generate_sbom.analysis.models import AnalysisReport
 from generate_sbom.manifests.models import ManifestUpload
 from generate_sbom.sbom.models import SBOMJob
 from generate_sbom.users.models import Org, OrgMembership, User
-from generate_sbom.users.services import register_user
+from generate_sbom.users.services import create_org, register_user
 
 pytestmark = pytest.mark.django_db
 
@@ -24,7 +24,7 @@ def _tmp_media(settings: pytest.FixtureRequest, tmp_path: object) -> None:
 def _setup(email: str) -> tuple[APIClient, User, Org]:
     """Register (admin of a fresh org) + log in; return the client, user, and org."""
     user = register_user(email=email, password="pw12345678")
-    org = user.org_memberships.select_related("org").get().org
+    org = create_org(name=user.email.split("@")[0], admin_user=user)
     client = APIClient()
     client.post("/api/v1/auth/login/", {"email": email, "password": "pw12345678"}, format="json")
     return client, user, org

@@ -4,6 +4,7 @@ import pytest
 from rest_framework.test import APIClient
 
 from generate_sbom.users.auth import SESSION_ACTIVE_ORG
+from generate_sbom.users.models import User
 from generate_sbom.users.services import create_org, register_user
 
 
@@ -11,10 +12,17 @@ def _login(client: APIClient, email: str, password: str) -> None:
     client.post("/api/v1/auth/login/", {"email": email, "password": password}, format="json")
 
 
+def _register_with_org(email: str, org_name: str, password: str = "pw12345678") -> User:
+    """Register a user and give them a first org (registration now creates none)."""
+    user = register_user(email=email, password=password)
+    create_org(name=org_name, admin_user=user)
+    return user
+
+
 @pytest.mark.django_db
 def test_org_list_flags_exactly_one_active() -> None:
     """The org list returns all memberships with exactly one flagged active."""
-    user = register_user(email="alice@example.com", password="pw12345678")
+    user = _register_with_org("alice@example.com", "Alice")
     create_org(name="Second", admin_user=user)
     client = APIClient()
     _login(client, "alice@example.com", "pw12345678")
@@ -29,7 +37,7 @@ def test_org_list_flags_exactly_one_active() -> None:
 @pytest.mark.django_db
 def test_switch_to_member_org_updates_active() -> None:
     """Switching to an org the user belongs to updates the active org."""
-    user = register_user(email="alice@example.com", password="pw12345678")
+    user = _register_with_org("alice@example.com", "Alice")
     create_org(name="Second", admin_user=user)
     client = APIClient()
     _login(client, "alice@example.com", "pw12345678")
@@ -45,8 +53,8 @@ def test_switch_to_member_org_updates_active() -> None:
 @pytest.mark.django_db
 def test_switch_to_non_member_org_rejected() -> None:
     """Switching to an org the user does not belong to is rejected."""
-    register_user(email="alice@example.com", password="pw12345678")
-    register_user(email="bob@example.com", password="pw12345678")  # bob's personal org
+    _register_with_org("alice@example.com", "Alice")
+    _register_with_org("bob@example.com", "Bob")
     client = APIClient()
     _login(client, "alice@example.com", "pw12345678")
 
@@ -59,7 +67,7 @@ def test_switch_to_non_member_org_rejected() -> None:
 @pytest.mark.django_db
 def test_session_request_resolves_active_org() -> None:
     """A session-authenticated request (no Api-Key) resolves the active org."""
-    register_user(email="alice@example.com", password="pw12345678")
+    _register_with_org("alice@example.com", "Alice")
     client = APIClient()
     _login(client, "alice@example.com", "pw12345678")
 
@@ -72,7 +80,7 @@ def test_session_request_resolves_active_org() -> None:
 @pytest.mark.django_db
 def test_active_org_falls_back_to_membership() -> None:
     """With no active org in the session, resolution falls back to a membership."""
-    register_user(email="alice@example.com", password="pw12345678")
+    _register_with_org("alice@example.com", "Alice")
     client = APIClient()
     _login(client, "alice@example.com", "pw12345678")
     session = client.session

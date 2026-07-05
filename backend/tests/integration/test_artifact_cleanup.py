@@ -17,7 +17,7 @@ from generate_sbom.analysis.models import AnalysisReport
 from generate_sbom.manifests.models import ManifestUpload
 from generate_sbom.sbom.models import SBOMJob
 from generate_sbom.sbom.services import purge_expired_artifacts
-from generate_sbom.users.services import register_user
+from generate_sbom.users.services import create_org, register_user
 
 
 @pytest.mark.integration
@@ -25,7 +25,7 @@ from generate_sbom.users.services import register_user
 def test_purge_deletes_real_blobs_and_keeps_metadata(settings: pytest.FixtureRequest, tmp_path: object) -> None:
     settings.MEDIA_ROOT = str(tmp_path)  # type: ignore[attr-defined]
     user = register_user(email=f"{uuid4().hex}@example.com", password="pw12345678")
-    org = user.org_memberships.select_related("org").get().org
+    org = create_org(name=user.email.split("@")[0], admin_user=user)
     upload = ManifestUpload(
         org=org,
         user=user,

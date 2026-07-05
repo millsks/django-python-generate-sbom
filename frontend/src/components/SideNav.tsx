@@ -21,12 +21,6 @@ interface NavDest {
   Icon: SvgIconComponent
 }
 
-const NAV_ITEMS: NavDest[] = [
-  { to: '/upload', label: 'Upload', Icon: NavIcon.upload },
-  { to: '/history', label: 'History', Icon: NavIcon.history },
-  { to: '/keys', label: 'API Keys', Icon: NavIcon.keys },
-]
-
 // `onNavigate` closes the temporary drawer after a selection on mobile; on the
 // permanent desktop drawer it is omitted.
 export function SideNav({
@@ -38,12 +32,16 @@ export function SideNav({
   activeOrg: OrgSummary | null
   onNavigate?: () => void
 }) {
-  // Admins get an "Organization" control center (Story 2.11) plus the Members link.
-  const adminItems: NavDest[] = [
-    { to: '/organization', label: 'Organization', Icon: NavIcon.organization },
-    { to: '/members', label: 'Members', Icon: NavIcon.members },
+  // Ordered destinations (Story 2.15); the admin-only Members and Organization links are
+  // interleaved into their correct positions — Members between History and API Keys,
+  // Organization last. Non-admins keep Upload, History, API Keys.
+  const items: NavDest[] = [
+    { to: '/upload', label: 'Upload', Icon: NavIcon.upload },
+    { to: '/history', label: 'History', Icon: NavIcon.history },
+    ...(isAdmin ? [{ to: '/members', label: 'Members', Icon: NavIcon.members }] : []),
+    { to: '/keys', label: 'API Keys', Icon: NavIcon.keys },
+    ...(isAdmin ? [{ to: '/organization', label: 'Organization', Icon: NavIcon.organization }] : []),
   ]
-  const items = isAdmin ? [...NAV_ITEMS, ...adminItems] : NAV_ITEMS
 
   return (
     <>

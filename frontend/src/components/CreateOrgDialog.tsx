@@ -35,7 +35,9 @@ export function CreateOrgDialog({ open, onClose }: { open: boolean; onClose: () 
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
       <form onSubmit={handleSubmit}>
         <DialogTitle>Create an organization</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+        {/* pt gives the outlined field's floating label clearance so it isn't clipped by
+            DialogContent's scroll area; the field's mt reinforces it under the title. */}
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
           {error && <ErrorState message={error} />}
           <TextField
             autoFocus
@@ -44,6 +46,7 @@ export function CreateOrgDialog({ open, onClose }: { open: boolean; onClose: () 
             onChange={(e) => setName(e.target.value)}
             required
             fullWidth
+            sx={{ mt: 1 }}
           />
         </DialogContent>
         <DialogActions>

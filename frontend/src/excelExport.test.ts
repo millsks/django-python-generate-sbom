@@ -40,6 +40,26 @@ describe('buildWorkbook', () => {
     expect(cell.font?.underline).toBe(true)
   })
 
+  it('renders a red-font cell for a { text, redText } value (Story 8.22)', () => {
+    const workbook = buildWorkbook([
+      {
+        name: 'Reds',
+        columns: [{ key: 'v', header: 'Value' }],
+        rows: [{ v: { text: '2.9.0', redText: true } }, { v: 'plain' }],
+      },
+    ])
+
+    const ws = workbook.getWorksheet('Reds')!
+    // The marker is unwrapped to its text and given a red font.
+    const redCell = ws.getRow(2).getCell(1)
+    expect(redCell.value).toBe('2.9.0')
+    expect(redCell.font?.color?.argb).toBe('FFD32F2F')
+    // A plain value keeps the default font (no red).
+    const plainCell = ws.getRow(3).getCell(1)
+    expect(plainCell.value).toBe('plain')
+    expect(plainCell.font?.color?.argb).toBeUndefined()
+  })
+
   it('supports multiple sheets in one workbook', () => {
     const workbook = buildWorkbook([
       { name: 'One', columns: [{ key: 'x', header: 'X' }], rows: [{ x: 1 }] },

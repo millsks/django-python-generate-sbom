@@ -10,10 +10,11 @@ describe('versionCurrencySheet', () => {
 
     expect(sheet.name).toBe('Version Currency')
     // All UI columns are present, including the conda-forge latest.
+    // "PyPI Latest" sits immediately before "conda-forge Latest" (Story 8.23).
     expect(sheet.columns.map((c) => c.header)).toEqual([
       'Package',
       'Installed',
-      'Latest (PyPI)',
+      'PyPI Latest',
       'conda-forge Latest',
       'Status',
       'LTS',
@@ -37,6 +38,19 @@ describe('versionCurrencySheet', () => {
       on_lts: '',
       ecosystem: 'conda',
     })
+    // A non-divergent conda_latest (no latest_mismatch) stays plain text (Story 8.22).
+    expect(sheet.rows[0].conda_latest).toBe('5.1.0')
+  })
+
+  it('marks a diverging conda-forge latest as red text (Story 8.22)', () => {
+    const sheet = versionCurrencySheet([
+      { name: 'flask', installed: '2.0.0', latest: '3.0.0', currency: 'behind-2+', lts: null, on_lts: null, ecosystem: 'pypi', conda_latest: '2.9.0', latest_mismatch: true },
+      { name: 'click', installed: '8.0.0', latest: '8.1.0', currency: 'behind-1', lts: null, on_lts: null, ecosystem: 'pypi', conda_latest: '8.1.0', latest_mismatch: false },
+    ])
+
+    // Divergent → red-text marker the workbook builder styles; empty stays plain.
+    expect(sheet.rows[0].conda_latest).toEqual({ text: '2.9.0', redText: true })
+    expect(sheet.rows[1].conda_latest).toBe('8.1.0')
   })
 })
 

@@ -52,6 +52,21 @@ describe('VersionsTab', () => {
     expect(within(rows[0]).getByText('alpha')).toBeInTheDocument() // name-asc: alpha first
   })
 
+  it('places "PyPI Latest" immediately before "conda-forge Latest" (Story 8.23)', async () => {
+    mockGet.mockResolvedValue(REPORT)
+    render(<VersionsTab taskId="t" />)
+
+    const table = await screen.findByRole('table')
+    const headerRow = within(table).getAllByRole('row')[0]
+    const headers = within(headerRow)
+      .getAllByRole('columnheader')
+      .map((c) => c.textContent ?? '')
+    const pypiIdx = headers.findIndex((t) => t.includes('PyPI Latest'))
+    const condaIdx = headers.findIndex((t) => t.includes('conda-forge Latest'))
+    expect(pypiIdx).toBeGreaterThanOrEqual(0)
+    expect(condaIdx).toBe(pypiIdx + 1) // adjacent, PyPI then conda-forge
+  })
+
   it('sorts by status when the Status header is clicked', async () => {
     mockGet.mockResolvedValue(REPORT)
     render(<VersionsTab taskId="t" />)

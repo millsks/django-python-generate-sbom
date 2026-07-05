@@ -2236,10 +2236,11 @@ conditional red font on the conda-forge-latest cells is unaffected; tests assert
 "PyPI Latest" immediately before "conda-forge Latest" and the export sheet has that order + label, and
 `pixi run ci` is green.
 
-<!-- Epic 8 reopened (bugfix): 8.24 fixes a CLASS of wrong conda-forge lookups where a PyPI package
-     has both a same-named conda-forge package (often a C library) AND a python-<name> variant (the
-     actual Python binding). E.g. PyPI xxhash → conda-forge python-xxhash, not xxhash. Extends 8.21's
-     reverse lookup; prefer the python-<name> candidate during inversion so it's not curated one-by-one. -->
+<!-- Epic 8 reopened (bugfix): 8.24 fixes wrong conda-forge lookups where a PyPI name coincides with an
+     unrelated same-named conda-forge package (often a C library). The authoritative answer is
+     parselmouth's "conda package that reports PyPI metadata for X" (prefix-dev.github.io/parselmouth,
+     ?dir=pypi) — e.g. PyPI xxhash -> conda-forge python-xxhash. Use that real mapping data, not a
+     name-shape guess; investigate whether the mapping is even loaded (weekly refresh + MinIO). -->
 
 ### Story 8.24: Fix PyPI → conda-forge python-<name> Disambiguation (Bugfix)
 
@@ -2249,34 +2250,32 @@ non-Python conda-forge package,
 So that version mismatches aren't reported against the wrong conda-forge package.
 
 **Context:** `parselmouth.pypi_to_conda` (`backend/generate_sbom/analysis/services/parselmouth.py`)
-resolves a PyPI name to a conda-forge name via a curated override map, then the inverted parselmouth map
-with **"first mapping wins"**. When conda-forge has BOTH a same-named package (often a C library) AND a
-`python-<name>` variant (the Python binding), the inversion can pick the wrong one. Example: PyPI
-**xxhash** → conda-forge **python-xxhash** (correct), but the lookup can return **xxhash** (the C
-library). Only `build → python-build` is currently curated (Story 8.21) — this is a recurring class, not
-a one-off.
+resolves a PyPI name via a curated override map, then the inverted parselmouth map with **"first mapping
+wins"**, then a **same-name fallback**. Parselmouth's authoritative answer is "the conda-forge package
+that reports PyPI metadata for X" — for PyPI **xxhash** that is **python-xxhash**, not the unrelated
+same-named C library `xxhash`. The mapping (`compressed_mapping.json`) is refreshed **weekly** into
+storage with **no bundled copy**, so before a refresh only a 3-entry seed is present and everything else
+same-name-falls-back — a likely reason `xxhash` resolves wrong in practice. Root cause must be confirmed
+against the real data before fixing.
 
 **Acceptance Criteria:**
 
-**Given** a PyPI package whose conda-forge equivalent is `python-<name>` while a same-named conda-forge
-package also exists,
-**When** `pypi_to_conda(name)` resolves it,
-**Then** it returns the `python-<name>` variant — implemented by **preferring a `python-<pypi_name>`
-candidate during map inversion** (fixing the whole class, not curating one-by-one). Both
-`xxhash → python-xxhash` and `build → python-build` resolve correctly.
+**Given** parselmouth's authoritative "reports PyPI metadata" mapping,
+**When** `pypi_to_conda(name)` resolves a PyPI name,
+**Then** it returns the conda-forge package that reports that project's metadata (PyPI `xxhash` →
+`python-xxhash`), driven by the real `compressed_mapping.json` data — not by assuming a `python-` prefix.
 
-**Given** a PyPI package with no `python-<name>` conda variant (e.g. `requests → requests`,
-`torch → pytorch`),
-**When** resolved,
-**Then** behavior is unchanged — no false `python-` prefixing and no regression to existing renames.
+**Given** the two possible root causes,
+**When** investigated,
+**Then** the fix is chosen from the actual mapping data: either the mapping isn't loaded (so it must be
+made available from first boot, e.g. a bundled snapshot / eager refresh, instead of silently
+same-name-falling-back), or the inverted map is genuinely ambiguous (so the tiebreak follows parselmouth's
+reports-metadata relationship in the data). The curated `_PYPI_TO_CONDA_OVERRIDES` stays highest authority.
 
-**Given** genuine exceptions the heuristic can't cover,
-**When** found,
-**Then** the curated `_PYPI_TO_CONDA_OVERRIDES` map stays the highest-precedence authority.
-
-**Given** the fix,
-**When** complete,
-**Then** unit tests cover `xxhash`, `build`, an unchanged non-python case, and override precedence, and
+**Given** existing behavior,
+**When** the fix lands,
+**Then** renames still resolve (`torch → pytorch`) and single-match names are unchanged
+(`requests → requests`); unit tests cover `xxhash`, a rename, a passthrough, and override precedence, and
 `pixi run ci` is green.
 
 ---

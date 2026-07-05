@@ -1817,6 +1817,48 @@ choice can be revisited if a per-deployment or per-request need emerges.
 **Then** the defaults are unchanged, tests cover the overrides, and `pixi run ci` stays
 green.
 
+### Story 8.21: Fix the PyPI → conda-forge equivalent (reverse) lookup
+
+As a user,
+I want a PyPI package mapped to its correct conda-forge package,
+So that the conda-forge latest / divergence lookup compares against the right package
+(not a coincidentally same-named but unrelated one).
+
+**Context (bug):** parselmouth's mapping is authoritative in the conda→PyPI direction.
+The reverse map (`parselmouth._ensure_loaded`) builds PyPI→conda by inverting it, but it
+**"prefers an identity mapping (conda name == pypi name) when several exist"**
+(`parselmouth.py:62-63`). That heuristic is wrong when the same-named conda package is a
+*different* project: e.g. PyPI **`build`** should map to conda-forge **`python-build`**,
+but conda-forge also has an unrelated **`build`** package, so the identity rule
+overrides `python-build` with `build`. `pypi_to_conda("build")` then returns `build`,
+and `versions._conda_forge_latest` (versions.py:172) queries the wrong conda-forge
+package.
+
+**Acceptance Criteria:**
+
+**Given** a PyPI name whose true conda-forge equivalent has a different name,
+**When** `parselmouth.pypi_to_conda(name)` is called,
+**Then** it returns the correct conda-forge package — e.g. `pypi_to_conda("build")` →
+`python-build` — rather than the coincidentally same-named package.
+
+**Given** the faulty "prefer identity" tie-break,
+**When** the reverse map is rebuilt,
+**Then** that heuristic is removed/replaced so a same-named-but-unrelated conda package
+no longer overrides the authoritative equivalent; a small **curated override table**
+(seeded with `build → python-build`, extendable) resolves known ambiguous PyPI→conda
+cases, and normal 1:1 names (e.g. `numpy → numpy`) are unaffected.
+
+**Given** the conda-forge latest / divergence feature (Story 8.10),
+**When** it looks up a PyPI package's conda-forge counterpart,
+**Then** it uses the corrected mapping, so the conda-forge latest and the
+PyPI/conda-forge divergence flag are computed against the right package.
+
+**Given** the fix,
+**When** complete,
+**Then** tests cover the `build → python-build` case, the identity/1:1 case, and the
+override precedence, and `pixi run ci` is green (backend coverage ≥90%). conda-forge
+data continues to come from **prefix.dev**, not anaconda.
+
 ---
 
 ## Epic 9: Project Management & CI/CD Workflows

@@ -100,5 +100,12 @@ nav:
       - Data Model: developer/data-model.md
       - Testing: developer/testing.md
       - Code Reference: developer/code-reference.md
-  - API Reference: api/index.md
+  - API Reference:
+    - Overview: api/index.md
+    - Authentication: api/authentication.md
+    - Organizations & Membership: api/organizations.md
+    - API Keys: api/api-keys.md
+    - Jobs: api/jobs.md
+    - Reports: api/analysis.md
+    - Artifacts & Downloads: api/artifacts.md
   - Contributing: contributing.md

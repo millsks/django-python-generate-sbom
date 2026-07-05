@@ -78,4 +78,16 @@ describe('LoginPage', () => {
     expect(await screen.findByText(/invalid email or password/i)).toBeInTheDocument()
     expect(screen.queryByText('upload page')).not.toBeInTheDocument()
   })
+
+  it('submits the form when Enter is pressed in a field (Story 10.6)', async () => {
+    mockLogin.mockResolvedValue({ org: null })
+    renderLogin()
+
+    await userEvent.type(screen.getByLabelText(/email/i), 'a@b.com')
+    // Enter in a text field should implicitly submit the form (there is a submit button).
+    await userEvent.type(screen.getByLabelText(/password/i), 'pw12345678{Enter}')
+
+    expect(mockLogin).toHaveBeenCalledWith('a@b.com', 'pw12345678')
+    expect(await screen.findByText('dashboard page')).toBeInTheDocument()
+  })
 })

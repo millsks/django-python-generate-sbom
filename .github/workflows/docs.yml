@@ -1,8 +1,10 @@
 name: Docs
 
 # Builds the MkDocs Material site and deploys it to GitHub Pages on pushes to main
-# that touch the docs (or on demand). Operator prerequisite: in repo Settings →
-# Pages, set Source = "GitHub Actions" (Pages requires a public repo or a paid plan).
+# that touch the docs (or on demand). Also exposed as a reusable workflow so the
+# release workflow can rebuild + republish the docs when a release is cut (Story
+# 11.10). Operator prerequisite: in repo Settings → Pages, set Source = "GitHub
+# Actions" (Pages requires a public repo or a paid plan).
 
 on:
   push:
@@ -12,6 +14,8 @@ on:
       - "mkdocs.yml"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
+  # Reusable: invoked by release.yml after a release is published (Story 11.10).
+  workflow_call:
 
 # Least-privilege token for the Pages deployment.
 permissions:

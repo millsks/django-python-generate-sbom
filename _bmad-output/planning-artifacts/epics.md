@@ -2105,6 +2105,47 @@ agree on which cells are flagged; non-mismatch and empty conda values keep the d
 **Then** a test asserts a mismatched conda-forge-latest cell in the generated sheet has the red
 font (and a non-mismatched cell does not), and `pixi run ci` is green.
 
+<!-- Epic 8 reopened: Story 8.23 puts the PyPI-latest and conda-forge-latest columns side by
+     side in the version currency table (and matches the export), renaming "Latest" to
+     "PyPI Latest" for at-a-glance comparison. Frontend-only; independent of 8.22's red font. -->
+
+### Story 8.23: Version Currency — Side-by-Side PyPI / conda-forge Latest Columns
+
+As a user reading the version currency report,
+I want the "PyPI Latest" and "conda-forge Latest" columns to sit next to each other,
+So that I can compare the two latest versions at a glance without scanning across the other columns.
+
+**Context:** the version currency table shows a "Latest" column (the **PyPI** latest —
+`VersionEntry.latest`, `api/reports.ts:56`; the export already labels it "Latest (PyPI)",
+`reportSheets.ts:18`) separated from "conda-forge Latest" by the Status column
+(`VersionsTab.tsx:31-36,159-161`). Placing the two latest columns adjacent makes PyPI-vs-conda
+comparison direct.
+
+**Acceptance Criteria:**
+
+**Given** the version currency **table**,
+**When** it renders,
+**Then** the "Latest" column is moved to sit immediately **left** of "conda-forge Latest" and its
+header is renamed to **"PyPI Latest"**, so the two latest columns are adjacent in the order
+**PyPI Latest | conda-forge Latest**.
+
+**Given** the renamed column's source,
+**When** labelled,
+**Then** it genuinely shows the **PyPI** latest (verified against `VersionEntry.latest`), so
+"PyPI Latest" is accurate.
+
+**Given** the version-currency Excel export and the Overview "export all" workbook (both via
+`versionCurrencySheet`),
+**When** they are generated,
+**Then** they use the **same** column order and the **"PyPI Latest"** header, so UI and exports match.
+
+**Given** the reorder,
+**When** complete,
+**Then** the default per-tab sort (Story 8.16) still targets its intended column and Story 8.22's
+conditional red font on the conda-forge-latest cells is unaffected; tests assert the tab renders
+"PyPI Latest" immediately before "conda-forge Latest" and the export sheet has that order + label, and
+`pixi run ci` is green.
+
 ---
 
 ## Epic 9: Project Management & CI/CD Workflows

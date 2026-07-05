@@ -70,7 +70,9 @@ development_status:
   # Reopened: 8.18/8.19 add pixi-based conda environment.yml resolution;
   # 8.21 fixes the PyPI->conda-forge reverse lookup.
   # Reopened again: 8.22 carries the version-currency conda-forge-latest red divergence
-  # text into the Excel export (mirrors the 8.10 UI rule in the 8.12 export).
+  # text into the Excel export (mirrors the 8.10 UI rule in the 8.12 export); 8.23 puts the
+  # PyPI-latest and conda-forge-latest columns side by side (table + export), renaming to
+  # "PyPI Latest".
   epic-8: in-progress
   8-1-broaden-lts-coverage-via-endoflife-date: done
   8-2-spike-direct-vs-transitive-dependency-design: done
@@ -95,6 +97,7 @@ development_status:
   8-20-configurable-conda-solve-platform-and-cuda: backlog
   8-21-fix-pypi-to-conda-forge-reverse-lookup: done
   8-22-version-currency-excel-conda-forge-color: ready-for-dev
+  8-23-version-currency-pypi-latest-column: ready-for-dev
 
   # Epic 9 — Project Management & CI/CD Workflows (ported from millsks/idp-app,
   # excluding renovate + disabled workflows). External secrets are operator-supplied.

@@ -76,6 +76,8 @@ development_status:
   8-17-licenses-expand-collapse-all: done
   8-18-spike-conda-environment-yml-via-pixi: done
   8-19-resolve-conda-environment-yml-via-pixi: done
+  # 8-20 is a deferred/parked option (revisit only if needed); Epic 8's committed scope is done.
+  8-20-configurable-conda-solve-platform-and-cuda: backlog
 
   # Epic 9 — Project Management & CI/CD Workflows (ported from millsks/idp-app,
   # excluding renovate + disabled workflows). External secrets are operator-supplied.

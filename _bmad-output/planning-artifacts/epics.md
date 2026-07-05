@@ -1666,6 +1666,90 @@ is decided in Story 8.12 and applied uniformly.
 - **Story 8.17 — Licenses Expand All / Collapse All:** controls to open/close every
   risk-tier accordion at once.
 
+### Story 8.18: [Spike] Resolve conda environment.yml via pixi conversion
+
+As a maintainer,
+I want to validate resolving a conda `environment.yml` by converting it to a pixi
+manifest and solving with pixi (instead of shelling out to mamba/conda),
+So that conda resolution runs through the project's native toolchain and reuses the
+existing pixi.lock parser.
+
+**Context:** The current conda resolver (`sbom/parsers/_conda.py`) shells out to
+`mamba env create --dry-run --json`. It works, but it adds heavy `conda`+`mamba`
+runtime deps, resolves conda-forge via `conda.anaconda.org` (not prefix.dev), and is a
+second, separate resolution path. `pixi init --import environment.yml` (verified with
+pixi 0.72.0) converts an env file to a pixi manifest cleanly (conda deps →
+`[dependencies]`, nested `pip:` → `[pypi-dependencies]`, channels preserved, with a
+`--conda-pypi-map` option). pixi's own solver (rattler, from prefix.dev) can then solve
+it, and the repo already has a `pixi.lock` parser (`sbom/parsers/pixi_lock.resolve`).
+
+**Acceptance Criteria:**
+
+**Given** a range of real `environment.yml` files (simple; with a `pip:` block; with
+build strings and multi-constraint version specs),
+**When** each is converted with `pixi init --import` and solved with `pixi lock`,
+**Then** the spike records whether the conversion is faithful (specs, channels, pip
+extras) and whether `pixi lock` produces a `pixi.lock` that `pixi_lock.resolve` parses
+into the expected `PackageSpec` list (name, version, direct/transitive, ecosystem).
+
+**Given** an `environment.yml` declares no platform,
+**When** pixi solves,
+**Then** the spike decides which platform(s) to solve for (the worker's platform vs. a
+configurable/canonical target) and documents the choice.
+
+**Given** genuinely unsatisfiable inputs (e.g. CUDA-only builds, private packages not
+on conda-forge — like the observed `farm-environment.yaml`),
+**When** solved via pixi,
+**Then** the spike confirms they still fail (as expected) and captures how pixi surfaces
+the reason, so Story 8.19 can present a clear failure message instead of an opaque
+`resolution_failed`.
+
+**Given** the outcome,
+**When** the spike concludes,
+**Then** it gives a go/no-go plus the recommended implementation shape for Story 8.19,
+including whether `conda`+`mamba` can be dropped as runtime deps.
+
+### Story 8.19: Resolve conda environment.yml via pixi (replace the mamba solver)
+
+As a user,
+I want conda `environment.yml` uploads resolved through pixi,
+So that they use the project's native toolchain, reuse the pixi.lock parser, and drop
+the mamba/conda dependency — while genuinely unsolvable environments fail with a clear
+reason.
+
+**Acceptance Criteria:**
+
+**Given** the spike's go decision (Story 8.18),
+**When** the CONDA resolver is reworked,
+**Then** `sbom/parsers/conda.resolve()` converts the uploaded `environment.yml` to a
+pixi manifest (via `pixi init --import` or equivalent), solves it with `pixi lock` (in
+an isolated temp dir, no install — solve only), and parses the resulting `pixi.lock`
+into `PackageSpec`s, reusing `pixi_lock.resolve` (or shared logic) so conda ecosystem +
+direct/transitive tagging are preserved.
+
+**Given** the mamba/conda subprocess is no longer used,
+**When** the change lands,
+**Then** `sbom/parsers/_conda.py` (the mamba/conda path) is removed and `conda` +
+`mamba` are dropped from `pixi.toml` runtime dependencies.
+
+**Given** a solvable `environment.yml`,
+**When** it is uploaded,
+**Then** the SBOM job completes with the expected resolved package list (no
+`resolution_failed`), verified by tests.
+
+**Given** a genuinely unsatisfiable `environment.yml` (CUDA-only builds, private/
+off-conda-forge packages),
+**When** it is resolved,
+**Then** the job fails deliberately (still a `ResolutionError`), but the failure reason
+surfaces the actual solver problem (e.g. "nothing provides __cuda …") rather than an
+opaque status — so the UI can explain why.
+
+**Given** the pipeline and tests,
+**When** complete,
+**Then** `pixi run ci` is green (backend coverage ≥90%), with unit tests mocking the
+pixi solve for a solvable and an unsatisfiable case, and the detection/format wiring for
+`environment.yml`/`.yaml` is unchanged.
+
 ---
 
 ## Epic 9: Project Management & CI/CD Workflows

@@ -17,6 +17,7 @@ import GavelIcon from '@mui/icons-material/Gavel'
 import GroupIcon from '@mui/icons-material/Group'
 import HelpOutlineIcon from '@mui/icons-material/HelpOutlineOutlined'
 import HistoryIcon from '@mui/icons-material/History'
+import HomeIcon from '@mui/icons-material/Home'
 import HourglassTopIcon from '@mui/icons-material/HourglassTop'
 import InfoIcon from '@mui/icons-material/Info'
 import Inventory2Icon from '@mui/icons-material/Inventory2'
@@ -36,6 +37,7 @@ export type IconColor = 'success' | 'warning' | 'error' | 'info' | 'disabled' | 
 
 // --- Navigation destinations ---
 export const NavIcon = {
+  home: HomeIcon,
   upload: CloudUploadIcon,
   history: HistoryIcon,
   keys: VpnKeyIcon,

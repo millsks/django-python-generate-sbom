@@ -737,6 +737,53 @@ consolidated Organization page/route or an admin-gated nav group that reuses the
 **Then** it uses the existing `NavIcon` vocabulary and active-route styling and closes the mobile
 drawer via `onNavigate`, and tests assert it is present for an admin and absent for a non-admin.
 
+<!-- Epic 2 reopened (bugfix): Story 2.12 restricts organization creation to GLOBAL admins only.
+     User-reported issue + confirmed policy decision: self-service create-org (Stories 2.5/2.6) is
+     DELIBERATELY REVERSED — a zero-org user now waits to be added by an admin instead of
+     self-provisioning. Backend gates CreateOrgView on services.is_global_admin; frontend hides the
+     create-org affordances for non-global-admins. Needs a new is_global_admin signal on auth/me +
+     AuthProvider — coordinate with Story 10.5, which also extends auth/me + AuthProvider. -->
+
+### Story 2.12: Restrict Organization Creation to Global Admins (Bugfix)
+
+As the product owner,
+I want only global admins (members of the ADMIN org) to create organizations,
+So that org provisioning is centrally controlled and regular users can't self-provision orgs.
+
+**Context (bug / policy reversal):** Stories 2.5/2.6 shipped self-service org creation — any
+authenticated user (including a zero-org user) can `POST /orgs/create/` and the UI offers "Create
+organization" affordances everywhere. A user-reported issue plus a confirmed policy decision reverse
+this: **only global admins** (`services.is_global_admin`, i.e. members of the ADMIN org where
+`Org.is_admin_org=True`, Story 2.8) may create orgs. Regular users and ordinary org-admins **cannot**.
+A zero-org non-admin now waits to be added by an admin (Story 2.7's add-by-email) rather than
+self-provisioning. `CreateOrgView.post` (`views.py:242-248`) currently performs **no** global-admin
+check, and the frontend surfaces create-org in four places.
+
+**Acceptance Criteria:**
+
+**Given** a request to `POST /orgs/create/`,
+**When** the caller is **not** a global admin (a regular user or an ordinary org-admin),
+**Then** the request is rejected with **403** (`not_global_admin`) and **no org is created**; when the
+caller **is** a global admin the org is created as today (**201**), gating on `services.is_global_admin`.
+
+**Given** the frontend needs to know global-admin status,
+**When** `GET /api/v1/auth/me/` responds,
+**Then** it includes an **`is_global_admin`** boolean and `AuthProvider` exposes it via `useAuth`
+(this extends the same endpoint + provider as Story 10.5 — coordinate so both signals land together).
+
+**Given** a non-global-admin user (including a zero-org user),
+**When** the shell and org-scoped pages render,
+**Then** **all** create-org affordances are hidden — `NoOrgState`'s "Create organization" button,
+`OrgSwitcher`'s zero-org create button **and** its "New organization" menu item (Story 2.5), and
+`OrganizationPage`'s create-org card (Story 2.11) — and a zero-org non-admin sees only an
+"ask an admin to add you" empty state with **no** create button.
+
+**Given** a global admin,
+**When** the same surfaces render,
+**Then** the create-org affordances remain available, and tests cover backend gating
+(non-global-admin → 403, global admin → 201) and frontend visibility (hidden for non-global-admin,
+shown for global admin).
+
 ---
 
 ## Epic 3: Manifest Upload, Job Submission & SBOM Generation
@@ -2482,6 +2529,84 @@ mid-typing re-render.
 **When** implemented,
 **Then** it lives in `LoginPage` (e.g. the email `TextField`'s `autoFocus`) and is covered by a test
 asserting the email input is the focused element after render.
+
+<!-- Epic 10 reopened (bugfix): Story 10.5 fixes the account menu, which shows the ORG name instead
+     of the logged-in user. Root cause: Layout.tsx:115-119 renders activeOrg.name, and AuthProvider
+     calls getMe() (line 37) but DISCARDS the user — AuthValue never exposes it. Fix stores + exposes
+     the current user and shows user.email. Extends the same auth/me + AuthProvider surface as Story
+     2.12 (is_global_admin) — coordinate so both land together. -->
+
+### Story 10.5: Account Menu Shows the Logged-In User, Not the Org (Bugfix)
+
+As a signed-in user,
+I want the account/profile menu to show my own identity,
+So that I can confirm which account I'm logged in as instead of seeing the org name where my name
+should be.
+
+**Context (bug):** The account menu (the `AccountIcon` menu in the app bar) shows the **org** name,
+not the user. Root cause (verified): `Layout.tsx:115-119` renders `activeOrg.name` in the menu, and
+`AuthProvider.tsx` calls `getMe()` (line 37) purely to establish auth but **discards** the returned
+user — the context value (`AuthValue`) never exposes it, so the menu has nothing else to show. There
+is also no identity displayed at all for a zero-org user (the `activeOrg &&` block collapses).
+
+**Acceptance Criteria:**
+
+**Given** `AuthProvider` already calls `getMe()` to establish auth,
+**When** it resolves,
+**Then** the provider **stores** the current `user` (`{id, email}`) and **exposes** it via `useAuth`
+(a new `user` field on `AuthValue`), instead of discarding the `getMe()` result.
+
+**Given** the account menu in `Layout`,
+**When** it renders for a signed-in user,
+**Then** it shows the logged-in **user's email** (`user.email`) as the primary identity; the active
+org may remain as a **secondary** context line if desired, but the user identity is what the menu
+leads with.
+
+**Given** a signed-in user with **zero** orgs,
+**When** the account menu renders,
+**Then** it still shows the user's email (identity does not depend on having an active org, Story 2.6).
+
+**Given** the fix,
+**When** implemented,
+**Then** it extends the same `auth/me` + `AuthProvider` surface as Story 2.12's `is_global_admin`
+(coordinate so both signals land on `AuthValue` together), and a test asserts the account menu shows
+the logged-in user's email.
+
+<!-- Epic 10 reopened (bugfix): Story 10.6 — pressing Enter on the login screen doesn't submit the
+     form (user must click the button). LoginPage LOOKS correct (Paper component="form" onSubmit +
+     Button type="submit"), so the story first REPRODUCES via a test simulating Enter, then fixes
+     whatever it reveals. Frontend-only. -->
+
+### Story 10.6: Login Form Submits on Enter (Bugfix)
+
+As a user on the login screen,
+I want to press Enter in a field to submit the form,
+So that I can log in with the keyboard instead of having to click the button.
+
+**Context (bug):** Pressing **Enter** while focused in the email or password field does **not** submit
+the login form — the user must click "Log in". `LoginPage.tsx` *looks* correct: a
+`<Paper component="form" onSubmit={handleSubmit}>` wrapping the fields with a `<Button type="submit">`
+(`LoginPage.tsx:49-77`), which should give implicit form submission. Because the structure appears
+right, this story is **test-first**: reproduce the failure before changing code.
+
+**Acceptance Criteria:**
+
+**Given** the reported bug,
+**When** work starts,
+**Then** a **failing test is written first** that simulates pressing **Enter** in the email (or
+password) field and asserts the form submits (`login` is called / `handleSubmit` runs) — reproducing
+the bug before any fix.
+
+**Given** the reproduction,
+**When** the root cause is identified,
+**Then** the fix makes implicit submission work with the MUI `Paper component="form"` structure
+(verify the rendered element is a real `<form>` and Enter triggers `onSubmit`); the change stays
+minimal and does not regress the existing click-to-submit path.
+
+**Given** the fix,
+**When** implemented,
+**Then** pressing **Enter** in a login field submits the form, and the test that reproduced the bug now
+passes (both Enter-to-submit and click-to-submit are covered).
 
 ---
 

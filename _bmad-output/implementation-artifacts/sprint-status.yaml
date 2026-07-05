@@ -28,8 +28,13 @@ development_status:
   2-9-membership-edge-cases: done
   # Reopened: 2.10 restores admin new-user provisioning (distinct from add-existing, which
   # 2.7 left raising no_such_user); 2.11 adds an admin-gated "Organization" nav control center.
-  2-10-admin-create-new-user-account: review
-  2-11-org-maintenance-navigation-for-admins: review
+  2-10-admin-create-new-user-account: done
+  2-11-org-maintenance-navigation-for-admins: done
+  # Reopened (bugfix): 2.12 restricts org creation to GLOBAL admins only — deliberately reverses
+  # the self-service create-org from 2.5/2.6. Gates CreateOrgView on is_global_admin, adds
+  # is_global_admin to auth/me + AuthProvider (coordinates with 10.5), and hides the create-org
+  # affordances for non-global-admins.
+  2-12-restrict-org-creation-to-global-admins: ready-for-dev
 
   epic-3: done
   3-1-manifest-upload-and-format-detection: done
@@ -73,7 +78,7 @@ development_status:
   # text into the Excel export (mirrors the 8.10 UI rule in the 8.12 export); 8.23 puts the
   # PyPI-latest and conda-forge-latest columns side by side (table + export), renaming to
   # "PyPI Latest".
-  epic-8: in-progress
+  epic-8: done
   8-1-broaden-lts-coverage-via-endoflife-date: done
   8-2-spike-direct-vs-transitive-dependency-design: done
   8-3-capture-direct-transitive-relationships-during-resolution: done
@@ -96,8 +101,8 @@ development_status:
   # 8-20 is a deferred/parked option (revisit only if needed); Epic 8's committed scope is done.
   8-20-configurable-conda-solve-platform-and-cuda: backlog
   8-21-fix-pypi-to-conda-forge-reverse-lookup: done
-  8-22-version-currency-excel-conda-forge-color: review
-  8-23-version-currency-pypi-latest-column: review
+  8-22-version-currency-excel-conda-forge-color: done
+  8-23-version-currency-pypi-latest-column: done
 
   # Epic 9 — Project Management & CI/CD Workflows (ported from millsks/idp-app,
   # excluding renovate + disabled workflows). External secrets are operator-supplied.
@@ -113,11 +118,16 @@ development_status:
   # Epic 10 — UI Navigation & Authenticated Routing (frontend).
   # Reopened: 10.3 auto-redirects to login ~5s after successful registration;
   # 10.4 autofocuses the login email field so the redirected user can type immediately.
+  # Reopened again (bugfix): 10.5 shows the logged-in user (not the org) in the account menu —
+  # AuthProvider now exposes the getMe() user (coordinates with 2.12's is_global_admin);
+  # 10.6 makes the login form submit on Enter (test-first reproduction, then fix).
   epic-10: in-progress
   10-1-app-shell-and-auth-aware-navigation: done
   10-2-redirect-to-login-and-back: done
   10-3-auto-redirect-to-login-after-registration: done
-  10-4-autofocus-email-on-login: review
+  10-4-autofocus-email-on-login: done
+  10-5-account-menu-shows-logged-in-user: ready-for-dev
+  10-6-login-submits-on-enter: ready-for-dev
 
   # Epic 11 — Project Documentation (MkDocs Material → GitHub Pages; markdown).
   # 11-1 (site scaffold) is the foundation; 11-2..11-5 add pages/nav to mkdocs.yml;
@@ -126,7 +136,7 @@ development_status:
   # Reopened: 11.11-11.14 reconcile the docs with the Epic 2 org-membership rework
   # (zero-org users, create-org UI, add-by-email, global-admin ADMIN org, auth/me) plus a
   # general drift sweep. Implemented AFTER Epic 2 is done; contexted just-in-time then.
-  epic-11: in-progress
+  epic-11: done
   11-1-documentation-site-scaffold-and-github-pages: done
   11-2-user-guide: done
   11-3-how-to-guides: done
@@ -137,10 +147,10 @@ development_status:
   11-8-repository-and-documentation-header-links: done
   11-9-openapi-schema-and-swagger-ui-endpoint: done
   11-10-publish-documentation-on-release: done
-  11-11-user-facing-documentation-reconciliation: review
-  11-12-api-reference-and-openapi-reconciliation: review
-  11-13-developer-documentation-reconciliation: review
-  11-14-cross-cutting-documentation-audit-and-refresh: review
+  11-11-user-facing-documentation-reconciliation: done
+  11-12-api-reference-and-openapi-reconciliation: done
+  11-13-developer-documentation-reconciliation: done
+  11-14-cross-cutting-documentation-audit-and-refresh: done
 
   # Epic 12 — UI/UX Visual Design & Professional Polish (frontend; refines Epic 10
   # shell + Story 5.7 theme). 12-1 (theme/design system) is the foundation; 12-2 icons

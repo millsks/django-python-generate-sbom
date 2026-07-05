@@ -2236,6 +2236,51 @@ conditional red font on the conda-forge-latest cells is unaffected; tests assert
 "PyPI Latest" immediately before "conda-forge Latest" and the export sheet has that order + label, and
 `pixi run ci` is green.
 
+<!-- Epic 8 reopened (bugfix): 8.24 fixes wrong conda-forge lookups where a PyPI name coincides with an
+     unrelated same-named conda-forge package (often a C library). The authoritative answer is
+     parselmouth's "conda package that reports PyPI metadata for X" (prefix-dev.github.io/parselmouth,
+     ?dir=pypi) — e.g. PyPI xxhash -> conda-forge python-xxhash. Use that real mapping data, not a
+     name-shape guess; investigate whether the mapping is even loaded (weekly refresh + MinIO). -->
+
+### Story 8.24: Fix PyPI → conda-forge python-<name> Disambiguation (Bugfix)
+
+As a user reading the version-currency report,
+I want the conda-forge column to resolve to the correct package when a PyPI name collides with a
+non-Python conda-forge package,
+So that version mismatches aren't reported against the wrong conda-forge package.
+
+**Context:** `parselmouth.pypi_to_conda` (`backend/generate_sbom/analysis/services/parselmouth.py`)
+resolves a PyPI name via a curated override map, then the inverted parselmouth map with **"first mapping
+wins"**, then a **same-name fallback**. Parselmouth's authoritative answer is "the conda-forge package
+that reports PyPI metadata for X" — for PyPI **xxhash** that is **python-xxhash**, not the unrelated
+same-named C library `xxhash`. The mapping (`compressed_mapping.json`) is refreshed **weekly** into
+storage with **no bundled copy**, so before a refresh only a 3-entry seed is present and everything else
+same-name-falls-back — a likely reason `xxhash` resolves wrong in practice. Root cause must be confirmed
+against the real data before fixing.
+
+**Acceptance Criteria:**
+
+**Given** parselmouth's `compressed_mapping.json` (33,415 entries) is loaded as a baseline from first boot
+— not just the 3-entry seed,
+**When** `pypi_to_conda(name)` resolves an unambiguous PyPI name,
+**Then** it returns the correct conda-forge package (e.g. `xxhash → python-xxhash`, since the map has
+`python-xxhash → xxhash` and `xxhash → None`); this fixes the ~19,700 single-match names that previously
+same-name-fell-back because the weekly refresh hadn't populated the map.
+
+**Given** a PyPI name with more than one conda candidate (~297 of ~20,000, e.g. `build → build` AND
+`python-build → build`),
+**When** it is resolved,
+**Then** parselmouth's authoritative per-package data (`pypi-to-conda-v1/conda-forge/<name>.json`, latest
+release) decides it (`build → python-build`) — a cached lookup only for ambiguous names — with
+`_PYPI_TO_CONDA_OVERRIDES` as the highest-precedence fast path and a deterministic fallback if the
+per-package lookup fails.
+
+**Given** existing behavior,
+**When** the fix lands,
+**Then** renames still resolve (`torch → pytorch`) and single-match names are unchanged
+(`requests → requests`); unit tests (no live network; per-package mocked) cover xxhash, an ambiguous name,
+a passthrough, override precedence, and per-package failure, and `pixi run ci` is green.
+
 ---
 
 ## Epic 9: Project Management & CI/CD Workflows

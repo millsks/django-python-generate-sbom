@@ -79,7 +79,9 @@ development_status:
   # text into the Excel export (mirrors the 8.10 UI rule in the 8.12 export); 8.23 puts the
   # PyPI-latest and conda-forge-latest columns side by side (table + export), renaming to
   # "PyPI Latest".
-  epic-8: done
+  # Reopened again (bugfix): 8.24 fixes the PyPI->conda-forge python-<name> disambiguation
+  # (e.g. PyPI xxhash -> conda-forge python-xxhash, not the same-named C library).
+  epic-8: in-progress
   8-1-broaden-lts-coverage-via-endoflife-date: done
   8-2-spike-direct-vs-transitive-dependency-design: done
   8-3-capture-direct-transitive-relationships-during-resolution: done
@@ -104,6 +106,7 @@ development_status:
   8-21-fix-pypi-to-conda-forge-reverse-lookup: done
   8-22-version-currency-excel-conda-forge-color: done
   8-23-version-currency-pypi-latest-column: done
+  8-24-fix-pypi-conda-forge-python-name-disambiguation: ready-for-dev
 
   # Epic 9 — Project Management & CI/CD Workflows (ported from millsks/idp-app,
   # excluding renovate + disabled workflows). External secrets are operator-supplied.

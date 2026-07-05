@@ -9,3 +9,7 @@ class UsersConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "generate_sbom.users"
     label = "users"
+
+    def ready(self) -> None:
+        """Register the drf-spectacular auth extension (Story 11.9)."""
+        from . import schema  # noqa: F401  (import for its registration side effect)

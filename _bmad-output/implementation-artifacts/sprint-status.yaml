@@ -100,8 +100,8 @@ development_status:
   11-3-how-to-guides: backlog
   11-4-developer-documentation: backlog
   11-5-rest-api-reference: backlog
-  11-6-contribution-and-project-meta-documentation: backlog
-  11-7-readme-overhaul: backlog
+  11-6-contribution-and-project-meta-documentation: done
+  11-7-readme-overhaul: done
   11-8-repository-and-documentation-header-links: done
   11-9-openapi-schema-and-swagger-ui-endpoint: backlog
   11-10-publish-documentation-on-release: backlog

@@ -1986,6 +1986,8 @@ Actions** in repo settings so the `docs.yml` deploy can publish (flagged in 11.1
   badges, quick start, screenshots, links to the docs site, license).
 - FR-DOC8: The app's top navigation exposes quick-access icon links to the **source
   repository** and the **published documentation site**.
+- FR-DOC9: The backend serves an **OpenAPI schema** and interactive **Swagger UI** at
+  standard endpoints, generated from the live DRF API.
 
 ### Story 11.1: Documentation Site Scaffold & GitHub Pages Deployment
 
@@ -2235,6 +2237,44 @@ theme toggle / user menu without disrupting the existing nav, org switcher, or l
 **When** implemented,
 **Then** a test covers that both links render with the correct `href`, `target`, and
 accessible label.
+
+### Story 11.9: OpenAPI Schema & Swagger UI Endpoint
+
+As a developer integrating with the API,
+I want interactive Swagger/OpenAPI docs served by the app at a standard endpoint,
+So that I can explore and try the REST API live without reading source or hand-written docs.
+
+**Acceptance Criteria:**
+
+**Given** the DRF API,
+**When** OpenAPI generation is added,
+**Then** `drf-spectacular` (a **new dependency — flagged**, user-requested) generates an
+OpenAPI 3 schema from the live viewsets/serializers, served at a standard **schema
+endpoint** (e.g. `/api/schema/`) (FR-DOC9).
+
+**Given** the schema,
+**When** the docs UI is wired,
+**Then** interactive **Swagger UI** is served at a standard endpoint (e.g.
+`/api/docs/`), and ReDoc (e.g. `/api/redoc/`) may also be exposed; the assets are
+self-hosted (e.g. `drf-spectacular-sidecar`) so the UI works without external CDNs.
+
+**Given** the app's auth,
+**When** the schema is generated,
+**Then** it reflects the real authentication schemes (session + API key), groups
+endpoints with sensible tags, and `SPECTACULAR_SETTINGS` sets the title, description,
+and version; `DEFAULT_SCHEMA_CLASS` points at drf-spectacular's `AutoSchema`.
+
+**Given** exposure of the endpoints,
+**When** configured,
+**Then** access is deliberate — the docs/schema endpoints are available in development
+and their availability in production is configurable (documented) rather than
+accidentally always-public.
+
+**Given** the rest of the documentation,
+**When** implemented,
+**Then** the Story 11.5 API reference and the docs site link to the live Swagger UI
+(and the schema may feed the 11.5 reference), and a test asserts the schema and
+Swagger-UI endpoints return 200 with a valid schema.
 
 ---
 

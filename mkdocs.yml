@@ -41,6 +41,21 @@ theme:
 
 plugins:
   - search
+  - mkdocstrings:
+      # Static (griffe) rendering of the backend docstrings — no Django runtime import.
+      # `paths` points griffe at backend/ so the generate_sbom package resolves.
+      handlers:
+        python:
+          paths: [backend]
+          options:
+            docstring_style: google
+            show_source: false
+            show_root_heading: true
+            show_root_full_path: false
+            show_if_no_docstring: false
+            members_order: source
+            separate_signature: true
+            filters: ["!^_"]
 
 markdown_extensions:
   - admonition
@@ -59,7 +74,6 @@ markdown_extensions:
       check_paths: true
 
 nav:
-  - Home: index.md
   - User Guide:
       - user-guide/index.md
       - Accounts & Organizations: user-guide/accounts-and-organizations.md
@@ -77,6 +91,14 @@ nav:
       - Export a report to Excel: how-to/export-to-excel.md
       - Create and use an API key: how-to/manage-api-keys.md
       - Invite a member / switch organizations: how-to/manage-organization.md
-  - Developer: developer/index.md
+  - Developer:
+      - developer/index.md
+      - Architecture: developer/architecture.md
+      - Local Development: developer/setup.md
+      - Project Layout: developer/project-layout.md
+      - SBOM Pipeline: developer/pipeline.md
+      - Data Model: developer/data-model.md
+      - Testing: developer/testing.md
+      - Code Reference: developer/code-reference.md
   - API Reference: api/index.md
   - Contributing: contributing.md

@@ -49,10 +49,10 @@ development_status:
   6-2-live-progress-polling: done
   6-3-job-elapsed-time-on-history-page: done
 
-  epic-7: in-progress
+  epic-7: done
   7-1-scheduled-artifact-expiry-and-cleanup: done
   7-2-manual-and-bulk-artifact-deletion: done
-  7-3-expired-artifact-ui-indication: in-progress
+  7-3-expired-artifact-ui-indication: done
 
   # Epic 8 — SBOM Enrichment & In-App Viewing (post-v1 enhancement).
   # 8.3-8.5 stay backlog until the 8.2 spike settles the direct/transitive mechanism.
@@ -122,7 +122,7 @@ development_status:
   12-1-theme-and-design-system-foundation: done
   12-2-material-icons-adoption: done
   12-3-application-layout-header-footer-side-navigation: done
-  12-4-page-level-visual-polish-and-states: backlog
+  12-4-page-level-visual-polish-and-states: in-progress
   12-5-branding-and-visual-identity: done
   12-6-set-the-spa-document-title: done
   12-7-update-the-site-favicon: done

@@ -1,6 +1,6 @@
 # Story 9.4: Repository Maintenance Workflow
 
-Status: ready-for-dev
+Status: review
 
 <!-- Ports idp-app/.github/workflows/maintenance.yml. -->
 
@@ -34,6 +34,17 @@ Source: `idp-app/.github/workflows/maintenance.yml` (jobs: `cleanup-artifacts` v
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Completion Notes List
 
+- Added `.github/workflows/maintenance.yml` (schedule: Sundays 02:00 UTC + `workflow_dispatch`).
+- `cleanup-runs` job: `Mattraks/delete-workflow-runs@v2` with `retain_days: 30`, `keep_minimum_runs: 10`, `actions: write` permission (AC #1).
+- `security-audit` job: `setup-pixi@v0.8.1`, reuses the Story 9.7 pixi tasks `security` (bandit) and `fe-security` (npm audit) — no new pixi tasks added — captures each to a report file, uploads them as the `security-reports` artifact (AC #2), and writes a tail of each to `$GITHUB_STEP_SUMMARY`.
+- Audit is **non-blocking** (`|| true` + `if: always()` on summary/upload) so scheduled maintenance never fails on findings (AC #3).
+- Scope: only `.github/workflows/maintenance.yml` + this story file. `pixi.toml` untouched (per coordination with the sibling CI fork).
+- `pixi run ci` exits 0; workflow YAML validated by the check-yaml pre-commit hook.
+
 ### File List
+
+- `.github/workflows/maintenance.yml` (new)

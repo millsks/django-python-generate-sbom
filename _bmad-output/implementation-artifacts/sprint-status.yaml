@@ -28,8 +28,8 @@ development_status:
   2-9-membership-edge-cases: done
   # Reopened: 2.10 restores admin new-user provisioning (distinct from add-existing, which
   # 2.7 left raising no_such_user); 2.11 adds an admin-gated "Organization" nav control center.
-  2-10-admin-create-new-user-account: ready-for-dev
-  2-11-org-maintenance-navigation-for-admins: ready-for-dev
+  2-10-admin-create-new-user-account: review
+  2-11-org-maintenance-navigation-for-admins: review
 
   epic-3: done
   3-1-manifest-upload-and-format-detection: done

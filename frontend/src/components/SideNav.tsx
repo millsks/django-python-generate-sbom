@@ -38,7 +38,12 @@ export function SideNav({
   activeOrg: OrgSummary | null
   onNavigate?: () => void
 }) {
-  const items = isAdmin ? [...NAV_ITEMS, { to: '/members', label: 'Members', Icon: NavIcon.members }] : NAV_ITEMS
+  // Admins get an "Organization" control center (Story 2.11) plus the Members link.
+  const adminItems: NavDest[] = [
+    { to: '/organization', label: 'Organization', Icon: NavIcon.organization },
+    { to: '/members', label: 'Members', Icon: NavIcon.members },
+  ]
+  const items = isAdmin ? [...NAV_ITEMS, ...adminItems] : NAV_ITEMS
 
   return (
     <>

@@ -81,6 +81,61 @@ def test_add_existing_member_rejected() -> None:
 
 
 @pytest.mark.django_db
+def test_create_new_user_and_add() -> None:
+    """An admin can create a brand-new user and add them in one step (Story 2.10)."""
+    _register_with_org("alice@example.com", "Alice")
+    client = _client("alice@example.com")
+
+    response = client.post(
+        "/api/v1/orgs/members/create-user/",
+        {"email": "newbie@example.com", "temp_password": "temp12345"},
+        format="json",
+    )
+
+    assert response.status_code == 201
+    assert response.data["email"] == "newbie@example.com"
+    newbie = User.objects.get(email="newbie@example.com")
+    assert OrgMembership.objects.filter(org__slug="alice", user=newbie, role="member").exists()
+
+
+@pytest.mark.django_db
+def test_create_user_duplicate_email_rejected() -> None:
+    """Creating a user whose email is already registered returns email_taken (Story 2.10)."""
+    _register_with_org("alice@example.com", "Alice")
+    register_user(email="bob@example.com", password="pw12345678")
+    client = _client("alice@example.com")
+
+    response = client.post(
+        "/api/v1/orgs/members/create-user/",
+        {"email": "bob@example.com", "temp_password": "temp12345"},
+        format="json",
+    )
+
+    assert response.status_code == 400
+    assert response.data["code"] == "email_taken"
+    assert not OrgMembership.objects.filter(org__slug="alice", user__email="bob@example.com").exists()
+
+
+@pytest.mark.django_db
+def test_create_user_forbidden_for_non_admin() -> None:
+    """create-user is admin-gated: a plain member gets 403 (Story 2.10)."""
+    _register_with_org("alice@example.com", "Alice")
+    admin = _client("alice@example.com")
+    _add_member(admin, "bob@example.com")
+    bob_client = _client("bob@example.com")
+
+    response = bob_client.post(
+        "/api/v1/orgs/members/create-user/",
+        {"email": "newbie@example.com", "temp_password": "temp12345"},
+        format="json",
+    )
+
+    assert response.status_code == 403
+    assert response.data["code"] == "not_admin"
+    assert not User.objects.filter(email="newbie@example.com").exists()
+
+
+@pytest.mark.django_db
 def test_remove_member() -> None:
     _register_with_org("alice@example.com", "Alice")
     client = _client("alice@example.com")

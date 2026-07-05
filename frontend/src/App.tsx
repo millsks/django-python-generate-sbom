@@ -4,6 +4,7 @@ import { RegisterPage } from './pages/RegisterPage'
 import { LoginPage } from './pages/LoginPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { MembersPage } from './pages/MembersPage'
+import { OrganizationPage } from './pages/OrganizationPage'
 import { KeysPage } from './pages/KeysPage'
 import { UploadPage } from './pages/UploadPage'
 import { ResultsPage } from './pages/ResultsPage'
@@ -26,6 +27,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <DashboardPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/organization"
+              element={
+                <ProtectedRoute>
+                  <OrganizationPage />
                 </ProtectedRoute>
               }
             />

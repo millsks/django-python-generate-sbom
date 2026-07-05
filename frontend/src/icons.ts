@@ -6,6 +6,7 @@ import AccountCircleIcon from '@mui/icons-material/AccountCircle'
 import AddIcon from '@mui/icons-material/Add'
 import AttachFileIcon from '@mui/icons-material/AttachFile'
 import BugReportIcon from '@mui/icons-material/BugReport'
+import BusinessIcon from '@mui/icons-material/Business'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import DashboardIcon from '@mui/icons-material/Dashboard'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined'
@@ -39,6 +40,7 @@ export const NavIcon = {
   history: HistoryIcon,
   keys: VpnKeyIcon,
   members: GroupIcon,
+  organization: BusinessIcon,
 } as const
 
 // --- Primary actions ---

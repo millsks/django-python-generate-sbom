@@ -20,6 +20,7 @@ from .selectors import get_api_keys, get_org_members, get_user_orgs
 from .serializers import (
     AddMemberSerializer,
     CreateKeySerializer,
+    CreateMemberUserSerializer,
     CreateOrgSerializer,
     LoginSerializer,
     RegistrationSerializer,
@@ -29,6 +30,7 @@ from .services import (
     MembershipError,
     create_api_key,
     create_member,
+    create_member_user,
     create_org,
     grant_global_admin,
     is_global_admin,
@@ -267,6 +269,32 @@ class MembersView(APIView):
             return _validation_error(serializer.errors)
         try:
             user = create_member(org, serializer.validated_data["email"])
+        except MembershipError as exc:
+            return _membership_error(exc)
+        return Response({"user_id": user.pk, "email": user.email}, status=status.HTTP_201_CREATED)
+
+
+class CreateMemberUserView(APIView):
+    """Create a brand-new user and add them to the active org (admin only, Story 2.10).
+
+    Distinct from ``MembersView.post`` (add existing by email): this provisions a new
+    account with an admin-set temporary password. Duplicate email → ``email_taken``.
+    """
+
+    def post(self, request: Request) -> Response:
+        """Create the user + membership, or return a 403/400 envelope."""
+        org = get_admin_org(request)
+        if org is None:
+            return Response(_NOT_ADMIN, status=status.HTTP_403_FORBIDDEN)
+        serializer = CreateMemberUserSerializer(data=request.data)
+        if not serializer.is_valid():
+            return _validation_error(serializer.errors)
+        try:
+            user = create_member_user(
+                org,
+                serializer.validated_data["email"],
+                serializer.validated_data["temp_password"],
+            )
         except MembershipError as exc:
             return _membership_error(exc)
         return Response({"user_id": user.pk, "email": user.email}, status=status.HTTP_201_CREATED)

@@ -125,6 +125,13 @@ class NoSuchUserError(MembershipError):
     message = "No registered user with that email."
 
 
+class EmailTakenError(MembershipError):
+    """Raised when creating a new user whose email is already registered (Story 2.10)."""
+
+    code = "email_taken"
+    message = "A user with that email already exists — add them as an existing member instead."
+
+
 class AdminOrgProtectedError(MembershipError):
     """Raised when an op would leave the ADMIN org without a global admin (Story 2.9)."""
 
@@ -235,6 +242,24 @@ def create_member(org: Org, email: str, role: str = OrgMembership.Role.MEMBER) -
         raise AlreadyMemberError
     OrgMembership.objects.create(org=org, user=user, role=role)
     logger.info("member_added", org_id=org.pk, user_id=user.pk, role=role)
+    return user
+
+
+@transaction.atomic
+def create_member_user(org: Org, email: str, temp_password: str, role: str = OrgMembership.Role.MEMBER) -> User:
+    """Create a brand-new user and add them to ``org`` in one step (Story 2.10).
+
+    Distinct from ``create_member`` (add-existing, Story 2.7): this provisions a new
+    account with an admin-set temporary password shared out-of-band (there is no
+    transactional email). Raises ``EmailTakenError`` if the email is already
+    registered so the admin uses "add existing" instead of silently duplicating.
+    The plaintext password is never logged.
+    """
+    if User.objects.filter(email__iexact=email).exists():
+        raise EmailTakenError
+    user = User.objects.create_user(email=email, password=temp_password)
+    OrgMembership.objects.create(org=org, user=user, role=role)
+    logger.info("member_created", org_id=org.pk, user_id=user.pk, role=role)
     return user
 
 

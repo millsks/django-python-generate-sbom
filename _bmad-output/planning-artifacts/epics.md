@@ -1988,6 +1988,8 @@ Actions** in repo settings so the `docs.yml` deploy can publish (flagged in 11.1
   repository** and the **published documentation site**.
 - FR-DOC9: The backend serves an **OpenAPI schema** and interactive **Swagger UI** at
   standard endpoints, generated from the live DRF API.
+- FR-DOC10: The documentation site is rebuilt and republished as part of the release
+  workflow, so a cut release always refreshes the published docs.
 
 ### Story 11.1: Documentation Site Scaffold & GitHub Pages Deployment
 
@@ -2275,6 +2277,42 @@ accidentally always-public.
 **Then** the Story 11.5 API reference and the docs site link to the live Swagger UI
 (and the schema may feed the 11.5 reference), and a test asserts the schema and
 Swagger-UI endpoints return 200 with a valid schema.
+
+### Story 11.10: Publish Documentation on Release
+
+As a maintainer,
+I want the docs rebuilt and republished when a release is cut,
+So that the published documentation always reflects the latest release, not just the last docs edit.
+
+**Acceptance Criteria:**
+
+**Given** the release workflow (Story 9.3 `release.yml`),
+**When** a release is successfully cut,
+**Then** the documentation site is rebuilt and republished to GitHub Pages as part of
+that run (FR-DOC10).
+
+**Given** the docs deploy already exists (Story 11.1 `docs.yml`),
+**When** the release publishes docs,
+**Then** it **reuses** that build/deploy mechanism rather than duplicating it — e.g.
+refactor the docs deploy into a reusable `workflow_call` job that both `docs.yml`
+(on-push) and `release.yml` (on-release) invoke, or have the release trigger it — so
+the mkdocs build + Pages deploy live in one place.
+
+**Given** GitHub Pages allows a single concurrent deployment,
+**When** an on-push docs deploy and an on-release docs deploy could overlap,
+**Then** a Pages **concurrency group** serializes them so a release publish and a
+docs-change publish don't collide or cancel each other destructively.
+
+**Given** the release may no-op (no changes since the last tag),
+**When** the scheduled release run skips,
+**Then** the docs publish behaves sensibly (either also skips or republishes the
+current site) without failing the workflow.
+
+**Given** the operator prerequisite from Story 11.1,
+**When** the release publishes docs,
+**Then** it relies on the same GitHub Pages setup (Source = GitHub Actions) and App
+token/permissions already configured — no new external secret beyond those from
+Stories 11.1 and 9.3.
 
 ---
 

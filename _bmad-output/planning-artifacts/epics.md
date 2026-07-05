@@ -2445,6 +2445,7 @@ polish) applies 12.1–12.3 across the pages; 12.5 (branding) is light and can l
   visible focus, and labels on icon-only controls.
 - FR-UI7: The SPA has a proper document title (the product name), replacing the
   placeholder "frontend".
+- FR-UI8: The site uses a deliberate favicon (not a scaffold placeholder).
 
 ### Story 12.1: Theme & Design System Foundation
 
@@ -2627,3 +2628,38 @@ acceptable but the base title fix is the required part.
 **When** implemented,
 **Then** the title matches the app name established for the header/branding (Story 12.5)
 and the `config.ts` app identity, avoiding a second hard-coded name string.
+
+### Story 12.7: Update the Site Favicon
+
+As a user,
+I want the browser tab to show a real favicon,
+So that the app is recognizable and looks finished, not a scaffold default.
+
+**Acceptance Criteria:**
+
+**Given** `frontend/index.html` currently links a scaffold favicon (`/favicon.svg`),
+**When** the favicon is updated,
+**Then** it is replaced with the deliberate favicon asset in `frontend/public/`, wired
+via the `<link rel="icon">` tag(s) (with appropriate size/format variants), and shows
+in the browser tab (FR-UI8).
+
+**Given** the favicon should be license-clean and consistent with the app's iconography,
+**When** the asset is chosen,
+**Then** it is derived from a **Material Design icon** in `@mui/icons-material` (already
+a dependency; Material icons are Apache-2.0 licensed — no trademark concern, unlike the
+Python logo), picking an icon apt for an SBOM tool (candidates: `AccountTree` / `Hub`
+for the dependency graph, `Inventory2` for a bill of materials, or `Shield` /
+`VerifiedUser` for the security angle).
+
+**Given** the chosen icon,
+**When** the favicon is produced,
+**Then** the icon's SVG is emitted as a static `frontend/public/favicon.svg` colored
+with the brand palette (e.g. primary red `#D71E28` on a suitable background), and wired
+via `<link rel="icon">` (with size/format variants as needed) so it renders crisply in
+the browser tab.
+
+**Given** the favicon and branding,
+**When** complete,
+**Then** the favicon matches the app's Material icon vocabulary (Story 12.2) and the
+app-name/logo treatment (coordinated with Story 12.5, which owns the broader visual
+identity; 12.7 owns the favicon specifically).

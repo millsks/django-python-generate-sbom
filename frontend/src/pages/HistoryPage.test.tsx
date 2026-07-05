@@ -27,7 +27,13 @@ const mockAuth = useAuth as Mock
 
 beforeEach(() => {
   // Default: a signed-in non-admin. Admin-only affordances are opt-in per test.
-  mockAuth.mockReturnValue({ status: 'authed', activeOrg: null, isAdmin: false, refresh: vi.fn(), logout: vi.fn() })
+  mockAuth.mockReturnValue({
+    status: 'authed',
+    activeOrg: { slug: 'acme', name: 'Acme' },
+    isAdmin: false,
+    refresh: vi.fn(),
+    logout: vi.fn(),
+  })
   mockDelete.mockResolvedValue({ task_id: 'abc-123', deleted: true })
   mockBulk.mockResolvedValue({ deleted: 1 })
 })
@@ -186,7 +192,13 @@ describe('HistoryPage', () => {
   })
 
   it('offers org-wide delete to admins and calls the all-org endpoint', async () => {
-    mockAuth.mockReturnValue({ status: 'authed', activeOrg: null, isAdmin: true, refresh: vi.fn(), logout: vi.fn() })
+    mockAuth.mockReturnValue({
+      status: 'authed',
+      activeOrg: { slug: 'acme', name: 'Acme' },
+      isAdmin: true,
+      refresh: vi.fn(),
+      logout: vi.fn(),
+    })
     mockList.mockResolvedValue(page([JOB]))
     renderPage()
     await screen.findByRole('table')

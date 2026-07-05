@@ -11,7 +11,7 @@ from generate_sbom.sbom.generation import Provenance, generate_sbom_document
 from generate_sbom.sbom.models import SBOMJob
 from generate_sbom.sbom.parsers import PackageSpec
 from generate_sbom.sbom.services import finalize_job
-from generate_sbom.users.services import register_user
+from generate_sbom.users.services import create_org, register_user
 
 PKGS = [PackageSpec(name="django", version="5.2.1"), PackageSpec(name="asgiref", version="3.8.1")]
 PROV = Provenance(
@@ -128,7 +128,7 @@ def test_metadata_precedes_components_in_document(output_format: str, meta_marke
 
 def _make_job(output_format: str = "cyclonedx-json", email: str = "alice@example.com") -> SBOMJob:
     user = register_user(email=email, password="pw12345678")
-    org = user.org_memberships.select_related("org").get().org
+    org = create_org(name=user.email.split("@")[0], admin_user=user)
     upload = ManifestUpload(
         org=org,
         user=user,
@@ -177,7 +177,7 @@ def test_document_endpoint_returns_components_and_raw() -> None:
 def test_document_endpoint_cross_org_404() -> None:
     job = _make_job()
     _complete(job)
-    register_user(email="bob@example.com", password="pw12345678")
+    create_org(name="bob", admin_user=register_user(email="bob@example.com", password="pw12345678"))
 
     response = _login("bob@example.com").get(f"/api/v1/sbom/document/{job.task_id}/")
 

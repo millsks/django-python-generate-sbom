@@ -30,6 +30,8 @@ from .services import (
     create_api_key,
     create_member,
     create_org,
+    grant_global_admin,
+    is_global_admin,
     leave_org,
     remove_member,
     revoke_api_key,
@@ -41,6 +43,7 @@ logger = structlog.get_logger()
 _INVALID_CREDENTIALS = {"error": "Invalid email or password", "code": "invalid_credentials"}
 _NOT_ADMIN = {"error": "Admin privileges are required.", "code": "not_admin"}
 _NO_ACTIVE_ORG = {"error": "No active org.", "code": "no_active_org"}
+_NOT_GLOBAL_ADMIN = {"error": "Global admin privileges are required.", "code": "not_global_admin"}
 
 
 def _validation_error(serializer_errors: object) -> Response:
@@ -85,7 +88,7 @@ class RegisterView(APIView):
     permission_classes = [AllowAny]  # noqa: RUF012
 
     def post(self, request: Request) -> Response:
-        """Create a user and their personal org, or return a 400 error envelope."""
+        """Create a zero-org user, or return a 400 error envelope (Story 2.6)."""
         serializer = RegistrationSerializer(data=request.data)
         if not serializer.is_valid():
             first_error = next(iter(serializer.errors.values()))[0]
@@ -94,14 +97,54 @@ class RegisterView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         user = serializer.save()
-        org = user.org_memberships.select_related("org").get().org
         return Response(
             {
                 "user": {"id": user.pk, "email": user.email},
-                "org": {"slug": org.slug, "name": org.name},
+                "org": None,
             },
             status=status.HTTP_201_CREATED,
         )
+
+
+class AuthMeView(APIView):
+    """Return the authenticated user's identity (GET /api/v1/auth/me/).
+
+    The identity signal for the SPA (Story 2.6): a logged-in user with zero orgs
+    is still authenticated. Requires authentication (default classes), so an
+    anonymous request receives a 403. Global-admin info is deliberately omitted
+    here (deferred to a later story).
+    """
+
+    def get(self, request: Request) -> Response:
+        """Return the current user's ``id`` and ``email``."""
+        user = cast(User, request.user)
+        return Response({"id": user.pk, "email": user.email})
+
+
+class GrantGlobalAdminView(APIView):
+    """Add another user to the ADMIN org (POST /api/v1/admin/global-admins/).
+
+    Global-admin-only management of the ADMIN org (Story 2.8, AC #3): only an
+    existing global admin may grant global admin. The target is back-filled as an
+    admin of every org via ``grant_global_admin``.
+    """
+
+    def post(self, request: Request) -> Response:
+        """Grant global admin to the target user; 403 unless the caller is one."""
+        if not is_global_admin(cast(User, request.user)):
+            return Response(_NOT_GLOBAL_ADMIN, status=status.HTTP_403_FORBIDDEN)
+        serializer = TransferAdminSerializer(data=request.data)
+        if not serializer.is_valid():
+            return _validation_error(serializer.errors)
+        target = User.objects.filter(pk=serializer.validated_data["user_id"]).first()
+        if target is None:
+            return Response(
+                {"error": "That user does not exist.", "code": "not_found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        grant_global_admin(target)
+        logger.info("global_admin_granted_via_api", by_user_id=request.user.pk, user_id=target.pk)
+        return Response({"user_id": target.pk, "email": target.email}, status=status.HTTP_201_CREATED)
 
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")

@@ -8,10 +8,13 @@ import Paper from '@mui/material/Paper'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { DEFAULT_OUTPUT_FORMAT, generateSbom, OUTPUT_FORMATS } from '../api/jobs'
+import { useAuth } from '../auth/AuthProvider'
+import { NoOrgState } from '../components/NoOrgState'
 import { ChooseFileIcon, UploadActionIcon } from '../icons'
 
 export function UploadPage() {
   const navigate = useNavigate()
+  const { activeOrg } = useAuth()
   const [file, setFile] = useState<File | null>(null)
   const [applicationId, setApplicationId] = useState('')
   const [componentName, setComponentName] = useState('')
@@ -46,6 +49,10 @@ export function UploadPage() {
       setError(err instanceof Error ? err.message : 'Generation failed. Check the file and try again.')
       setSubmitting(false)
     }
+  }
+
+  if (!activeOrg) {
+    return <NoOrgState />
   }
 
   return (

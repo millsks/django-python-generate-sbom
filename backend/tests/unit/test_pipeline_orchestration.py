@@ -16,7 +16,7 @@ from generate_sbom.manifests.models import ManifestUpload
 from generate_sbom.sbom.models import SBOMJob
 from generate_sbom.sbom.parsers import PackageSpec, ResolutionError
 from generate_sbom.tasks import sbom_pipeline as pipeline
-from generate_sbom.users.services import register_user
+from generate_sbom.users.services import create_org, register_user
 
 _NO_UPDATE = "celery.app.task.Task.update_state"
 PIXI_LOCK = (
@@ -38,7 +38,7 @@ def _tmp_media(settings: pytest.FixtureRequest, tmp_path: object) -> None:
 
 def _make_job(output_format: str = "cyclonedx-json", email: str = "alice@example.com") -> SBOMJob:
     user = register_user(email=email, password="pw12345678")
-    org = user.org_memberships.select_related("org").get().org
+    org = create_org(name=user.email.split("@")[0], admin_user=user)
     upload = ManifestUpload(
         org=org,
         user=user,

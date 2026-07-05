@@ -6,12 +6,25 @@ import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom'
 import { UploadPage } from './UploadPage'
 import { ApiError } from '../api/client'
 import { generateSbom } from '../api/jobs'
+import { useAuth } from '../auth/AuthProvider'
 
 vi.mock('../api/jobs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/jobs')>()
   return { ...actual, generateSbom: vi.fn() }
 })
+vi.mock('../auth/AuthProvider', () => ({ useAuth: vi.fn() }))
 const mockGenerate = generateSbom as Mock
+const mockAuth = useAuth as Mock
+
+// Default to a signed-in user with an active org so the upload form renders.
+const AUTHED_WITH_ORG = {
+  status: 'authed' as const,
+  activeOrg: { slug: 'acme', name: 'Acme' },
+  isAdmin: false,
+  refresh: vi.fn(),
+  logout: vi.fn(),
+}
+mockAuth.mockReturnValue(AUTHED_WITH_ORG)
 
 function ResultsStub() {
   const { taskId } = useParams()
@@ -104,5 +117,25 @@ describe('UploadPage', () => {
 
     expect(await screen.findByText(/choose a manifest file/i)).toBeInTheDocument()
     expect(mockGenerate.mock.calls.length).toBe(before) // no submit for this click
+  })
+
+  it('shows the no-org empty state with a create affordance when there is no active org', async () => {
+    mockAuth.mockReturnValue({
+      status: 'authed',
+      activeOrg: null,
+      isAdmin: false,
+      refresh: vi.fn(),
+      logout: vi.fn(),
+    })
+    try {
+      renderPage()
+
+      expect(screen.getByText(/not in an organization yet/i)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /create organization/i })).toBeInTheDocument()
+      // The upload form is not rendered while the user has no org.
+      expect(screen.queryByRole('button', { name: 'Generate SBOM' })).not.toBeInTheDocument()
+    } finally {
+      mockAuth.mockReturnValue(AUTHED_WITH_ORG)
+    }
   })
 })

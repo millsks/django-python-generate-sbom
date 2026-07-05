@@ -13,7 +13,9 @@ import Tab from '@mui/material/Tab'
 import Tabs from '@mui/material/Tabs'
 import Typography from '@mui/material/Typography'
 import { TERMINAL_STATUSES } from '../api/jobs'
+import { useAuth } from '../auth/AuthProvider'
 import { useJobStatus } from '../hooks/useJobStatus'
+import { NoOrgState } from '../components/NoOrgState'
 import { OverviewTab } from '../components/OverviewTab'
 import { SbomTab } from '../components/SbomTab'
 import { VulnerabilitiesTab } from '../components/VulnerabilitiesTab'
@@ -49,9 +51,13 @@ function Centered({ children }: { children: ReactNode }) {
 
 export function ResultsPage() {
   const { taskId } = useParams<{ taskId: string }>()
+  const { activeOrg } = useAuth()
   const { status, error: pageError } = useJobStatus(taskId)
   const [tab, setTab] = useState(0)
 
+  if (!activeOrg) {
+    return <NoOrgState />
+  }
   if (pageError === 'denied') {
     return (
       <Centered>

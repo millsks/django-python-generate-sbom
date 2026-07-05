@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react'
+import Button from '@mui/material/Button'
 import FormControl from '@mui/material/FormControl'
 import InputLabel from '@mui/material/InputLabel'
 import MenuItem from '@mui/material/MenuItem'
 import Select, { type SelectChangeEvent } from '@mui/material/Select'
 import { getOrgs, switchOrg, type OrgListItem } from '../api/orgs'
+import { CreateOrgDialog } from './CreateOrgDialog'
+import { AddActionIcon } from '../icons'
 
 export function OrgSwitcher() {
   const [orgs, setOrgs] = useState<OrgListItem[]>([])
   const [active, setActive] = useState('')
+  const [createOpen, setCreateOpen] = useState(false)
 
   useEffect(() => {
     getOrgs()
@@ -27,7 +31,22 @@ export function OrgSwitcher() {
   }
 
   if (orgs.length === 0) {
-    return null
+    // A user with no orgs still sees a way forward instead of an invisible switcher.
+    return (
+      <>
+        <Button
+          color="inherit"
+          variant="outlined"
+          size="small"
+          startIcon={<AddActionIcon />}
+          onClick={() => setCreateOpen(true)}
+          sx={{ borderColor: 'currentColor' }}
+        >
+          Create organization
+        </Button>
+        <CreateOrgDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+      </>
+    )
   }
 
   return (

@@ -4,9 +4,16 @@ import pytest
 from rest_framework.test import APIClient
 
 from generate_sbom.users.models import OrgMembership, User
-from generate_sbom.users.services import register_user
+from generate_sbom.users.services import create_org, register_user
 
 LAST_ADMIN_ERROR = "An org must always have at least one admin."
+
+
+def _register_with_org(email: str, org_name: str, password: str = "pw12345678") -> User:
+    """Register a user and give them a first org (registration now creates none)."""
+    user = register_user(email=email, password=password)
+    create_org(name=org_name, admin_user=user)
+    return user
 
 
 def _client(email: str, password: str = "pw12345678") -> APIClient:
@@ -26,7 +33,7 @@ def _add_member(client: APIClient, email: str, temp_password: str = "temp12345")
 
 @pytest.mark.django_db
 def test_create_org_adds_caller_as_admin() -> None:
-    register_user(email="alice@example.com", password="pw12345678")
+    _register_with_org("alice@example.com", "Alice")
     client = _client("alice@example.com")
 
     response = client.post("/api/v1/orgs/create/", {"name": "New Team"}, format="json")
@@ -39,7 +46,7 @@ def test_create_org_adds_caller_as_admin() -> None:
 
 @pytest.mark.django_db
 def test_add_member_creates_membership_without_email(mailoutbox: list) -> None:
-    register_user(email="alice@example.com", password="pw12345678")
+    _register_with_org("alice@example.com", "Alice")
     client = _client("alice@example.com")
 
     bob = _add_member(client, "bob@example.com")
@@ -50,7 +57,7 @@ def test_add_member_creates_membership_without_email(mailoutbox: list) -> None:
 
 @pytest.mark.django_db
 def test_add_existing_member_rejected() -> None:
-    register_user(email="alice@example.com", password="pw12345678")
+    _register_with_org("alice@example.com", "Alice")
     client = _client("alice@example.com")
     _add_member(client, "bob@example.com")
 
@@ -66,7 +73,7 @@ def test_add_existing_member_rejected() -> None:
 
 @pytest.mark.django_db
 def test_remove_member() -> None:
-    register_user(email="alice@example.com", password="pw12345678")
+    _register_with_org("alice@example.com", "Alice")
     client = _client("alice@example.com")
     bob = _add_member(client, "bob@example.com")
 
@@ -78,7 +85,7 @@ def test_remove_member() -> None:
 
 @pytest.mark.django_db
 def test_remove_sole_admin_rejected() -> None:
-    alice = register_user(email="alice@example.com", password="pw12345678")
+    alice = _register_with_org("alice@example.com", "Alice")
     client = _client("alice@example.com")
 
     response = client.delete(f"/api/v1/orgs/members/{alice.pk}/")
@@ -90,7 +97,7 @@ def test_remove_sole_admin_rejected() -> None:
 
 @pytest.mark.django_db
 def test_transfer_admin_promotes_and_demotes_sole_admin() -> None:
-    alice = register_user(email="alice@example.com", password="pw12345678")
+    alice = _register_with_org("alice@example.com", "Alice")
     client = _client("alice@example.com")
     bob = _add_member(client, "bob@example.com")
 
@@ -103,7 +110,7 @@ def test_transfer_admin_promotes_and_demotes_sole_admin() -> None:
 
 @pytest.mark.django_db
 def test_non_sole_admin_can_leave() -> None:
-    register_user(email="alice@example.com", password="pw12345678")
+    _register_with_org("alice@example.com", "Alice")
     admin_client = _client("alice@example.com")
     bob = _add_member(admin_client, "bob@example.com")
 
@@ -116,7 +123,7 @@ def test_non_sole_admin_can_leave() -> None:
 
 @pytest.mark.django_db
 def test_sole_admin_cannot_leave() -> None:
-    register_user(email="alice@example.com", password="pw12345678")
+    _register_with_org("alice@example.com", "Alice")
     client = _client("alice@example.com")
 
     response = client.post("/api/v1/orgs/leave/")
@@ -127,8 +134,8 @@ def test_sole_admin_cannot_leave() -> None:
 
 @pytest.mark.django_db
 def test_list_members_is_org_scoped_and_flags_admin() -> None:
-    register_user(email="alice@example.com", password="pw12345678")
-    register_user(email="carol@example.com", password="pw12345678")  # separate org
+    _register_with_org("alice@example.com", "Alice")
+    _register_with_org("carol@example.com", "Carol")  # separate org
     client = _client("alice@example.com")
     _add_member(client, "bob@example.com")
 
@@ -142,7 +149,7 @@ def test_list_members_is_org_scoped_and_flags_admin() -> None:
 
 @pytest.mark.django_db
 def test_non_admin_blocked_from_admin_actions() -> None:
-    register_user(email="alice@example.com", password="pw12345678")
+    _register_with_org("alice@example.com", "Alice")
     admin_client = _client("alice@example.com")
     _add_member(admin_client, "bob@example.com")
 

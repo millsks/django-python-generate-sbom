@@ -12,10 +12,13 @@ import TableRow from '@mui/material/TableRow'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { addMember, getMembers, removeMember, transferAdmin, type Member } from '../api/orgs'
+import { useAuth } from '../auth/AuthProvider'
+import { NoOrgState } from '../components/NoOrgState'
 import { EmptyState, ErrorState, LoadingState } from '../components/PageState'
 import { NavIcon } from '../icons'
 
 export function MembersPage() {
+  const { activeOrg } = useAuth()
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -69,6 +72,10 @@ export function MembersPage() {
     } catch {
       setError('Could not transfer admin.')
     }
+  }
+
+  if (!activeOrg) {
+    return <NoOrgState />
   }
 
   return (

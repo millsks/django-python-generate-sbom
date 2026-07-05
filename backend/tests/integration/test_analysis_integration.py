@@ -29,7 +29,7 @@ from generate_sbom.tasks.sbom_pipeline import (
     persist_artifacts,
     resolve_transitive_deps,
 )
-from generate_sbom.users.services import register_user
+from generate_sbom.users.services import create_org, register_user
 
 _NO_UPDATE = "celery.app.task.Task.update_state"
 PIXI_LOCK = b'version: 5\npackages:\n  - name: numpy\n    version: "1.26.0"\n'
@@ -38,7 +38,7 @@ _ANALYSIS_TASKS = (scan_vulnerabilities, classify_licenses, build_dependency_gra
 
 def _make_job() -> SBOMJob:
     user = register_user(email="alice@example.com", password="pw12345678")
-    org = user.org_memberships.select_related("org").get().org
+    org = create_org(name=user.email.split("@")[0], admin_user=user)
     upload = ManifestUpload(
         org=org,
         user=user,

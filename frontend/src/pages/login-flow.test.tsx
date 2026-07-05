@@ -12,7 +12,7 @@ import { AuthProvider } from '../auth/AuthProvider'
 import { ProtectedRoute } from '../components/ProtectedRoute'
 import { LoginPage } from './LoginPage'
 import { getActiveOrg, getMembers } from '../api/orgs'
-import { login } from '../api/auth'
+import { getMe, login } from '../api/auth'
 
 vi.mock('../api/orgs', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api/orgs')>()),
@@ -21,8 +21,10 @@ vi.mock('../api/orgs', async (importOriginal) => ({
 }))
 vi.mock('../api/auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api/auth')>()),
+  getMe: vi.fn(),
   login: vi.fn(),
 }))
+const mockGetMe = getMe as Mock
 const mockActiveOrg = getActiveOrg as Mock
 const mockMembers = getMembers as Mock
 const mockLogin = login as Mock
@@ -57,7 +59,8 @@ describe('login flow (bounce-loop regression, Story 10.2)', () => {
   it('lands on the protected target after login and is NOT bounced back to /login', async () => {
     // Anonymous at mount (protected route bounces to /login), then authed after the
     // successful login triggers refresh() — so the target route stays rendered.
-    mockActiveOrg.mockRejectedValueOnce(new Error('anon')).mockResolvedValue({ slug: 'acme', name: 'Acme' })
+    mockGetMe.mockRejectedValueOnce(new Error('anon')).mockResolvedValue({ id: 1, email: 'a@b.com' })
+    mockActiveOrg.mockResolvedValue({ slug: 'acme', name: 'Acme' })
     mockMembers.mockResolvedValue({ is_admin: false, members: [] })
     mockLogin.mockResolvedValue({ org: { slug: 'acme', name: 'Acme' } })
 
@@ -70,6 +73,23 @@ describe('login flow (bounce-loop regression, Story 10.2)', () => {
     await submitLogin()
 
     // After login refreshes the auth state, we return to /upload — no bounce back.
+    expect(await screen.findByText('upload page')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /log in/i })).not.toBeInTheDocument()
+  })
+
+  it('a zero-org user who logs in stays authenticated and reaches the protected page', async () => {
+    // Identity resolves but the active-org call 404s: the user has no org yet, yet must
+    // still be treated as authenticated (Story 2.6) — no bounce back to /login.
+    mockGetMe.mockRejectedValueOnce(new Error('anon')).mockResolvedValue({ id: 2, email: 'zero@org.com' })
+    mockActiveOrg.mockRejectedValue(new Error('404'))
+    mockLogin.mockResolvedValue({ org: null })
+
+    renderApp('/upload')
+
+    await screen.findByRole('button', { name: /log in/i })
+    await submitLogin()
+
+    // Authed with no org → the protected route renders instead of bouncing to /login.
     expect(await screen.findByText('upload page')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /log in/i })).not.toBeInTheDocument()
   })

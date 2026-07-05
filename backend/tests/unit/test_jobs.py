@@ -8,7 +8,7 @@ from rest_framework.test import APIClient
 
 from generate_sbom.sbom.models import SBOMJob
 from generate_sbom.sbom.services import finalize_job, update_job_status
-from generate_sbom.users.services import register_user
+from generate_sbom.users.services import create_org, register_user
 
 _DISPATCH = "generate_sbom.sbom.views.run_sbom_pipeline.delay_on_commit"
 META = {
@@ -25,7 +25,8 @@ def _tmp_media(settings: pytest.FixtureRequest, tmp_path: object) -> None:
 
 
 def _login(email: str = "alice@example.com") -> APIClient:
-    register_user(email=email, password="pw12345678")
+    user = register_user(email=email, password="pw12345678")
+    create_org(name=email.split("@")[0], admin_user=user)
     client = APIClient()
     client.post("/api/v1/auth/login/", {"email": email, "password": "pw12345678"}, format="json")
     return client

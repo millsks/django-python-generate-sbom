@@ -9,7 +9,7 @@ from generate_sbom.manifests.models import ManifestUpload
 from generate_sbom.sbom.models import SBOMJob
 from generate_sbom.sbom.services import resolve_job_packages
 from generate_sbom.tasks.sbom_pipeline import detect_and_parse_manifest, resolve_transitive_deps
-from generate_sbom.users.services import register_user
+from generate_sbom.users.services import create_org, register_user
 
 PIXI_LOCK = b"""
 version: 5
@@ -28,7 +28,7 @@ def _tmp_media(settings: pytest.FixtureRequest, tmp_path: object) -> None:
 
 def _make_job() -> SBOMJob:
     user = register_user(email="alice@example.com", password="pw12345678")
-    org = user.org_memberships.select_related("org").get().org
+    org = create_org(name=user.email.split("@")[0], admin_user=user)
     upload = ManifestUpload(
         org=org,
         user=user,

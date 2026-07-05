@@ -11,14 +11,14 @@ export function RegisterPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [orgSlug, setOrgSlug] = useState<string | null>(null)
+  const [registered, setRegistered] = useState(false)
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     setError(null)
     try {
-      const result = await register(email, password)
-      setOrgSlug(result.org.slug)
+      await register(email, password)
+      setRegistered(true)
     } catch {
       setError('Registration failed. That email may already be in use.')
     }
@@ -29,8 +29,8 @@ export function RegisterPage() {
       <Typography variant="h4" component="h1" gutterBottom>
         Create your account
       </Typography>
-      {orgSlug ? (
-        <Alert severity="success">Account created. Your personal org is “{orgSlug}”.</Alert>
+      {registered ? (
+        <Alert severity="success">Account created — you can now log in.</Alert>
       ) : (
         <Paper
           component="form"

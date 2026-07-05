@@ -2750,6 +2750,36 @@ minimal and does not regress the existing click-to-submit path.
 **Then** pressing **Enter** in a login field submits the form, and the test that reproduced the bug now
 passes (both Enter-to-submit and click-to-submit are covered).
 
+<!-- Epic 10 reopened (cleanup): 10.7 removes the redundant /dashboard page (a vestigial stub
+     superseded by /history's jobs table; not in the nav, duplicated the org switcher + logout) and
+     lands post-login on the index page (/) instead. -->
+
+### Story 10.7: Remove the Redundant /dashboard Page; Land Login on the Index Page
+
+As a user,
+I want a single, useful home after login instead of an empty placeholder,
+So that I'm not dropped on a redundant page that duplicates the shell's controls.
+
+**Context:** `/dashboard` (`DashboardPage`) is a leftover scaffolding stub — not linked in the nav, it
+renders a duplicate org switcher + "Log out" (already in the app shell) plus an empty "Your SBOM jobs will
+appear here." The real jobs dashboard is `/history` (Stories 6.1–6.3). Login currently defaults to
+`/dashboard` (`DEFAULT_AFTER_LOGIN`), dropping users on the empty stub.
+
+**Acceptance Criteria:**
+
+**Given** the redundant page,
+**When** the change lands,
+**Then** `DashboardPage` and its `/dashboard` route are removed and no references remain (`tsc`/grep clean).
+
+**Given** a successful login with no intended destination,
+**When** it completes,
+**Then** the user lands on the **index page** (`/`) — `DEFAULT_AFTER_LOGIN = '/'` — while a preserved
+`from` destination (a `ProtectedRoute` redirect, Story 10.2) still wins.
+
+**Given** the change,
+**When** complete,
+**Then** the login round-trip and default-fallback tests pass against `/`, and `pixi run ci` is green.
+
 ---
 
 ## Epic 11: Project Documentation

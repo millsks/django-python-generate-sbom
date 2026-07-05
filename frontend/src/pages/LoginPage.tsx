@@ -9,8 +9,8 @@ import Typography from '@mui/material/Typography'
 import { login } from '../api/auth'
 import { useAuth } from '../auth/AuthProvider'
 
-// Where to land after login when there's no intended destination.
-const DEFAULT_AFTER_LOGIN = '/dashboard'
+// Where to land after login when there's no intended destination — the index page.
+const DEFAULT_AFTER_LOGIN = '/'
 
 export function LoginPage() {
   const navigate = useNavigate()

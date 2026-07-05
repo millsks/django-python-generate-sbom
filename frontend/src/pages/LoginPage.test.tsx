@@ -20,7 +20,7 @@ function renderLogin(state?: unknown) {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/upload" element={<div>upload page</div>} />
-        <Route path="/dashboard" element={<div>dashboard page</div>} />
+        <Route path="/" element={<div>index page</div>} />
       </Routes>
     </MemoryRouter>,
   )
@@ -58,14 +58,14 @@ describe('LoginPage', () => {
 
     await submitLogin()
 
-    expect(await screen.findByText('dashboard page')).toBeInTheDocument()
+    expect(await screen.findByText('index page')).toBeInTheDocument()
   })
 
   it('redirects an already-authenticated user away from the form to the default', () => {
     mockUseAuth.mockReturnValue({ status: 'authed', refresh: vi.fn() })
     renderLogin()
 
-    expect(screen.getByText('dashboard page')).toBeInTheDocument()
+    expect(screen.getByText('index page')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /log in/i })).not.toBeInTheDocument()
   })
 
@@ -88,6 +88,6 @@ describe('LoginPage', () => {
     await userEvent.type(screen.getByLabelText(/password/i), 'pw12345678{Enter}')
 
     expect(mockLogin).toHaveBeenCalledWith('a@b.com', 'pw12345678')
-    expect(await screen.findByText('dashboard page')).toBeInTheDocument()
+    expect(await screen.findByText('index page')).toBeInTheDocument()
   })
 })

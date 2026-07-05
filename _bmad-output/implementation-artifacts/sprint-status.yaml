@@ -134,6 +134,7 @@ development_status:
   10-4-autofocus-email-on-login: done
   10-5-account-menu-shows-logged-in-user: review
   10-6-login-submits-on-enter: review
+  10-7-remove-dashboard-login-to-index: review
 
   # Epic 11 — Project Documentation (MkDocs Material → GitHub Pages; markdown).
   # 11-1 (site scaffold) is the foundation; 11-2..11-5 add pages/nav to mkdocs.yml;

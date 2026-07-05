@@ -76,11 +76,11 @@ development_status:
 
   # Epic 9 — Project Management & CI/CD Workflows (ported from millsks/idp-app,
   # excluding renovate + disabled workflows). External secrets are operator-supplied.
-  epic-9: ready-for-dev
-  9-1-comprehensive-ci-workflow: ready-for-dev
-  9-2-sonarcloud-code-analysis: ready-for-dev
+  epic-9: done
+  9-1-comprehensive-ci-workflow: done
+  9-2-sonarcloud-code-analysis: done
   9-3-automated-release-workflow: done
-  9-4-repository-maintenance-workflow: ready-for-dev
+  9-4-repository-maintenance-workflow: done
   9-5-stale-issue-and-pr-management: done
   9-6-label-automation: done
   9-7-adopt-beneficial-pixi-tasks: done

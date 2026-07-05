@@ -18,7 +18,7 @@ development_status:
   # admin-managed membership by email, a global-admin ADMIN org, and edge cases).
   # Reopened (bugfix): 2.16 fixes "Make admin" (promote, don't transfer; protect global admins);
   # 2.17 enforces admin-only pages at the route + API (not just the nav).
-  epic-2: in-progress
+  epic-2: done
   2-1-user-and-org-data-models-and-registration: done
   2-2-login-session-auth-and-org-switcher: done
   2-3-org-administration-and-membership-management: done
@@ -40,8 +40,8 @@ development_status:
   2-13-seed-initial-superuser-from-env: done
   2-14-create-org-dialog-label-clipped: done
   2-15-reorder-side-navigation: done
-  2-16-fix-make-admin-and-protect-global-admin: review
-  2-17-admin-route-and-api-authorization: review
+  2-16-fix-make-admin-and-protect-global-admin: done
+  2-17-admin-route-and-api-authorization: done
 
   epic-3: done
   3-1-manifest-upload-and-format-detection: done
@@ -131,7 +131,7 @@ development_status:
   # Reopened again (bugfix): 10.5 shows the logged-in user (not the org) in the account menu —
   # AuthProvider now exposes the getMe() user (coordinates with 2.12's is_global_admin);
   # 10.6 makes the login form submit on Enter (test-first reproduction, then fix).
-  epic-10: in-progress
+  epic-10: done
   10-1-app-shell-and-auth-aware-navigation: done
   10-2-redirect-to-login-and-back: done
   10-3-auto-redirect-to-login-after-registration: done
@@ -139,7 +139,7 @@ development_status:
   10-5-account-menu-shows-logged-in-user: done
   10-6-login-submits-on-enter: done
   10-7-remove-dashboard-login-to-index: done
-  10-8-home-nav-item: review
+  10-8-home-nav-item: done
 
   # Epic 11 — Project Documentation (MkDocs Material → GitHub Pages; markdown).
   # 11-1 (site scaffold) is the foundation; 11-2..11-5 add pages/nav to mkdocs.yml;

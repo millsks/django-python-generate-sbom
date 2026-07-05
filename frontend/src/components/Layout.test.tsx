@@ -67,13 +67,13 @@ describe('Layout', () => {
     expect(within(nav).queryByRole('link', { name: 'Members' })).not.toBeInTheDocument()
   })
 
-  it('shows the brand mark (Inventory2 icon + app name) linking home', async () => {
+  it('shows the brand mark (FactCheck icon + app name) linking home', async () => {
     mockUseAuth.mockReturnValue(authState())
     renderAt('/upload')
 
     const brand = screen.getByRole('link', { name: 'Generate SBOM' })
     expect(brand).toHaveAttribute('href', '/')
-    expect(within(brand).getByTestId('Inventory2Icon')).toBeInTheDocument()
+    expect(within(brand).getByTestId('FactCheckIcon')).toBeInTheDocument()
   })
 
   it('shows the brand mark when logged out too', async () => {

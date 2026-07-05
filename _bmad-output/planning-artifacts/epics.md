@@ -2355,6 +2355,8 @@ polish) applies 12.1–12.3 across the pages; 12.5 (branding) is light and can l
   accent usage — that reads as a cohesive product.
 - FR-UI6: The UI meets baseline accessibility — sufficient contrast in both themes,
   visible focus, and labels on icon-only controls.
+- FR-UI7: The SPA has a proper document title (the product name), replacing the
+  placeholder "frontend".
 
 ### Story 12.1: Theme & Design System Foundation
 
@@ -2512,3 +2514,28 @@ cohesive product identity.
 **When** branding assets exist,
 **Then** any logo/screenshots produced here are reusable by the README/docs, keeping
 the product identity consistent across the repo and the app.
+
+### Story 12.6: Set the SPA Document Title
+
+As a user,
+I want the browser tab to show the product name,
+So that the app is identifiable among my open tabs instead of reading "frontend".
+
+**Acceptance Criteria:**
+
+**Given** `frontend/index.html` currently has `<title>frontend</title>` (the Vite
+placeholder),
+**When** the title is set,
+**Then** the base document title is the product name (the same name used in the header
+brand / README), so a freshly loaded page shows it in the browser tab (FR-UI7).
+
+**Given** the SPA has multiple routes,
+**When** navigating between pages,
+**Then** the title may optionally reflect the current page (e.g. `Upload · <App>`)
+while always falling back to the product name — a small per-route title helper is
+acceptable but the base title fix is the required part.
+
+**Given** consistency with branding,
+**When** implemented,
+**Then** the title matches the app name established for the header/branding (Story 12.5)
+and the `config.ts` app identity, avoiding a second hard-coded name string.

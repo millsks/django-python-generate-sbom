@@ -1754,6 +1754,38 @@ opaque status — so the UI can explain why.
 pixi solve for a solvable and an unsatisfiable case, and the detection/format wiring for
 `environment.yml`/`.yaml` is unchanged.
 
+### Story 8.20: [Deferred] Configurable conda solve platform & CUDA system-requirement
+
+As a maintainer,
+I want the conda resolver's target platform and CUDA assumption to be configurable,
+So that resolution behavior can be adjusted without a code change if requirements change.
+
+**Deferred — parked for later per an explicit decision; the current fixed defaults
+(`linux-64` + `cuda="12"`) are intentional and stay as-is until this is picked up.**
+
+**Context:** Story 8.19's pixi-based conda resolver hard-codes `--platform linux-64`
+and appends a `cuda="12"` system-requirement (this is what lets CUDA environments such
+as `farm-environment.yaml` resolve — `linux-64` alone still fails `nothing provides
+__cuda`). Both are deliberate fixed defaults for now. This story exists only so the
+choice can be revisited if a per-deployment or per-request need emerges.
+
+**Acceptance Criteria (when/if implemented):**
+
+**Given** the conda solve platform,
+**When** made configurable,
+**Then** it is overridable via a setting/env var (e.g. `CONDA_SOLVE_PLATFORM`),
+**defaulting to `linux-64`** so current behavior is unchanged.
+
+**Given** the CUDA system-requirement,
+**When** made configurable,
+**Then** it is overridable/toggleable via a setting/env var (e.g. `CONDA_SOLVE_CUDA`),
+**defaulting to `12`** (enabled), with an option to omit it for non-CUDA-only targets.
+
+**Given** the change,
+**When** complete,
+**Then** the defaults are unchanged, tests cover the overrides, and `pixi run ci` stays
+green.
+
 ---
 
 ## Epic 9: Project Management & CI/CD Workflows

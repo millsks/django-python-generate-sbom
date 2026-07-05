@@ -3,8 +3,15 @@
 import pytest
 from rest_framework.test import APIClient
 
-from generate_sbom.users.models import OrgApiKey
-from generate_sbom.users.services import register_user
+from generate_sbom.users.models import OrgApiKey, User
+from generate_sbom.users.services import create_org, register_user
+
+
+def _register_with_org(email: str, password: str = "pw12345678") -> User:
+    """Register a user and give them a first org (registration now creates none)."""
+    user = register_user(email=email, password=password)
+    create_org(name=email.split("@")[0], admin_user=user)
+    return user
 
 
 def _login(email: str, password: str = "pw12345678") -> APIClient:
@@ -15,7 +22,7 @@ def _login(email: str, password: str = "pw12345678") -> APIClient:
 
 @pytest.mark.django_db
 def test_create_key_returns_plaintext_once_and_list_hides_it() -> None:
-    register_user(email="alice@example.com", password="pw12345678")
+    _register_with_org("alice@example.com")
     client = _login("alice@example.com")
 
     created = client.post("/api/v1/keys/", {"name": "ci"}, format="json")
@@ -33,7 +40,7 @@ def test_create_key_returns_plaintext_once_and_list_hides_it() -> None:
 
 @pytest.mark.django_db
 def test_eleventh_active_key_rejected() -> None:
-    register_user(email="alice@example.com", password="pw12345678")
+    _register_with_org("alice@example.com")
     client = _login("alice@example.com")
     for i in range(10):
         client.post("/api/v1/keys/", {"name": f"k{i}"}, format="json")
@@ -47,7 +54,7 @@ def test_eleventh_active_key_rejected() -> None:
 
 @pytest.mark.django_db
 def test_valid_key_authenticates_and_updates_last_used() -> None:
-    register_user(email="alice@example.com", password="pw12345678")
+    _register_with_org("alice@example.com")
     admin = _login("alice@example.com")
     key = admin.post("/api/v1/keys/", {"name": "ci"}, format="json").data["key"]
 
@@ -59,7 +66,7 @@ def test_valid_key_authenticates_and_updates_last_used() -> None:
 
 @pytest.mark.django_db
 def test_revoked_key_is_rejected() -> None:
-    register_user(email="alice@example.com", password="pw12345678")
+    _register_with_org("alice@example.com")
     admin = _login("alice@example.com")
     created = admin.post("/api/v1/keys/", {"name": "ci"}, format="json")
     key, key_id = created.data["key"], created.data["id"]
@@ -80,8 +87,8 @@ def test_bogus_key_is_rejected() -> None:
 
 @pytest.mark.django_db
 def test_revoke_other_orgs_key_returns_404() -> None:
-    register_user(email="alice@example.com", password="pw12345678")
-    register_user(email="bob@example.com", password="pw12345678")
+    _register_with_org("alice@example.com")
+    _register_with_org("bob@example.com")
     bob_key_id = _login("bob@example.com").post("/api/v1/keys/", {"name": "bobkey"}, format="json").data["id"]
 
     response = _login("alice@example.com").delete(f"/api/v1/keys/{bob_key_id}/")
@@ -91,7 +98,7 @@ def test_revoke_other_orgs_key_returns_404() -> None:
 
 @pytest.mark.django_db
 def test_non_admin_cannot_create_key() -> None:
-    register_user(email="alice@example.com", password="pw12345678")
+    _register_with_org("alice@example.com")
     admin = _login("alice@example.com")
     admin.post(
         "/api/v1/orgs/members/",

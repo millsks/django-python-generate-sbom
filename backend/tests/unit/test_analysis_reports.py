@@ -7,7 +7,7 @@ from generate_sbom.analysis.models import AnalysisReport
 from generate_sbom.analysis.services.reports import make_envelope, write_report
 from generate_sbom.manifests.models import ManifestUpload
 from generate_sbom.sbom.models import SBOMJob
-from generate_sbom.users.services import register_user
+from generate_sbom.users.services import create_org, register_user
 
 
 @pytest.fixture(autouse=True)
@@ -17,7 +17,7 @@ def _tmp_media(settings: pytest.FixtureRequest, tmp_path: object) -> None:
 
 def _make_job() -> SBOMJob:
     user = register_user(email="alice@example.com", password="pw12345678")
-    org = user.org_memberships.select_related("org").get().org
+    org = create_org(name=user.email.split("@")[0], admin_user=user)
     upload = ManifestUpload(
         org=org,
         user=user,

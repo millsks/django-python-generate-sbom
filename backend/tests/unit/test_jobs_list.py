@@ -11,7 +11,7 @@ from generate_sbom.sbom.models import SBOMJob
 from generate_sbom.sbom.selectors import get_jobs
 from generate_sbom.sbom.serializers import JobListSerializer
 from generate_sbom.users.models import Org, User
-from generate_sbom.users.services import register_user
+from generate_sbom.users.services import create_org, register_user
 
 
 @pytest.fixture(autouse=True)
@@ -21,7 +21,7 @@ def _tmp_media(settings: pytest.FixtureRequest, tmp_path: object) -> None:
 
 def _org(email: str) -> tuple[User, Org]:
     user = register_user(email=email, password="pw12345678")
-    return user, user.org_memberships.select_related("org").get().org
+    return user, create_org(name=user.email.split("@")[0], admin_user=user)
 
 
 def _job(org: Org, user: User, *, fmt: str = "pixi_lock", status: str = "SUCCESS") -> SBOMJob:

@@ -33,10 +33,21 @@ class UserManager(DjangoUserManager["User"]):
     def create_superuser(  # type: ignore[override]
         self, email: str, password: str | None = None, **extra_fields: object
     ) -> User:
-        """Create and save a superuser identified by email."""
+        """Create and save a superuser and make them a global admin.
+
+        After the user is created, ``services.grant_global_admin`` seeds them
+        into the ADMIN org (Story 2.8). It returns early if the ADMIN org does
+        not yet exist (e.g. migrations have not run), so this is safe at any
+        point in the migration lifecycle. The import is deferred to avoid a
+        circular import between ``models`` and ``services``.
+        """
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
-        return self.create_user(email, password, **extra_fields)
+        user = self.create_user(email, password, **extra_fields)
+        from . import services
+
+        services.grant_global_admin(user)
+        return user
 
 
 class User(AbstractUser):
@@ -56,10 +67,18 @@ class User(AbstractUser):
 
 
 class Org(models.Model):
-    """A tenant boundary; owns all org-scoped resources."""
+    """A tenant boundary; owns all org-scoped resources.
+
+    Exactly one org is the distinguished **ADMIN** org (``is_admin_org=True``).
+    Its members are **global admins**: a deliberate, documented cross-org
+    superuser tier that is provisioned as a real ADMIN membership into every
+    other org (existing and future) and therefore bypasses normal org isolation
+    (Story 2.8).
+    """
 
     name = models.CharField(max_length=255)
     slug = models.SlugField(max_length=255, unique=True)
+    is_admin_org = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:

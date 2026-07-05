@@ -19,7 +19,7 @@ from generate_sbom.sbom.models import SBOMJob
 from generate_sbom.sbom.parsers import PackageSpec
 from generate_sbom.tasks.sbom_pipeline import generate_sbom_document as generate_phase
 from generate_sbom.tasks.sbom_pipeline import persist_artifacts
-from generate_sbom.users.services import register_user
+from generate_sbom.users.services import create_org, register_user
 
 PKGS = [PackageSpec(name="django", version="5.2.1"), PackageSpec(name="asgiref", version="3.8.1")]
 _NO_UPDATE = "celery.app.task.Task.update_state"
@@ -27,7 +27,7 @@ _NO_UPDATE = "celery.app.task.Task.update_state"
 
 def _make_job(output_format: str) -> SBOMJob:
     user = register_user(email="alice@example.com", password="pw12345678")
-    org = user.org_memberships.select_related("org").get().org
+    org = create_org(name=user.email.split("@")[0], admin_user=user)
     upload = ManifestUpload(
         org=org,
         user=user,

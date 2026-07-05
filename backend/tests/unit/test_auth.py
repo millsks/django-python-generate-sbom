@@ -4,13 +4,14 @@ import pytest
 from rest_framework.test import APIClient
 
 from generate_sbom.users.auth import SESSION_ACTIVE_ORG
-from generate_sbom.users.services import register_user
+from generate_sbom.users.services import create_org, register_user
 
 
 @pytest.mark.django_db
 def test_login_success_creates_session_and_active_org() -> None:
-    """Valid credentials create a session and pin the personal org as active."""
-    register_user(email="alice@example.com", password="pw12345678")
+    """Valid credentials create a session and pin the user's org as active."""
+    user = register_user(email="alice@example.com", password="pw12345678")
+    create_org(name="Alice", admin_user=user)
     client = APIClient()
 
     response = client.post(
@@ -23,6 +24,24 @@ def test_login_success_creates_session_and_active_org() -> None:
     assert response.data["org"]["slug"] == "alice"
     assert "_auth_user_id" in client.session
     assert client.session[SESSION_ACTIVE_ORG] is not None
+
+
+@pytest.mark.django_db
+def test_login_zero_org_user_stays_authenticated() -> None:
+    """A zero-org user logs in successfully with ``org: null`` (Story 2.6)."""
+    register_user(email="alice@example.com", password="pw12345678")
+    client = APIClient()
+
+    response = client.post(
+        "/api/v1/auth/login/",
+        {"email": "alice@example.com", "password": "pw12345678"},
+        format="json",
+    )
+
+    assert response.status_code == 200
+    assert response.data["org"] is None
+    assert "_auth_user_id" in client.session
+    assert SESSION_ACTIVE_ORG not in client.session
 
 
 @pytest.mark.django_db

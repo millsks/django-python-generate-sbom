@@ -17,7 +17,7 @@ from generate_sbom.manifests.models import ManifestUpload
 from generate_sbom.sbom import services
 from generate_sbom.sbom.models import SBOMJob
 from generate_sbom.tasks import sbom_pipeline as pipeline
-from generate_sbom.users.services import register_user
+from generate_sbom.users.services import create_org, register_user
 
 _NO_UPDATE = "celery.app.task.Task.update_state"
 PIXI_LOCK = (
@@ -33,7 +33,7 @@ ANALYSIS_TASKS = (
 
 def _make_job(output_format: str) -> SBOMJob:
     user = register_user(email="alice@example.com", password="pw12345678")
-    org = user.org_memberships.select_related("org").get().org
+    org = create_org(name=user.email.split("@")[0], admin_user=user)
     upload = ManifestUpload(
         org=org,
         user=user,

@@ -13,7 +13,49 @@ from .models import Org, OrgApiKey, OrgMembership, User
 
 MAX_ACTIVE_API_KEYS = 10
 
+ADMIN_ORG_NAME = "Admin"
+ADMIN_ORG_SLUG = "admin"
+
 logger = structlog.get_logger()
+
+
+def get_the_admin_org() -> Org | None:
+    """Return the distinguished ADMIN org, or None if it has not been seeded."""
+    return Org.objects.filter(is_admin_org=True).first()
+
+
+def is_global_admin(user: User) -> bool:
+    """Return True if ``user`` is a member of the ADMIN org (a global admin)."""
+    admin_org = get_the_admin_org()
+    return admin_org is not None and OrgMembership.objects.filter(org=admin_org, user=user).exists()
+
+
+def _global_admins() -> list[User]:
+    """Return every global admin (member of the ADMIN org)."""
+    admin_org = get_the_admin_org()
+    return [] if admin_org is None else list(User.objects.filter(org_memberships__org=admin_org))
+
+
+def _provision_global_admins(org: Org) -> None:
+    """Make every global admin a full ADMIN of ``org`` (idempotent)."""
+    for user in _global_admins():
+        OrgMembership.objects.update_or_create(org=org, user=user, defaults={"role": OrgMembership.Role.ADMIN})
+
+
+def grant_global_admin(user: User) -> None:
+    """Add ``user`` to the ADMIN org and back-fill them as admin of every org.
+
+    Returns early if the ADMIN org has not been seeded yet (Story 2.8). Adding a
+    user to the ADMIN org makes them a global admin; they are then written as a
+    real ADMIN membership into every non-admin org (existing and future).
+    """
+    admin_org = get_the_admin_org()
+    if admin_org is None:
+        return
+    OrgMembership.objects.get_or_create(org=admin_org, user=user, defaults={"role": OrgMembership.Role.ADMIN})
+    for org in Org.objects.filter(is_admin_org=False):
+        OrgMembership.objects.update_or_create(org=org, user=user, defaults={"role": OrgMembership.Role.ADMIN})
+    logger.info("global_admin_granted", user_id=user.pk)
 
 
 def _unique_org_slug(name: str) -> str:
@@ -30,23 +72,24 @@ def _unique_org_slug(name: str) -> str:
 def create_org(name: str, admin_user: User) -> Org:
     """Create an org with ``admin_user`` as its sole admin.
 
-    Shared by registration (Story 2.1) and create-additional-org (Story 2.3).
+    Shared by create-additional-org (Story 2.3/2.5). Every global admin is
+    auto-added as an admin of the new org (Story 2.8, AC #2a).
     """
     org = Org.objects.create(name=name, slug=_unique_org_slug(name))
     OrgMembership.objects.create(org=org, user=admin_user, role=OrgMembership.Role.ADMIN)
+    _provision_global_admins(org)
     return org
 
 
 @transaction.atomic
 def register_user(email: str, password: str) -> User:
-    """Register a new user and create their personal org atomically.
+    """Register a new user, creating the account only (Story 2.6).
 
-    A failure at any step (e.g. a duplicate email) rolls the whole thing back so
-    no partial User/Org/OrgMembership rows are left behind.
+    A new user starts with **zero** orgs — no personal org is created. A failure
+    (e.g. a duplicate email) rolls back so no partial User row is left behind.
     """
     user = User.objects.create_user(email=email, password=password)
-    org = create_org(name=email.split("@")[0], admin_user=user)
-    logger.info("user_registered", user_id=user.pk, org_id=org.pk, org_slug=org.slug)
+    logger.info("user_registered", user_id=user.pk)
     return user
 
 

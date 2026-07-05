@@ -9,7 +9,7 @@ from .models import User
 
 
 class RegistrationSerializer(serializers.Serializer[User]):
-    """Validates registration input and creates the user + personal org."""
+    """Validates registration input and creates the user (zero orgs, Story 2.6)."""
 
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, min_length=8)
@@ -21,7 +21,7 @@ class RegistrationSerializer(serializers.Serializer[User]):
         return value
 
     def create(self, validated_data: dict[str, str]) -> User:
-        """Create the user and their personal org."""
+        """Create the user account (no org — Story 2.6)."""
         return services.register_user(
             email=validated_data["email"],
             password=validated_data["password"],

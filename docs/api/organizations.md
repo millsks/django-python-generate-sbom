@@ -21,11 +21,20 @@ List the organizations the caller belongs to, flagging the active one.
 
 ## `POST /api/v1/orgs/create/`
 
-Create a new organization with the caller as its admin.
+Create a new organization with the caller as its admin. The `slug` is derived
+from `name` and made unique automatically (a numeric suffix is appended on
+collision).
 
 **Request body** — `{ "name": "Acme, Inc." }` (`name`, max 255 chars).
 
 **Response `201 Created`** — `{ "slug": "acme", "name": "Acme, Inc." }`.
+
+**Errors** — `400 validation_error` (missing or too-long `name`).
+
+!!! note "Global-admin provisioning"
+    Every [global admin](#post-apiv1adminglobal-admins) is automatically added
+    as an **admin** of the new org at creation time. This keeps global admins
+    co-owners of every organization in the system.
 
 ## `POST /api/v1/orgs/switch/`
 
@@ -65,18 +74,27 @@ List the active org's roster and whether the caller is an admin.
 
 ## `POST /api/v1/orgs/members/`
 
-Add a member to the active org. **Admin only.**
+Add an **already-registered** user to the active org by email. **Admin only.**
+There is no account creation here — the person must have
+[registered](authentication.md#post-apiv1authregister) first; an unknown email
+is rejected rather than provisioned.
 
 **Request body**
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `email` | string (email) | The new member's email |
-| `temp_password` | string | Minimum 8 characters |
+| `email` | string (email) | The existing user's email (case-insensitive) |
 
 **Response `201 Created`** — `{ "user_id": 3, "email": "new@acme.com" }`.
 
-**Errors** — `403 not_admin`, `400 validation_error` (or a membership error code).
+**Errors**
+
+| Status | Code | When |
+| --- | --- | --- |
+| `403` | `not_admin` | Caller is not an admin of the active org |
+| `400` | `validation_error` | Missing or malformed `email` |
+| `400` | `no_such_user` | No registered user has that email |
+| `400` | `already_member` | That user already belongs to the org |
 
 ## `DELETE /api/v1/orgs/members/{user_id}/`
 
@@ -103,3 +121,17 @@ Leave the active organization. A sole admin cannot leave.
 **Response `204 No Content`.**
 
 **Errors** — `404 no_active_org`, `400` (membership error).
+
+## `POST /api/v1/admin/global-admins/`
+
+Grant **global admin** to another user. **Global admins only** — the caller must
+already be a global admin. The target is added to the system ADMIN org and
+back-filled as an **admin of every existing (and future) organization**.
+
+**Request body** — `{ "user_id": 2 }`.
+
+**Response `201 Created`** — `{ "user_id": 2, "email": "new-admin@acme.com" }`.
+
+**Errors** — `403 not_global_admin` (caller is not a global admin),
+`400 validation_error` (missing or invalid `user_id`), `404 not_found` (no user
+with that id).

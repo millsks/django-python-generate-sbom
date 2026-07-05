@@ -1,6 +1,6 @@
 # Story 9.2: SonarCloud Code Analysis
 
-Status: ready-for-dev
+Status: review
 
 <!-- Ports the `sonar` job from idp-app/.github/workflows/ci.yml. -->
 
@@ -35,6 +35,18 @@ Source: the `sonar` job in `idp-app/.github/workflows/ci.yml` (`SonarSource/sona
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Completion Notes List
 
+- Added a `sonar` job to `.github/workflows/ci.yml` (`needs: [backend-test, frontend-test]`) that regenerates both coverage reports in-job via the Story 9.1 pixi tasks (`cov-xml`, `fe-cov`) and scans with `SonarSource/sonarqube-scan-action@v5`. Coverage is regenerated rather than passed as artifacts (simpler; mirrors idp-app's approach).
+- Graceful no-op: a "Check for SONAR_TOKEN" step (reads the secret via env, not shell interpolation) gates the coverage + scan steps on `present == 'true'`, so runs without the secret succeed with a notice instead of failing. The job is also skipped for pull requests from forks (which cannot access the secret).
+- `sonar-project.properties` is based on idp-app's file, adapted to this repo: `projectKey=millsks_django-python-generate-sbom`, `sources=backend/generate_sbom,frontend/src`, Django `**/migrations/**` exclusion (replacing idp-app's alembic), coverage paths `backend/coverage.xml` + `frontend/coverage/lcov.info`, and `sonar.host.url=https://sonarcloud.io` (required by the scan action for the cloud service).
+- Did not modify `pixi.toml` (reuses existing tasks); adding the job/config does not change `pixi run ci`, which remains green.
+- Operator prerequisites: create a SonarCloud project bound to this repo and add a `SONAR_TOKEN` repository secret; confirm the exact projectKey/organization match the SonarCloud project. Until the token is set, the sonar job no-ops.
+
 ### File List
+
+- `.github/workflows/ci.yml` (added `sonar` job)
+- `sonar-project.properties` (new)
+- `_bmad-output/implementation-artifacts/9-2-sonarcloud-code-analysis.md` (this file)

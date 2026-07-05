@@ -827,6 +827,60 @@ equivalent management command), making them a **global admin** through the exist
 convenience (never commit real credentials). Covered by a test of the seed command (idempotent create +
 skip-when-exists).
 
+<!-- Epic 2 (bugfix): 2.14 fixes the Create Organization dialog — the outlined "Organization name"
+     field's floating label is clipped by DialogContent's too-small top padding. -->
+
+### Story 2.14: Create-Organization Dialog Label Clipped (Bugfix)
+
+As a user creating an organization,
+I want the "Organization name" field label to be fully visible,
+So that the dialog looks correct and the field is clearly labeled.
+
+**Context:** In `CreateOrgDialog` the outlined `TextField`'s floating label is cut off (only its lower
+half shows) because `DialogContent`'s `pt: 1` (8px) top padding is too small — the scroll area clips the
+label, which sits above the input's top border.
+
+**Acceptance Criteria:**
+
+**Given** the Create Organization dialog is open,
+**When** it renders,
+**Then** the full "Organization name" label is visible above the outlined field (not clipped) —
+`DialogContent` gives the label adequate top clearance (increased top padding and/or a top margin on the
+field) — and the dialog's title spacing, error state, and actions still look correct.
+
+**Given** the fix,
+**When** complete,
+**Then** the existing `CreateOrgDialog` render test still passes (label + fields present) and
+`pixi run ci` is green.
+
+<!-- Epic 2 (bugfix): 2.15 reorders the side navigation to Upload, History, Members, API Keys,
+     Organization — interleaving the admin-only Members and Organization links into place. -->
+
+### Story 2.15: Reorder the Left Side Navigation (Bugfix)
+
+As a user,
+I want the side-navigation destinations in a sensible order,
+So that related items sit together and the admin links aren't appended out of place.
+
+**Context:** `SideNav` builds `items = isAdmin ? [...NAV_ITEMS, ...adminItems] : NAV_ITEMS`, which appends
+the admin-only Organization + Members links after API Keys — giving admins Upload, History, API Keys,
+Organization, Members. The desired order interleaves them.
+
+**Acceptance Criteria:**
+
+**Given** an admin user,
+**When** the side navigation renders,
+**Then** the destinations are ordered **Upload, History, Members, API Keys, Organization** — Members
+between History and API Keys, Organization last (both admin-only).
+
+**Given** a non-admin user,
+**When** the side navigation renders,
+**Then** it shows Upload, History, API Keys (unchanged) with no Members/Organization links.
+
+**Given** the change,
+**When** complete,
+**Then** `SideNav.test.tsx` asserts the admin order and `pixi run ci` is green.
+
 ---
 
 ## Epic 3: Manifest Upload, Job Submission & SBOM Generation

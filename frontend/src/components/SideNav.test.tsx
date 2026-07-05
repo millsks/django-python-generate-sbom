@@ -18,6 +18,12 @@ describe('SideNav', () => {
     expect(screen.getByRole('link', { name: /members/i })).toBeInTheDocument()
   })
 
+  it('orders destinations Upload, History, Members, API Keys, Organization for an admin (Story 2.15)', () => {
+    renderNav(true)
+    const labels = screen.getAllByRole('link').map((link) => link.textContent)
+    expect(labels).toEqual(['Upload', 'History', 'Members', 'API Keys', 'Organization'])
+  })
+
   it('hides the Organization entry for a non-admin', () => {
     renderNav(false)
     expect(screen.queryByRole('link', { name: /organization/i })).not.toBeInTheDocument()

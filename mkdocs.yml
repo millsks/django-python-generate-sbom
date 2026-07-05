@@ -1,0 +1,61 @@
+# MkDocs Material configuration (Story 11.1). The nav skeleton below is filled in
+# by the Epic 11 content stories (11.2–11.6). Build strictly with `pixi run docs-build`.
+site_name: django-python-generate-sbom
+site_description: Generate and analyze CycloneDX SBOMs for Python projects — vulnerabilities, licenses, dependency graph, and version currency.
+site_url: https://millsks.github.io/django-python-generate-sbom/
+repo_url: https://github.com/millsks/django-python-generate-sbom
+repo_name: millsks/django-python-generate-sbom
+edit_uri: edit/main/docs/
+copyright: Copyright &copy; Kevin Mills
+
+theme:
+  name: material
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    # Light mode (brand red primary, amber/gold accent) with a toggle to dark.
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: red
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: red
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tracking
+    - navigation.top
+    - navigation.sections
+    - navigation.indexes
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+    - toc.follow
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+
+nav:
+  - Home: index.md
+  - User Guide: user-guide/index.md
+  - How-To: how-to/index.md
+  - Developer: developer/index.md
+  - API Reference: api/index.md
+  - Contributing: contributing.md

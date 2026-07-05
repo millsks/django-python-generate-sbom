@@ -58,6 +58,8 @@ hatchling = ">=1.25,<2"
 responses = ">=0.25,<1"
 bandit = ">=1.7,<2"
 flower = ">=2,<3"
+mkdocs-material = ">=9.5,<10"
+mkdocstrings-python = ">=1.11,<2"
 
 [environments]
 default = { features = ["dev"], solve-group = "default" }
@@ -170,6 +172,15 @@ cmd = "pre-commit autoupdate"
 [tasks.changelog-unreleased]
 cmd = "git cliff --unreleased --prepend CHANGELOG.md"
 
+# --- Documentation site (MkDocs Material → GitHub Pages; Story 11.1) ---
+# Live-reload preview at http://localhost:8000.
+[tasks.docs-serve]
+cmd = "mkdocs serve"
+
+# Strict build (broken links/nav fail); outputs the static site to ./site.
+[tasks.docs-build]
+cmd = "mkdocs build --strict"
+
 # --- Docker Compose convenience wrappers (compose file at repo root) ---
 [tasks.docker-build]
 cmd = "docker compose build"
@@ -253,4 +264,5 @@ depends-on = [
   "fe-typecheck",
   "fe-test",
   "fe-build",
+  "docs-build",
 ]

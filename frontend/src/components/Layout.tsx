@@ -18,8 +18,8 @@ import Typography from '@mui/material/Typography'
 import useMediaQuery from '@mui/material/useMediaQuery'
 import { useTheme } from '@mui/material/styles'
 import ListItemIcon from '@mui/material/ListItemIcon'
+import FactCheckIcon from '@mui/icons-material/FactCheck'
 import GitHubIcon from '@mui/icons-material/GitHub'
-import Inventory2Icon from '@mui/icons-material/Inventory2'
 import MenuBookIcon from '@mui/icons-material/MenuBook'
 import MenuIcon from '@mui/icons-material/Menu'
 import { useAuth } from '../auth/AuthProvider'
@@ -83,7 +83,7 @@ export function Layout() {
             to="/"
             sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'inherit', textDecoration: 'none', mr: 2 }}
           >
-            <Inventory2Icon />
+            <FactCheckIcon />
             <Typography variant="h6" component="span" sx={{ fontWeight: 700, letterSpacing: '.02em', whiteSpace: 'nowrap' }}>
               {APP_NAME}
             </Typography>

@@ -100,7 +100,7 @@ development_status:
   # 11-1 (site scaffold) is the foundation; 11-2..11-5 add pages/nav to mkdocs.yml;
   # 11-6 (meta files) and 11-7 (README) are largely independent. Story files are
   # contexted just-in-time when Epic 11 implementation begins.
-  epic-11: in-progress
+  epic-11: done
   11-1-documentation-site-scaffold-and-github-pages: done
   11-2-user-guide: done
   11-3-how-to-guides: done
@@ -110,7 +110,7 @@ development_status:
   11-7-readme-overhaul: done
   11-8-repository-and-documentation-header-links: done
   11-9-openapi-schema-and-swagger-ui-endpoint: done
-  11-10-publish-documentation-on-release: backlog
+  11-10-publish-documentation-on-release: done
 
   # Epic 12 — UI/UX Visual Design & Professional Polish (frontend; refines Epic 10
   # shell + Story 5.7 theme). 12-1 (theme/design system) is the foundation; 12-2 icons
@@ -118,7 +118,7 @@ development_status:
   # 12-5 branding lands last. Story files contexted just-in-time.
   epic-12: in-progress
   12-1-theme-and-design-system-foundation: done
-  12-2-material-icons-adoption: backlog
+  12-2-material-icons-adoption: done
   12-3-application-layout-header-footer-side-navigation: done
   12-4-page-level-visual-polish-and-states: backlog
   12-5-branding-and-visual-identity: backlog

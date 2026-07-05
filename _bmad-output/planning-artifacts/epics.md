@@ -881,6 +881,66 @@ between History and API Keys, Organization last (both admin-only).
 **When** complete,
 **Then** `SideNav.test.tsx` asserts the admin order and `pixi run ci` is green.
 
+<!-- Epic 2 reopened (bugfix): the admin workflow. 2.16 fixes "Make admin" — it now PROMOTES
+     (adds an admin, demotes no one) instead of the old transfer that demoted the sole admin and
+     could strip a global admin; the endpoint returns 204 (killing a false error). 2.17 enforces
+     admin-only pages at the route AND the API (not just the nav), with auth/me carrying is_admin. -->
+
+### Story 2.16: Fix "Make admin" — Promote, Don't Transfer; Protect Global Admins (Bugfix)
+
+As an org admin,
+I want "Make admin" to add another admin without demoting anyone,
+So that I don't accidentally strip my own or the global admin's admin rights.
+
+**Context:** "Make admin" was wired to `transfer_admin`, which promoted the target AND demoted the
+caller when they were the sole admin — surprising for a promotion, and (for the seeded global admin)
+it stripped their admin rights, violating Story 2.8. It also returned 200 with an empty body, which the
+SPA turned into a false "Could not transfer admin." error while the change silently committed.
+
+**Acceptance Criteria:**
+
+**Given** an admin clicks "Make admin" on a member,
+**When** it runs,
+**Then** the target is promoted to admin of that org and **no one is demoted** (orgs may have many
+admins), via `promote_member_to_admin` behind `POST /orgs/promote-admin/` returning **204**.
+
+**Given** the promotion,
+**When** it runs,
+**Then** it is strictly per-org: it does NOT grant global admin, add the target to the ADMIN org, or
+change their role in any other org — a promoted member is an admin of that one org only.
+
+**Given** the buggy transfer,
+**When** removed,
+**Then** there is no demotion path, so a global admin can never be dropped below admin. Tests cover
+promote-without-demote, per-org scoping (`is_global_admin` stays false; other-org role unchanged),
+non-admin 403, non-member 400, and the frontend "Make admin" calling the promote endpoint.
+
+### Story 2.17: Route + API Authorization for Admin Pages (Bugfix)
+
+As a security-conscious operator,
+I want admin-only pages enforced at the route and the API, not just hidden in the nav,
+So that a non-admin can't reach them by typing the URL or calling the endpoint.
+
+**Context:** `/members` and `/organization` used `ProtectedRoute` (authenticated-only), and
+`MembersView.get` served the roster to any member — so authorization lived entirely in the hidden nav
+links. A non-admin could open `/members` by URL and even call the API.
+
+**Acceptance Criteria:**
+
+**Given** a non-admin authenticated user,
+**When** they navigate to `/members` or `/organization`,
+**Then** an `AdminRoute` redirects them to `/` (anonymous → `/login`, preserving the destination).
+
+**Given** the roster API,
+**When** a non-admin calls `GET /orgs/members/`,
+**Then** it returns **403 `not_admin`** (Members is an admin-only page now).
+
+**Given** the client needs the admin flag cheaply,
+**When** `GET /auth/me/` responds,
+**Then** it includes `is_admin` (admin of the active org) and `AuthProvider` exposes `isAdmin` from it —
+so nothing probes an admin-only endpoint to learn its role. Tests cover the redirect, the 403, and the
+auth/me flag; `pixi run ci` is green.
+
 ---
 
 ## Epic 3: Manifest Upload, Job Submission & SBOM Generation

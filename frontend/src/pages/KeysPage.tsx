@@ -17,17 +17,16 @@ import TableRow from '@mui/material/TableRow'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { createKey, getKeys, revokeKey, type ApiKey } from '../api/keys'
-import { getMembers } from '../api/orgs'
 import { useAuth } from '../auth/AuthProvider'
 import { NoOrgState } from '../components/NoOrgState'
 import { EmptyState, ErrorState, LoadingState } from '../components/PageState'
 import { AddActionIcon, DeleteActionIcon, NavIcon } from '../icons'
 
 export function KeysPage() {
-  const { activeOrg } = useAuth()
+  // API Keys is viewable by any member; admin flag (create/revoke) comes from useAuth.
+  const { activeOrg, isAdmin } = useAuth()
   const [keys, setKeys] = useState<ApiKey[]>([])
   const [loading, setLoading] = useState(true)
-  const [isAdmin, setIsAdmin] = useState(false)
   const [name, setName] = useState('')
   const [plaintext, setPlaintext] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -40,9 +39,6 @@ export function KeysPage() {
       })
       .catch(() => setError('Failed to load API keys.'))
       .finally(() => setLoading(false))
-    getMembers()
-      .then((response) => setIsAdmin(response.is_admin))
-      .catch(() => {})
   }
 
   useEffect(() => {

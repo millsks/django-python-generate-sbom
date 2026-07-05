@@ -13,7 +13,7 @@ import TextField from '@mui/material/TextField'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Typography from '@mui/material/Typography'
-import { addMember, createMemberUser, getMembers, removeMember, transferAdmin, type Member } from '../api/orgs'
+import { addMember, createMemberUser, getMembers, promoteAdmin, removeMember, type Member } from '../api/orgs'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthProvider'
 import { NoOrgState } from '../components/NoOrgState'
@@ -21,10 +21,10 @@ import { EmptyState, ErrorState, LoadingState } from '../components/PageState'
 import { NavIcon } from '../icons'
 
 export function MembersPage() {
-  const { activeOrg } = useAuth()
+  // The page is admin-only (AdminRoute), so isAdmin comes straight from useAuth.
+  const { activeOrg, isAdmin } = useAuth()
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
-  const [isAdmin, setIsAdmin] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [mode, setMode] = useState<'existing' | 'create'>('existing')
@@ -34,7 +34,6 @@ export function MembersPage() {
     getMembers()
       .then((response) => {
         setMembers(response.members)
-        setIsAdmin(response.is_admin)
         setError(null)
       })
       .catch(() => setError('Failed to load members.'))
@@ -80,13 +79,13 @@ export function MembersPage() {
     }
   }
 
-  async function handleTransfer(userId: number) {
+  async function handlePromote(userId: number) {
     setError(null)
     try {
-      await transferAdmin(userId)
+      await promoteAdmin(userId)
       load()
     } catch {
-      setError('Could not transfer admin.')
+      setError('Could not make admin.')
     }
   }
 
@@ -134,7 +133,7 @@ export function MembersPage() {
                           Remove
                         </Button>
                         {member.role !== 'admin' && (
-                          <Button size="small" onClick={() => handleTransfer(member.user_id)}>
+                          <Button size="small" onClick={() => handlePromote(member.user_id)}>
                             Make admin
                           </Button>
                         )}

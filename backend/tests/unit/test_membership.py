@@ -4,7 +4,13 @@ import pytest
 from rest_framework.test import APIClient
 
 from generate_sbom.users.models import Org, OrgMembership, User
-from generate_sbom.users.services import create_org, grant_global_admin, register_user
+from generate_sbom.users.services import (
+    create_org,
+    grant_global_admin,
+    is_global_admin,
+    promote_member_to_admin,
+    register_user,
+)
 
 LAST_ADMIN_ERROR = "An org must always have at least one admin."
 
@@ -175,16 +181,73 @@ def test_remove_sole_admin_rejected() -> None:
 
 
 @pytest.mark.django_db
-def test_transfer_admin_promotes_and_demotes_sole_admin() -> None:
+def test_promote_member_to_admin_adds_admin_without_demoting() -> None:
     alice = _register_with_org("alice@example.com", "Alice")
     client = _client("alice@example.com")
     bob = _add_member(client, "bob@example.com")
 
-    response = client.post("/api/v1/orgs/transfer-admin/", {"user_id": bob.pk}, format="json")
+    response = client.post("/api/v1/orgs/promote-admin/", {"user_id": bob.pk}, format="json")
 
-    assert response.status_code == 200
+    assert response.status_code == 204
     assert OrgMembership.objects.get(org__slug="alice", user=bob).role == "admin"
-    assert OrgMembership.objects.get(org__slug="alice", user=alice).role == "member"
+    # The promoter is NOT demoted (Story 2.16) — an org may have multiple admins.
+    assert OrgMembership.objects.get(org__slug="alice", user=alice).role == "admin"
+
+
+@pytest.mark.django_db
+def test_promote_non_member_is_rejected() -> None:
+    _register_with_org("alice@example.com", "Alice")
+    stranger = register_user(email="stranger@example.com", password="pw12345678")
+    client = _client("alice@example.com")
+
+    response = client.post("/api/v1/orgs/promote-admin/", {"user_id": stranger.pk}, format="json")
+
+    assert response.status_code == 400
+    assert response.data["code"] == "not_a_member"
+
+
+@pytest.mark.django_db
+def test_promote_admin_requires_admin() -> None:
+    _register_with_org("alice@example.com", "Alice")
+    admin_client = _client("alice@example.com")
+    bob = _add_member(admin_client, "bob@example.com")
+
+    response = _client("bob@example.com").post("/api/v1/orgs/promote-admin/", {"user_id": bob.pk}, format="json")
+
+    assert response.status_code == 403
+    assert response.data["code"] == "not_admin"
+
+
+@pytest.mark.django_db
+def test_promote_is_per_org_and_not_global() -> None:
+    """Promote makes the target an admin of THAT org only (Story 2.16): not a global
+    admin, and their role in any other org they belong to is unchanged."""
+    _register_with_org("alice@example.com", "Alice")
+    _register_with_org("carol@example.com", "Carol")
+    alice_org = Org.objects.get(slug="alice")
+    carol_org = Org.objects.get(slug="carol")
+    bob = _add_member(_client("alice@example.com"), "bob@example.com")
+    OrgMembership.objects.create(org=carol_org, user=bob, role=OrgMembership.Role.MEMBER)
+
+    promote_member_to_admin(alice_org, bob)
+
+    assert OrgMembership.objects.get(org=alice_org, user=bob).role == "admin"
+    assert OrgMembership.objects.get(org=carol_org, user=bob).role == "member"  # unchanged
+    assert is_global_admin(bob) is False  # never added to the ADMIN org
+
+
+@pytest.mark.django_db
+def test_promote_endpoint_grants_no_access_to_other_orgs() -> None:
+    """An org-admin promoting bob does not give bob any access to a different org."""
+    _register_with_org("alice@example.com", "Alice")
+    _register_with_org("carol@example.com", "Carol")  # bob is NOT a member of this one
+    bob = _add_member(_client("alice@example.com"), "bob@example.com")
+
+    _client("alice@example.com").post("/api/v1/orgs/promote-admin/", {"user_id": bob.pk}, format="json")
+
+    assert OrgMembership.objects.filter(org__slug="alice", user=bob, role="admin").exists()
+    assert not OrgMembership.objects.filter(org__slug="carol", user=bob).exists()
+    assert is_global_admin(bob) is False
 
 
 @pytest.mark.django_db
@@ -238,7 +301,9 @@ def test_non_admin_blocked_from_admin_actions() -> None:
 
     assert add.status_code == 403
     assert add.data["code"] == "not_admin"
-    assert roster.data["is_admin"] is False
+    # The roster is admin-only now (Story 2.17): a non-admin is refused, not just flagged.
+    assert roster.status_code == 403
+    assert roster.data["code"] == "not_admin"
 
 
 # --- Story 2.9: membership edge cases -------------------------------------
@@ -252,15 +317,15 @@ def _make_global_admin(email: str, password: str = "pw12345678") -> User:
 
 
 @pytest.mark.django_db
-def test_transfer_then_leave_lets_sole_admin_exit() -> None:
+def test_promote_then_leave_lets_sole_admin_exit() -> None:
     alice = _register_with_org("alice@example.com", "Alice")
     client = _client("alice@example.com")
     bob = _add_member(client, "bob@example.com")
 
-    transfer = client.post("/api/v1/orgs/transfer-admin/", {"user_id": bob.pk}, format="json")
+    promote = client.post("/api/v1/orgs/promote-admin/", {"user_id": bob.pk}, format="json")
     leave = client.post("/api/v1/orgs/leave/")
 
-    assert transfer.status_code == 200
+    assert promote.status_code == 204
     assert leave.status_code == 204
     assert not OrgMembership.objects.filter(org__slug="alice", user=alice).exists()
     assert OrgMembership.objects.get(org__slug="alice", user=bob).role == "admin"

@@ -54,8 +54,8 @@ class CreateMemberUserSerializer(serializers.Serializer[User]):
     temp_password = serializers.CharField(write_only=True, min_length=8)
 
 
-class TransferAdminSerializer(serializers.Serializer[User]):
-    """Validates the transfer-admin request."""
+class UserIdSerializer(serializers.Serializer[User]):
+    """Validates a request that targets a user by id (promote-admin, grant-global-admin)."""
 
     user_id = serializers.IntegerField()
 

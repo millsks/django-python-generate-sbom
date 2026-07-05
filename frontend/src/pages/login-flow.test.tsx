@@ -11,13 +11,12 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from '../auth/AuthProvider'
 import { ProtectedRoute } from '../components/ProtectedRoute'
 import { LoginPage } from './LoginPage'
-import { getActiveOrg, getMembers } from '../api/orgs'
+import { getActiveOrg } from '../api/orgs'
 import { getMe, login } from '../api/auth'
 
 vi.mock('../api/orgs', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api/orgs')>()),
   getActiveOrg: vi.fn(),
-  getMembers: vi.fn(),
 }))
 vi.mock('../api/auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api/auth')>()),
@@ -26,7 +25,6 @@ vi.mock('../api/auth', async (importOriginal) => ({
 }))
 const mockGetMe = getMe as Mock
 const mockActiveOrg = getActiveOrg as Mock
-const mockMembers = getMembers as Mock
 const mockLogin = login as Mock
 
 function renderApp(initial: string) {
@@ -59,9 +57,10 @@ describe('login flow (bounce-loop regression, Story 10.2)', () => {
   it('lands on the protected target after login and is NOT bounced back to /login', async () => {
     // Anonymous at mount (protected route bounces to /login), then authed after the
     // successful login triggers refresh() — so the target route stays rendered.
-    mockGetMe.mockRejectedValueOnce(new Error('anon')).mockResolvedValue({ id: 1, email: 'a@b.com' })
+    mockGetMe
+      .mockRejectedValueOnce(new Error('anon'))
+      .mockResolvedValue({ id: 1, email: 'a@b.com', is_admin: false, is_global_admin: false })
     mockActiveOrg.mockResolvedValue({ slug: 'acme', name: 'Acme' })
-    mockMembers.mockResolvedValue({ is_admin: false, members: [] })
     mockLogin.mockResolvedValue({ org: { slug: 'acme', name: 'Acme' } })
 
     renderApp('/upload')
@@ -80,7 +79,9 @@ describe('login flow (bounce-loop regression, Story 10.2)', () => {
   it('a zero-org user who logs in stays authenticated and reaches the protected page', async () => {
     // Identity resolves but the active-org call 404s: the user has no org yet, yet must
     // still be treated as authenticated (Story 2.6) — no bounce back to /login.
-    mockGetMe.mockRejectedValueOnce(new Error('anon')).mockResolvedValue({ id: 2, email: 'zero@org.com' })
+    mockGetMe
+      .mockRejectedValueOnce(new Error('anon'))
+      .mockResolvedValue({ id: 2, email: 'zero@org.com', is_admin: false, is_global_admin: false })
     mockActiveOrg.mockRejectedValue(new Error('404'))
     mockLogin.mockResolvedValue({ org: null })
 

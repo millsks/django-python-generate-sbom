@@ -24,7 +24,7 @@ from .serializers import (
     CreateOrgSerializer,
     LoginSerializer,
     RegistrationSerializer,
-    TransferAdminSerializer,
+    UserIdSerializer,
 )
 from .services import (
     MembershipError,
@@ -35,9 +35,9 @@ from .services import (
     grant_global_admin,
     is_global_admin,
     leave_org,
+    promote_member_to_admin,
     remove_member,
     revoke_api_key,
-    transfer_admin,
 )
 
 logger = structlog.get_logger()
@@ -118,9 +118,21 @@ class AuthMeView(APIView):
     """
 
     def get(self, request: Request) -> Response:
-        """Return the current user's ``id``, ``email``, and global-admin flag."""
+        """Return the current user's ``id``, ``email``, and admin flags.
+
+        ``is_admin`` (admin of the active org) and ``is_global_admin`` are the SPA's
+        single source of truth for gating admin-only nav, routes, and affordances —
+        so the client never has to probe an admin-only endpoint to learn its role.
+        """
         user = cast(User, request.user)
-        return Response({"id": user.pk, "email": user.email, "is_global_admin": is_global_admin(user)})
+        return Response(
+            {
+                "id": user.pk,
+                "email": user.email,
+                "is_admin": get_admin_org(request) is not None,
+                "is_global_admin": is_global_admin(user),
+            }
+        )
 
 
 class GrantGlobalAdminView(APIView):
@@ -135,7 +147,7 @@ class GrantGlobalAdminView(APIView):
         """Grant global admin to the target user; 403 unless the caller is one."""
         if not is_global_admin(cast(User, request.user)):
             return Response(_NOT_GLOBAL_ADMIN, status=status.HTTP_403_FORBIDDEN)
-        serializer = TransferAdminSerializer(data=request.data)
+        serializer = UserIdSerializer(data=request.data)
         if not serializer.is_valid():
             return _validation_error(serializer.errors)
         target = User.objects.filter(pk=serializer.validated_data["user_id"]).first()
@@ -252,15 +264,20 @@ class CreateOrgView(APIView):
 
 
 class MembersView(APIView):
-    """List (any member) or add (admin only) members of the active org."""
+    """List (admin only) or add (admin only) members of the active org.
+
+    The roster is admin-only (Story 2.17): Members is an admin page, so a non-admin
+    is refused at the API too — not just hidden in the nav. ``AuthMeView`` supplies
+    ``is_admin`` for the client, so nothing needs to probe this endpoint for a role.
+    """
 
     def get(self, request: Request) -> Response:
-        """Return the active org's roster and whether the caller is an admin."""
-        org = get_request_org(request)
+        """Return the active org's roster (admin only)."""
+        org = get_admin_org(request)
         if org is None:
-            return Response(_NO_ACTIVE_ORG, status=status.HTTP_404_NOT_FOUND)
+            return Response(_NOT_ADMIN, status=status.HTTP_403_FORBIDDEN)
         members = [_member_data(m) for m in get_org_members(org)]
-        return Response({"members": members, "is_admin": get_admin_org(request) is not None})
+        return Response({"members": members, "is_admin": True})
 
     def post(self, request: Request) -> Response:
         """Add a member to the active org (admin only, FR-1.3)."""
@@ -324,15 +341,20 @@ class MemberDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class TransferAdminView(APIView):
-    """Transfer admin to another member (POST /orgs/transfer-admin/)."""
+class PromoteAdminView(APIView):
+    """Promote a member to admin (POST /orgs/promote-admin/, admin only, Story 2.16).
+
+    Adds an admin (orgs may have many) and demotes no one — replacing the old
+    transfer-admin, which demoted the sole admin (surprising, and able to strip a
+    global admin). Returns 204 so the client's empty-body handling is clean.
+    """
 
     def post(self, request: Request) -> Response:
-        """Promote the target to admin, demoting the caller if sole admin (FR-1.5)."""
+        """Promote the target member to admin."""
         org = get_admin_org(request)
         if org is None:
             return Response(_NOT_ADMIN, status=status.HTTP_403_FORBIDDEN)
-        serializer = TransferAdminSerializer(data=request.data)
+        serializer = UserIdSerializer(data=request.data)
         if not serializer.is_valid():
             return _validation_error(serializer.errors)
         target = User.objects.filter(pk=serializer.validated_data["user_id"]).first()
@@ -342,10 +364,10 @@ class TransferAdminView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
         try:
-            transfer_admin(org, cast(User, request.user), target)
+            promote_member_to_admin(org, target)
         except MembershipError as exc:
             return _membership_error(exc)
-        return Response(status=status.HTTP_200_OK)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class LeaveOrgView(APIView):

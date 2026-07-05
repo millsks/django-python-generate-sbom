@@ -16,7 +16,9 @@ development_status:
 
   # Reopened: 2.5-2.9 add the full org-membership model (zero-org users, create-org UI,
   # admin-managed membership by email, a global-admin ADMIN org, and edge cases).
-  epic-2: done
+  # Reopened (bugfix): 2.16 fixes "Make admin" (promote, don't transfer; protect global admins);
+  # 2.17 enforces admin-only pages at the route + API (not just the nav).
+  epic-2: in-progress
   2-1-user-and-org-data-models-and-registration: done
   2-2-login-session-auth-and-org-switcher: done
   2-3-org-administration-and-membership-management: done
@@ -38,6 +40,8 @@ development_status:
   2-13-seed-initial-superuser-from-env: done
   2-14-create-org-dialog-label-clipped: done
   2-15-reorder-side-navigation: done
+  2-16-fix-make-admin-and-protect-global-admin: review
+  2-17-admin-route-and-api-authorization: review
 
   epic-3: done
   3-1-manifest-upload-and-format-detection: done

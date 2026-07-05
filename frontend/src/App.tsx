@@ -9,6 +9,7 @@ import { UploadPage } from './pages/UploadPage'
 import { ResultsPage } from './pages/ResultsPage'
 import { HistoryPage } from './pages/HistoryPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
+import { AdminRoute } from './components/AdminRoute'
 import { Layout } from './components/Layout'
 import { AuthProvider } from './auth/AuthProvider'
 
@@ -24,17 +25,17 @@ function App() {
             <Route
               path="/organization"
               element={
-                <ProtectedRoute>
+                <AdminRoute>
                   <OrganizationPage />
-                </ProtectedRoute>
+                </AdminRoute>
               }
             />
             <Route
               path="/members"
               element={
-                <ProtectedRoute>
+                <AdminRoute>
                   <MembersPage />
-                </ProtectedRoute>
+                </AdminRoute>
               }
             />
             <Route

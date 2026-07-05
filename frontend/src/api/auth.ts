@@ -7,10 +7,12 @@ export interface OrgSummary {
 }
 
 // The authenticated user's identity, independent of any org membership (Story 2.6).
-// `is_global_admin` (Story 2.12) lets the SPA gate global-admin-only affordances.
+// `is_admin` (admin of the active org, Story 2.17) and `is_global_admin` (Story 2.12)
+// are the SPA's single source of truth for gating admin-only nav, routes, and actions.
 export interface CurrentUser {
   id: number
   email: string
+  is_admin: boolean
   is_global_admin: boolean
 }
 

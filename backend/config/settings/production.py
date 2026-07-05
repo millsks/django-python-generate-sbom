@@ -6,6 +6,10 @@ from config.settings.base import *
 
 DEBUG = False
 
+# API docs are off by default in production (Story 11.9); set API_DOCS_ENABLED=true to
+# expose /api/schema/, /api/docs/, and /api/redoc/ on a deployed instance.
+API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED", default=False)
+
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_HSTS_SECONDS = 31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True

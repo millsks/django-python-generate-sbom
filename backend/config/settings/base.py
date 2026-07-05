@@ -29,6 +29,8 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "rest_framework_api_key",
+    "drf_spectacular",
+    "drf_spectacular_sidecar",
     "generate_sbom.users",
     "generate_sbom.manifests",
     "generate_sbom.sbom",
@@ -47,6 +49,29 @@ REST_FRAMEWORK = {
         "rest_framework.authentication.SessionAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": ["generate_sbom.users.authentication.HasSessionOrApiKey"],
+    # OpenAPI schema generation for the interactive docs (Story 11.9, drf-spectacular).
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+# OpenAPI / Swagger UI (Story 11.9). Assets are self-hosted via drf-spectacular-sidecar
+# (SIDECAR) so the docs work without any external CDN. API_DOCS_ENABLED gates whether the
+# /api/schema/, /api/docs/, and /api/redoc/ endpoints are served — on in development, and
+# overridable per environment (production defaults it off; see settings/production.py).
+API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED", default=True)
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "generate-sbom API",
+    "DESCRIPTION": "REST API for uploading manifests, running SBOM jobs, and reading "
+    "vulnerability, license, dependency-graph, and version-currency reports.",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    # Public serve permissions so the docs are reachable without a session/API key;
+    # exposure itself is gated by API_DOCS_ENABLED at the URLconf level.
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"],
+    # Self-hosted UI assets (no external CDN).
+    "SWAGGER_UI_DIST": "SIDECAR",
+    "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
+    "REDOC_DIST": "SIDECAR",
 }
 
 MIDDLEWARE = [

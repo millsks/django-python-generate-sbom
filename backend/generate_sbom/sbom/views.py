@@ -8,6 +8,7 @@ gate-then-create) is preserved by the transaction, independent of file location.
 
 from __future__ import annotations
 
+import uuid
 from typing import cast
 
 from django.conf import settings
@@ -25,13 +26,20 @@ from rest_framework.views import APIView
 from generate_sbom.manifests.detection import ManifestParseError, UnsupportedFormatError
 from generate_sbom.manifests.services import upload_manifest
 from generate_sbom.tasks.sbom_pipeline import run_sbom_pipeline
-from generate_sbom.users.auth import get_request_org
+from generate_sbom.users.auth import get_admin_org, get_request_org
 
 from .document import normalize_components, parse_metadata
 from .models import SBOMJob
 from .selectors import get_job, get_jobs
 from .serializers import GenerateJobSerializer, JobListSerializer
-from .services import OUTPUT_FORMAT_MAP, create_job, estimate_seconds, mark_stale_job_timed_out
+from .services import (
+    OUTPUT_FORMAT_MAP,
+    create_job,
+    delete_artifacts_for_jobs,
+    delete_job_artifacts,
+    estimate_seconds,
+    mark_stale_job_timed_out,
+)
 
 _NO_ACTIVE_ORG = {"error": "No active org.", "code": "no_active_org"}
 _ACTIVE_STATUSES = [SBOMJob.Status.PENDING, SBOMJob.Status.PROGRESS]
@@ -227,3 +235,63 @@ class SbomDocumentView(APIView):
                 "raw": raw.decode("utf-8"),
             }
         )
+
+
+class JobArtifactsView(APIView):
+    """Delete one job's artifacts on demand (DELETE /api/v1/sbom/jobs/{task_id}/artifacts/).
+
+    Any org member may purge a job owned by their active org (Story 7.2, FR-8.4). The
+    job record + metadata are retained; only the blobs and key columns are removed via
+    the shared cleanup service (AD-3). Cross-org / unknown jobs 404 (AD-2); already-clean
+    jobs succeed idempotently.
+    """
+
+    def delete(self, request: Request, task_id: str) -> Response:
+        """Purge the job's artifacts, or 404 for unknown/cross-org."""
+        org = get_request_org(request)
+        if org is None:
+            return Response(_NO_ACTIVE_ORG, status=status.HTTP_404_NOT_FOUND)
+        try:
+            job = get_job(org, task_id)
+        except SBOMJob.DoesNotExist:
+            return Response({"error": "Job not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
+        deleted = delete_job_artifacts(job)
+        return Response({"task_id": str(job.task_id), "deleted": deleted})
+
+
+class BulkDeleteArtifactsView(APIView):
+    """Bulk-delete artifacts (POST /api/v1/sbom/jobs/artifacts/bulk-delete/).
+
+    Body ``{"all": true}`` purges every artifact for the active org — **admin only**
+    (FR-8.5, AD-2); a non-admin gets 403. Body ``{"task_ids": [...]}`` purges the named
+    jobs owned by the active org (bulk selection). Both reuse the shared cleanup service
+    (AD-3); job records + metadata are retained; the operation is idempotent.
+    """
+
+    def post(self, request: Request) -> Response:
+        """Purge artifacts for the whole org (admin) or a list of the org's jobs."""
+        payload = request.data if isinstance(request.data, dict) else {}
+        if payload.get("all"):
+            org = get_admin_org(request)
+            if org is None:
+                return Response({"error": "Org admin required.", "code": "forbidden"}, status=status.HTTP_403_FORBIDDEN)
+            jobs = cast("QuerySet[SBOMJob]", SBOMJob.objects.for_org(org)).filter(result_key__isnull=False)
+            return Response({"deleted": delete_artifacts_for_jobs(jobs), "scope": "org"})
+
+        org = get_request_org(request)
+        if org is None:
+            return Response(_NO_ACTIVE_ORG, status=status.HTTP_404_NOT_FOUND)
+        raw_ids = payload.get("task_ids")
+        if not isinstance(raw_ids, list):
+            return Response(
+                {"error": "task_ids must be a list.", "code": "validation_error"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        valid_ids: list[uuid.UUID] = []
+        for tid in raw_ids:
+            try:
+                valid_ids.append(uuid.UUID(str(tid)))
+            except (ValueError, TypeError):
+                continue
+        jobs = cast("QuerySet[SBOMJob]", SBOMJob.objects.for_org(org)).filter(task_id__in=valid_ids)
+        return Response({"deleted": delete_artifacts_for_jobs(jobs), "requested": len(raw_ids)})

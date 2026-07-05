@@ -1,6 +1,6 @@
 # Story 7.2: Manual & Bulk Artifact Deletion
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -93,8 +93,24 @@ If Story 7.1 is not yet implemented, that service function is the prerequisite â
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
 
 ### Completion Notes List
 
+- Reused Story 7.1's `delete_job_artifacts(job)` (AD-3, no duplicated deletion logic); added a thin `delete_artifacts_for_jobs(jobs)` bulk primitive that loops it.
+- `DELETE /api/v1/sbom/jobs/{task_id}/artifacts/` for a single job (org member; 404 cross-org/unknown via `get_job`; idempotent).
+- `POST /api/v1/sbom/jobs/artifacts/bulk-delete/`: `{"all": true}` is admin-only (`get_admin_org` â†’ 403 for members) and purges the whole org; `{"task_ids": [...]}` purges the named org jobs (frontend bulk selection). Invalid UUID strings are skipped.
+- Endpoint path uses the repo's `sbom/` prefix (`/api/v1/sbom/jobs/...`) rather than the AC's illustrative `/api/v1/jobs/...`, matching every other job route.
+- Frontend: per-row delete icon (`DeleteActionIcon` from the 12.2 vocabulary), checkbox selection + "Delete selected", admin-only "Delete all artifacts", all behind a confirmation dialog; the list refreshes after a delete.
+
 ### File List
+
+- backend/generate_sbom/sbom/services.py (add `delete_artifacts_for_jobs`)
+- backend/generate_sbom/sbom/views.py (add `JobArtifactsView`, `BulkDeleteArtifactsView`)
+- backend/generate_sbom/sbom/urls.py (wire the two routes)
+- backend/tests/unit/test_artifact_deletion.py (new)
+- frontend/src/api/jobs.ts (`deleteJobArtifacts`, `bulkDeleteArtifacts`)
+- frontend/src/pages/HistoryPage.tsx (delete UI)
+- frontend/src/pages/HistoryPage.test.tsx (delete tests + auth mock)

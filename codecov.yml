@@ -1,0 +1,56 @@
+# Codecov configuration (Story 9.1).
+#
+# The project ships two independently-tested components under one repo: the
+# Django/DRF/Celery backend (pytest -> coverage.xml) and the React SPA frontend
+# (vitest v8 -> lcov). Each is uploaded under its own flag so Codecov tracks and
+# reports them separately instead of collapsing both into a single number.
+codecov:
+  require_ci_to_pass: true
+
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+      backend:
+        target: auto
+        threshold: 1%
+        flags:
+          - backend
+      frontend:
+        target: auto
+        threshold: 1%
+        flags:
+          - frontend
+    patch:
+      default:
+        target: auto
+
+# Flags carry the two upload streams; paths scope each flag to its source tree.
+flag_management:
+  default_rules:
+    carryforward: true
+  individual_flags:
+    - name: backend
+      paths:
+        - backend/generate_sbom
+    - name: frontend
+      paths:
+        - frontend/src
+
+# Components give each a named view in the Codecov UI.
+component_management:
+  individual_components:
+    - component_id: backend
+      name: Backend (Django/DRF/Celery)
+      paths:
+        - backend/generate_sbom/**
+    - component_id: frontend
+      name: Frontend (React SPA)
+      paths:
+        - frontend/src/**
+
+comment:
+  layout: "header, diff, flags, components"
+  behavior: default

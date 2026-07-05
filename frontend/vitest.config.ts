@@ -11,5 +11,14 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
     css: false,
+    // v8 coverage with an lcov report (frontend/coverage/lcov.info) for the
+    // Codecov `frontend` flag (Story 9.1). `text` keeps a terminal summary.
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'lcov'],
+      reportsDirectory: './coverage',
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: ['src/**/*.test.{ts,tsx}', 'src/test/**', 'src/**/*.d.ts', 'src/main.tsx'],
+    },
   },
 })

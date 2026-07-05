@@ -18,7 +18,3 @@ dependency tree and produces an SBOM plus enrichment reports:
 | [Developer](developer/index.md) | Architecture, setup, and internals |
 | [API Reference](api/index.md) | The REST API |
 | [Contributing](contributing.md) | Working on the project |
-
-!!! note
-    This documentation site is being built out (Epic 11). Sections above are
-    placeholders that the content stories fill in.

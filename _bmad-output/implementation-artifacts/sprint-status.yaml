@@ -21,11 +21,11 @@ development_status:
   2-2-login-session-auth-and-org-switcher: done
   2-3-org-administration-and-membership-management: done
   2-4-api-key-management: done
-  2-5-create-organization-from-the-ui: review
+  2-5-create-organization-from-the-ui: done
   2-6-zero-org-users-and-identity-decoupling: done
-  2-7-admin-add-remove-existing-users-by-email: review
+  2-7-admin-add-remove-existing-users-by-email: done
   2-8-global-admin-org-and-cross-org-provisioning: done
-  2-9-membership-edge-cases: review
+  2-9-membership-edge-cases: done
   # Reopened: 2.10 restores admin new-user provisioning (distinct from add-existing, which
   # 2.7 left raising no_such_user); 2.11 adds an admin-gated "Organization" nav control center.
   2-10-admin-create-new-user-account: ready-for-dev
@@ -116,7 +116,7 @@ development_status:
   epic-10: in-progress
   10-1-app-shell-and-auth-aware-navigation: done
   10-2-redirect-to-login-and-back: done
-  10-3-auto-redirect-to-login-after-registration: review
+  10-3-auto-redirect-to-login-after-registration: done
   10-4-autofocus-email-on-login: ready-for-dev
 
   # Epic 11 — Project Documentation (MkDocs Material → GitHub Pages; markdown).
@@ -137,10 +137,10 @@ development_status:
   11-8-repository-and-documentation-header-links: done
   11-9-openapi-schema-and-swagger-ui-endpoint: done
   11-10-publish-documentation-on-release: done
-  11-11-user-facing-documentation-reconciliation: ready-for-dev
-  11-12-api-reference-and-openapi-reconciliation: ready-for-dev
-  11-13-developer-documentation-reconciliation: ready-for-dev
-  11-14-cross-cutting-documentation-audit-and-refresh: ready-for-dev
+  11-11-user-facing-documentation-reconciliation: review
+  11-12-api-reference-and-openapi-reconciliation: review
+  11-13-developer-documentation-reconciliation: review
+  11-14-cross-cutting-documentation-audit-and-refresh: review
 
   # Epic 12 — UI/UX Visual Design & Professional Polish (frontend; refines Epic 10
   # shell + Story 5.7 theme). 12-1 (theme/design system) is the foundation; 12-2 icons

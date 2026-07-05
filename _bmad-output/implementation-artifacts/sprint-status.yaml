@@ -55,7 +55,8 @@ development_status:
 
   # Epic 8 — SBOM Enrichment & In-App Viewing (post-v1 enhancement).
   # 8.3-8.5 stay backlog until the 8.2 spike settles the direct/transitive mechanism.
-  epic-8: done
+  # Reopened: 8.18/8.19 add pixi-based conda environment.yml resolution.
+  epic-8: in-progress
   8-1-broaden-lts-coverage-via-endoflife-date: done
   8-2-spike-direct-vs-transitive-dependency-design: done
   8-3-capture-direct-transitive-relationships-during-resolution: done
@@ -73,6 +74,8 @@ development_status:
   8-15-overview-export-all-to-excel: done
   8-16-default-sort-order-per-tab: done
   8-17-licenses-expand-collapse-all: done
+  8-18-spike-conda-environment-yml-via-pixi: ready-for-dev
+  8-19-resolve-conda-environment-yml-via-pixi: ready-for-dev
 
   # Epic 9 — Project Management & CI/CD Workflows (ported from millsks/idp-app,
   # excluding renovate + disabled workflows). External secrets are operator-supplied.

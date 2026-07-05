@@ -29,6 +29,15 @@ _SEED_CONDA_TO_PYPI: dict[str, str] = {
     "faiss-gpu": "faiss",
 }
 
+# Curated PyPI → conda-forge overrides (canonical PyPI name → conda-forge name), applied
+# with highest precedence in ``pypi_to_conda``. Needed where the inverted map is
+# ambiguous because a coincidentally same-named conda-forge package is a *different*
+# project: e.g. PyPI ``build`` maps to conda-forge ``python-build`` — conda-forge's own
+# ``build`` package is unrelated. Extend as such cases are found.
+_PYPI_TO_CONDA_OVERRIDES: dict[str, str] = {
+    "build": "python-build",
+}
+
 _conda_to_pypi: dict[str, str] | None = None  # canonical conda name → original PyPI name
 _pypi_to_conda: dict[str, str] | None = None  # canonical PyPI name → original conda name
 
@@ -58,17 +67,27 @@ def _ensure_loaded() -> None:
         conda_key = canonicalize_name(str(conda_name))
         pypi_key = canonicalize_name(str(pypi_name))
         conda_to_pypi[conda_key] = str(pypi_name)
-        # Prefer an identity mapping (conda name == pypi name) when several exist.
-        if pypi_key not in pypi_to_conda or conda_key == pypi_key:
+        # Invert conda→pypi to pypi→conda, first mapping wins. We deliberately do NOT
+        # prefer an identity (conda name == pypi name) match: a coincidentally same-named
+        # conda package can be a different project (e.g. conda ``build`` vs PyPI
+        # ``build`` → ``python-build``). Known ambiguities are resolved authoritatively
+        # by ``_PYPI_TO_CONDA_OVERRIDES`` in ``pypi_to_conda``.
+        if pypi_key not in pypi_to_conda:
             pypi_to_conda[pypi_key] = str(conda_name)
     _conda_to_pypi, _pypi_to_conda = conda_to_pypi, pypi_to_conda
 
 
 def pypi_to_conda(name: str) -> str:
-    """Return the conda-forge package name for a PyPI name (same name if unmapped)."""
+    """Return the conda-forge package name for a PyPI name (same name if unmapped).
+
+    Precedence: curated override > inverted parselmouth map > the same name.
+    """
     _ensure_loaded()
     assert _pypi_to_conda is not None
-    return _pypi_to_conda.get(canonicalize_name(name), name)
+    key = canonicalize_name(name)
+    if key in _PYPI_TO_CONDA_OVERRIDES:
+        return _PYPI_TO_CONDA_OVERRIDES[key]
+    return _pypi_to_conda.get(key, name)
 
 
 def conda_to_pypi(name: str) -> str:

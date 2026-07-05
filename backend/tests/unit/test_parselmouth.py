@@ -43,6 +43,40 @@ def test_stored_mapping_is_used_and_inverted() -> None:
     assert parselmouth.pypi_to_conda("conda-only") == "conda-only"
 
 
+def test_pypi_build_maps_to_python_build_override() -> None:
+    # PyPI ``build``'s true conda-forge equivalent is ``python-build`` — the curated
+    # override applies even with no stored map (conda-forge's own ``build`` is unrelated).
+    assert parselmouth.pypi_to_conda("build") == "python-build"
+
+
+def test_override_wins_over_stored_inverted_map() -> None:
+    # Even when the stored map would invert ``build`` → conda ``build``, the override wins.
+    _store({"build": "build"})
+    parselmouth._invalidate()
+
+    assert parselmouth.pypi_to_conda("build") == "python-build"
+    # Forward direction is unaffected: conda ``build`` → pypi ``build``.
+    assert parselmouth.conda_to_pypi("build") == "build"
+
+
+def test_inversion_does_not_prefer_identity() -> None:
+    # Two conda names map to one PyPI name; the identity (conda == pypi) is NOT preferred
+    # anymore — first mapping wins. (Old behavior returned "shared-pypi".)
+    _store({"first-conda": "shared-pypi", "shared-pypi": "shared-pypi"})
+    parselmouth._invalidate()
+
+    assert parselmouth.pypi_to_conda("shared-pypi") == "first-conda"
+
+
+def test_normal_one_to_one_name_unaffected() -> None:
+    # A 1:1 mapping still inverts cleanly; an unmapped name falls back to itself.
+    _store({"numpy": "numpy"})
+    parselmouth._invalidate()
+
+    assert parselmouth.pypi_to_conda("numpy") == "numpy"
+    assert parselmouth.pypi_to_conda("nonexistent-pkg") == "nonexistent-pkg"
+
+
 @responses.activate
 def test_refresh_fetches_stores_and_reloads(settings: pytest.FixtureRequest) -> None:
     settings.PARSELMOUTH_MAPPING_URL = "https://example.test/mapping.json"  # type: ignore[attr-defined]

@@ -181,7 +181,7 @@ def test_phase8_finalizes_job() -> None:
     assert job.summary_stats == {"total_packages": 5}
     assert job.progress == 100
     assert job.completed_at is not None
-    assert abs((job.artifacts_expire_at - job.completed_at) - timedelta(days=10)).total_seconds() < 5
+    assert abs((job.artifacts_expire_at - job.completed_at) - timedelta(days=30)).total_seconds() < 5
 
 
 @pytest.mark.django_db

@@ -7,10 +7,13 @@ PENDING via ``create_job``. DRF views never write status otherwise.
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
+from typing import cast
 
 import structlog
 from django.conf import settings
+from django.core.files.storage import default_storage
+from django.db.models import QuerySet
 from django.utils import timezone
 
 from generate_sbom.manifests.models import ManifestUpload
@@ -32,10 +35,12 @@ __all__ = [
     "SBOMGenerationError",
     "build_provenance",
     "create_job",
+    "delete_job_artifacts",
     "estimate_seconds",
     "finalize_job",
     "generate_sbom_document",
     "mark_stale_job_timed_out",
+    "purge_expired_artifacts",
     "record_analysis_summaries",
     "record_generation",
     "resolve_job_packages",
@@ -52,7 +57,6 @@ OUTPUT_FORMAT_MAP = {
     "spdx-2.3": "spdx-json",
 }
 DEFAULT_OUTPUT_FORMAT = "cdx-json"
-ARTIFACT_TTL_DAYS = 10
 
 
 def create_job(org: Org, manifest: ManifestUpload, user: User | None, output_format: str) -> SBOMJob:
@@ -131,7 +135,11 @@ def mark_stale_job_timed_out(job: SBOMJob) -> bool:
 
 
 def finalize_job(task_id: str, result_key: str, summary_stats: dict[str, object]) -> None:
-    """Mark a job SUCCESS with its artifact key and set the 10-day expiry (AD-12)."""
+    """Mark a job SUCCESS with its artifact key and set the retention expiry (AD-12).
+
+    The expiry window is ``settings.ARTIFACT_RETENTION_DAYS`` (default 30, env-overridable;
+    Story 7.1), after which the daily cleanup purges the blobs.
+    """
     now = timezone.now()
     SBOMJob.objects.filter(task_id=task_id).update(
         status=SBOMJob.Status.SUCCESS,
@@ -139,8 +147,49 @@ def finalize_job(task_id: str, result_key: str, summary_stats: dict[str, object]
         result_key=result_key,
         summary_stats=summary_stats,
         completed_at=now,
-        artifacts_expire_at=now + timedelta(days=ARTIFACT_TTL_DAYS),
+        artifacts_expire_at=now + timedelta(days=settings.ARTIFACT_RETENTION_DAYS),
     )
+
+
+def delete_job_artifacts(job: SBOMJob) -> bool:
+    """Delete a job's SBOM + analysis-report blobs from storage and null their keys.
+
+    The ``SBOMJob`` and its ``AnalysisReport`` rows — with all metadata (status,
+    package count, summary statistics) — are retained forever (FR-8.1); only the blobs
+    and the key columns (``result_key`` / ``artifact_key``) are removed. Idempotent: a
+    job whose artifacts were already cleaned (``result_key`` is null) is skipped and
+    returns ``False``. Pure service-layer primitive (AD-3) reused by the scheduled
+    cleanup task and by on-demand deletion (Story 7.2).
+    """
+    if not job.result_key:
+        return False
+    report_keys = [report.artifact_key for report in job.reports.all() if report.artifact_key]
+    for key in (job.result_key, *report_keys):
+        if default_storage.exists(key):
+            default_storage.delete(key)
+    job.reports.filter(artifact_key__isnull=False).update(artifact_key=None)
+    SBOMJob.objects.filter(task_id=job.task_id).update(result_key=None)
+    logger.info("job_artifacts_deleted", task_id=str(job.task_id), org_id=job.org_id, blobs=len(report_keys) + 1)
+    return True
+
+
+def purge_expired_artifacts(now: datetime | None = None) -> int:
+    """Purge artifacts for every job past its ``artifacts_expire_at`` (the daily sweep).
+
+    Selects expired jobs that still hold artifacts (``result_key__isnull=False``, AD-6),
+    deletes each one's blobs via :func:`delete_job_artifacts`, and returns the number of
+    jobs cleaned. Job metadata is never deleted (FR-8.1).
+    """
+    cutoff = now or timezone.now()
+    expired = cast(
+        "QuerySet[SBOMJob]",
+        SBOMJob.objects.filter(artifacts_expire_at__lte=cutoff, result_key__isnull=False),
+    )
+    cleaned = 0
+    for job in expired:
+        if delete_job_artifacts(job):
+            cleaned += 1
+    return cleaned
 
 
 def build_provenance(manifest: ManifestUpload) -> Provenance:

@@ -20,11 +20,15 @@ app.autodiscover_tasks()
 # (not a per-app tasks.py), so discover it explicitly.
 app.autodiscover_tasks(["generate_sbom"])
 
-# Beat schedule. The nightly artifact-cleanup task is added in Epic 7.
 app.conf.beat_schedule = {
     # Weekly refresh of the parselmouth conda↔PyPI name mapping (Story 8.10).
     "refresh-parselmouth-mapping": {
         "task": "generate_sbom.tasks.maintenance.refresh_parselmouth_mapping",
         "schedule": crontab(hour=3, minute=0, day_of_week=1),
+    },
+    # Nightly purge of expired artifact blobs; job metadata is retained (Story 7.1).
+    "purge-expired-artifacts": {
+        "task": "generate_sbom.tasks.maintenance.purge_expired_artifacts",
+        "schedule": crontab(hour=4, minute=0),
     },
 }

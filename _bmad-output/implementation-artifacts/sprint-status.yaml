@@ -103,7 +103,7 @@ development_status:
   11-6-contribution-and-project-meta-documentation: done
   11-7-readme-overhaul: done
   11-8-repository-and-documentation-header-links: done
-  11-9-openapi-schema-and-swagger-ui-endpoint: backlog
+  11-9-openapi-schema-and-swagger-ui-endpoint: done
   11-10-publish-documentation-on-release: backlog
 
   # Epic 12 — UI/UX Visual Design & Professional Polish (frontend; refines Epic 10

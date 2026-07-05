@@ -33,7 +33,14 @@ export function OrgSwitcher() {
   return (
     <FormControl size="small" sx={{ minWidth: 200 }}>
       <InputLabel id="org-switcher-label">Org</InputLabel>
-      <Select labelId="org-switcher-label" label="Org" value={active} onChange={handleChange}>
+      <Select
+        labelId="org-switcher-label"
+        label="Org"
+        value={active}
+        onChange={handleChange}
+        // Give the dropdown a solid surface (not transparent) in both themes.
+        MenuProps={{ slotProps: { paper: { sx: { bgcolor: 'background.paper' } } } }}
+      >
         {orgs.map((org) => (
           <MenuItem key={org.slug} value={org.slug}>
             {org.name}

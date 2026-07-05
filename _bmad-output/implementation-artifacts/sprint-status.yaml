@@ -96,8 +96,8 @@ development_status:
   # 8-20 is a deferred/parked option (revisit only if needed); Epic 8's committed scope is done.
   8-20-configurable-conda-solve-platform-and-cuda: backlog
   8-21-fix-pypi-to-conda-forge-reverse-lookup: done
-  8-22-version-currency-excel-conda-forge-color: ready-for-dev
-  8-23-version-currency-pypi-latest-column: ready-for-dev
+  8-22-version-currency-excel-conda-forge-color: review
+  8-23-version-currency-pypi-latest-column: review
 
   # Epic 9 — Project Management & CI/CD Workflows (ported from millsks/idp-app,
   # excluding renovate + disabled workflows). External secrets are operator-supplied.

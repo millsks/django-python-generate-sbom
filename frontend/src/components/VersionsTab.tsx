@@ -28,11 +28,14 @@ import { TabFailureNotice } from './TabFailureNotice'
 const CURRENCY_RANK: Record<string, number> = { 'behind-2+': 3, 'behind-1': 2, current: 1, unknown: 0 }
 
 type Column = 'name' | 'installed' | 'latest' | 'currency'
+// "PyPI Latest" is ordered last so it renders immediately before the appended
+// "conda-forge Latest" column — the two latest-version columns sit side by side
+// for at-a-glance comparison (Story 8.23).
 const COLUMNS: { key: Column; label: string }[] = [
   { key: 'name', label: 'Package' },
   { key: 'installed', label: 'Installed' },
-  { key: 'latest', label: 'Latest' },
   { key: 'currency', label: 'Status' },
+  { key: 'latest', label: 'PyPI Latest' },
 ]
 
 function badge(currency: string): { label: string; color: 'success' | 'warning' | 'default' } {
@@ -171,10 +174,10 @@ export function VersionsTab({ taskId }: { taskId: string }) {
                     <NameCell pkg={row} />
                   </TableCell>
                   <TableCell>{row.installed}</TableCell>
-                  <TableCell>{row.latest ?? '—'}</TableCell>
                   <TableCell>
                     <Chip size="small" label={b.label} color={b.color} icon={<CurrencyIcon fontSize="small" />} />
                   </TableCell>
+                  <TableCell>{row.latest ?? '—'}</TableCell>
                   <TableCell>
                     <CondaLatestCell condaLatest={row.conda_latest} mismatch={row.latest_mismatch} />
                   </TableCell>

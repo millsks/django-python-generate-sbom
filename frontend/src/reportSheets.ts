@@ -14,7 +14,7 @@ export function versionCurrencySheet(packages: VersionEntry[]): SheetSpec {
     columns: [
       { key: 'name', header: 'Package' },
       { key: 'installed', header: 'Installed' },
-      { key: 'latest', header: 'Latest (PyPI)' },
+      { key: 'latest', header: 'PyPI Latest' },
       { key: 'conda_latest', header: 'conda-forge Latest' },
       { key: 'currency', header: 'Status' },
       { key: 'lts', header: 'LTS' },
@@ -27,7 +27,12 @@ export function versionCurrencySheet(packages: VersionEntry[]): SheetSpec {
         name: url ? { text: pkg.name, hyperlink: url } : pkg.name,
         installed: pkg.installed,
         latest: pkg.latest ?? '',
-        conda_latest: pkg.conda_latest ?? '',
+        // Carry the UI's divergence red into the sheet (Story 8.22): red only when the
+        // conda-forge latest diverges from the PyPI latest and a value is present.
+        conda_latest:
+          pkg.latest_mismatch && pkg.conda_latest
+            ? { text: pkg.conda_latest, redText: true }
+            : (pkg.conda_latest ?? ''),
         currency: pkg.currency,
         lts: pkg.lts ?? '',
         on_lts: onLtsCell(pkg.on_lts),

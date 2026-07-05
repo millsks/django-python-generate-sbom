@@ -1034,9 +1034,16 @@ stay admins of every org — Stories 2.8/2.9), each surfaced with distinct UI co
 
 **Given** the Members page,
 **When** it renders an `admin`-role row,
-**Then** a "Make member" action sits beside "Remove", wired to the demote endpoint. Tests cover the
-promote↔demote round-trip, blocked last-admin and global-admin demotes, per-org scoping (a two-org
-admin's other-org role unchanged), and a non-admin caller → 403.
+**Then** a "Make member" action sits beside "Remove", wired to the demote endpoint.
+
+**Given** any membership action (remove, promote, demote) fails,
+**When** the backend returns a specific error code,
+**Then** the page shows that specific reason instead of a generic "Could not …" — `handleRemove` /
+`handlePromote` / `handleDemote` map `global_admin_protected`, `last_admin`, `admin_org_protected`,
+`not_a_member` (and `no_such_user`) to clear copy (reusing `handleAdd`'s pattern), falling back to the
+backend message. Tests cover the promote↔demote round-trip, blocked last-admin and global-admin demotes,
+per-org scoping (a two-org admin's other-org role unchanged), a non-admin caller → 403, and a
+`global_admin_protected` remove/demote surfacing its specific reason.
 
 ---
 

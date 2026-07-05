@@ -102,6 +102,7 @@ development_status:
   11-5-rest-api-reference: backlog
   11-6-contribution-and-project-meta-documentation: backlog
   11-7-readme-overhaul: backlog
+  11-8-repository-and-documentation-header-links: backlog
 
   # Epic 12 — UI/UX Visual Design & Professional Polish (frontend; refines Epic 10
   # shell + Story 5.7 theme). 12-1 (theme/design system) is the foundation; 12-2 icons

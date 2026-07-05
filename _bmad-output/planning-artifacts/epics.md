@@ -1984,6 +1984,8 @@ Actions** in repo settings so the `docs.yml` deploy can publish (flagged in 11.1
   `CODE_OF_CONDUCT.md`, `SECURITY.md`, and issue/PR templates.
 - FR-DOC7: The **README** is rewritten as a proper project front page (overview,
   badges, quick start, screenshots, links to the docs site, license).
+- FR-DOC8: The app's top navigation exposes quick-access icon links to the **source
+  repository** and the **published documentation site**.
 
 ### Story 11.1: Documentation Site Scaffold & GitHub Pages Deployment
 
@@ -2196,6 +2198,43 @@ row, not an exhaustive wall).
 **When** the README is written,
 **Then** it links to (rather than duplicates) the User Guide, Developer docs, and API
 reference, and includes the License section.
+
+### Story 11.8: Repository & Documentation Links in the App Header
+
+As a user,
+I want quick links to the source repository and the documentation from the app,
+So that I can reach the code and the docs without hunting for URLs.
+
+**Acceptance Criteria:**
+
+**Given** the app's top navigation/header (the Epic 10 shell),
+**When** it renders,
+**Then** it shows two icon links in the header, on every page and in both auth states:
+a **GitHub icon** linking to the source repository, and a **documentation icon** (e.g.
+a book/article icon) linking to the published documentation site (FR-DOC8).
+
+**Given** the links point off-site,
+**When** activated,
+**Then** each opens in a new tab (`target="_blank"` + `rel="noopener noreferrer"`) and
+carries an accessible label/tooltip ("GitHub repository", "Documentation").
+
+**Given** the target URLs must not be hard-coded ad hoc,
+**When** implemented,
+**Then** the repo URL and docs-site URL are sourced from a single config constant (or
+Vite env var), with the docs URL matching the GitHub Pages site from Story 11.1
+(`https://millsks.github.io/django-python-generate-sbom/`).
+
+**Given** icons are needed,
+**When** implemented,
+**Then** `@mui/icons-material` is used for the icons (the same **user-approved** dep
+introduced in Epic 12 Story 12.2 — if 11.8 lands first it adds the dependency, which
+12.2 then builds on), and the icon buttons sit consistently in the header alongside the
+theme toggle / user menu without disrupting the existing nav, org switcher, or logout.
+
+**Given** the change touches the shell,
+**When** implemented,
+**Then** a test covers that both links render with the correct `href`, `target`, and
+accessible label.
 
 ---
 

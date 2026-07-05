@@ -53,7 +53,7 @@ function NavButton({ to, label }: { to: string; label: string }) {
 }
 
 export function Layout() {
-  const { status, user, activeOrg, isAdmin, logout } = useAuth()
+  const { status, user, activeOrg, isAdmin, isGlobalAdmin, logout } = useAuth()
   const navigate = useNavigate()
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
@@ -147,7 +147,7 @@ export function Layout() {
               ModalProps={{ keepMounted: true }}
               sx={{ '& .MuiDrawer-paper': { width: DRAWER_WIDTH, display: 'flex', flexDirection: 'column' } }}
             >
-              <SideNav isAdmin={isAdmin} activeOrg={activeOrg} onNavigate={closeMobile} />
+              <SideNav isAdmin={isAdmin} isGlobalAdmin={isGlobalAdmin} activeOrg={activeOrg} onNavigate={closeMobile} />
             </Drawer>
           ) : (
             <Drawer
@@ -158,7 +158,7 @@ export function Layout() {
                 '& .MuiDrawer-paper': { width: DRAWER_WIDTH, boxSizing: 'border-box', display: 'flex', flexDirection: 'column' },
               }}
             >
-              <SideNav isAdmin={isAdmin} activeOrg={activeOrg} />
+              <SideNav isAdmin={isAdmin} isGlobalAdmin={isGlobalAdmin} activeOrg={activeOrg} />
             </Drawer>
           ))}
 

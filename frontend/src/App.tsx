@@ -8,8 +8,10 @@ import { KeysPage } from './pages/KeysPage'
 import { UploadPage } from './pages/UploadPage'
 import { ResultsPage } from './pages/ResultsPage'
 import { HistoryPage } from './pages/HistoryPage'
+import { GlobalAdminsPage } from './pages/GlobalAdminsPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { AdminRoute } from './components/AdminRoute'
+import { GlobalAdminRoute } from './components/GlobalAdminRoute'
 import { Layout } from './components/Layout'
 import { AuthProvider } from './auth/AuthProvider'
 
@@ -68,6 +70,14 @@ function App() {
                 <ProtectedRoute>
                   <HistoryPage />
                 </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/platform/global-admins"
+              element={
+                <GlobalAdminRoute>
+                  <GlobalAdminsPage />
+                </GlobalAdminRoute>
               }
             />
             <Route path="*" element={<HomePage />} />

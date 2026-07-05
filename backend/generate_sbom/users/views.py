@@ -32,12 +32,14 @@ from .services import (
     create_member,
     create_member_user,
     create_org,
-    grant_global_admin,
+    grant_global_admin_by_email,
     is_global_admin,
     leave_org,
+    list_global_admins,
     promote_member_to_admin,
     remove_member,
     revoke_api_key,
+    revoke_global_admin,
 )
 
 logger = structlog.get_logger()
@@ -135,30 +137,59 @@ class AuthMeView(APIView):
         )
 
 
-class GrantGlobalAdminView(APIView):
-    """Add another user to the ADMIN org (POST /api/v1/admin/global-admins/).
+class GlobalAdminsView(APIView):
+    """List or grant global admins (GET/POST /api/v1/admin/global-admins/).
 
-    Global-admin-only management of the ADMIN org (Story 2.8, AC #3): only an
-    existing global admin may grant global admin. The target is back-filled as an
-    admin of every org via ``grant_global_admin``.
+    Global-admin-only management of the ADMIN org (Story 2.8 AC #3, Story 13.1):
+    GET lists the current global admins; POST grants global admin to a **registered**
+    user looked up by email (back-filled as an admin of every org).
     """
 
-    def post(self, request: Request) -> Response:
-        """Grant global admin to the target user; 403 unless the caller is one."""
+    def get(self, request: Request) -> Response:
+        """List current global admins (id + email); 403 unless the caller is one."""
         if not is_global_admin(cast(User, request.user)):
             return Response(_NOT_GLOBAL_ADMIN, status=status.HTTP_403_FORBIDDEN)
-        serializer = UserIdSerializer(data=request.data)
+        data = [{"user_id": u.pk, "email": u.email} for u in list_global_admins()]
+        return Response({"global_admins": data})
+
+    def post(self, request: Request) -> Response:
+        """Grant global admin to a registered user by email; 403 unless the caller is one."""
+        if not is_global_admin(cast(User, request.user)):
+            return Response(_NOT_GLOBAL_ADMIN, status=status.HTTP_403_FORBIDDEN)
+        serializer = AddMemberSerializer(data=request.data)
         if not serializer.is_valid():
             return _validation_error(serializer.errors)
-        target = User.objects.filter(pk=serializer.validated_data["user_id"]).first()
+        try:
+            target = grant_global_admin_by_email(serializer.validated_data["email"])
+        except MembershipError as exc:
+            return _membership_error(exc)
+        logger.info("global_admin_granted_via_api", by_user_id=request.user.pk, user_id=target.pk)
+        return Response({"user_id": target.pk, "email": target.email}, status=status.HTTP_201_CREATED)
+
+
+class GlobalAdminDetailView(APIView):
+    """Revoke a global admin (DELETE /api/v1/admin/global-admins/<user_id>/).
+
+    Global-admin-only (Story 13.1). Removes the target from the ADMIN org and
+    demotes them to member in every non-admin org; blocked (``last_global_admin``)
+    if they are the last global admin.
+    """
+
+    def delete(self, request: Request, user_id: int) -> Response:
+        """Revoke the target's global-admin status; 403 unless the caller is one."""
+        if not is_global_admin(cast(User, request.user)):
+            return Response(_NOT_GLOBAL_ADMIN, status=status.HTTP_403_FORBIDDEN)
+        target = User.objects.filter(pk=user_id).first()
         if target is None:
             return Response(
                 {"error": "That user does not exist.", "code": "not_found"},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        grant_global_admin(target)
-        logger.info("global_admin_granted_via_api", by_user_id=request.user.pk, user_id=target.pk)
-        return Response({"user_id": target.pk, "email": target.email}, status=status.HTTP_201_CREATED)
+        try:
+            revoke_global_admin(target)
+        except MembershipError as exc:
+            return _membership_error(exc)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")

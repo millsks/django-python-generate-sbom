@@ -6,7 +6,8 @@ from .views import (
     AuthMeView,
     CreateMemberUserView,
     CreateOrgView,
-    GrantGlobalAdminView,
+    GlobalAdminDetailView,
+    GlobalAdminsView,
     KeyDetailView,
     KeysView,
     LeaveOrgView,
@@ -37,5 +38,6 @@ urlpatterns = [
     path("orgs/members/<int:user_id>/", MemberDetailView.as_view(), name="org-member-detail"),
     path("keys/", KeysView.as_view(), name="key-list"),
     path("keys/<str:key_id>/", KeyDetailView.as_view(), name="key-detail"),
-    path("admin/global-admins/", GrantGlobalAdminView.as_view(), name="grant-global-admin"),
+    path("admin/global-admins/", GlobalAdminsView.as_view(), name="global-admins"),
+    path("admin/global-admins/<int:user_id>/", GlobalAdminDetailView.as_view(), name="global-admin-detail"),
 ]

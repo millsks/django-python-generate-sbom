@@ -2254,6 +2254,27 @@ So that it feels like a polished professional product rather than default compon
 **both light and dark** modes, a **typography** scale (font family, headings, body,
 captions), and **shape/spacing** tokens (FR-UI1).
 
+**Given** the user-supplied brand palette (below) is the source of truth,
+**When** the palette is authored,
+**Then** the theme derives its tokens from these exact hex values — mapping the brand
+red/gold to `primary`/`secondary`, the neutral ramp to background/surface/text/divider
+(light and dark), and the accent spectrum to a data-visualization / status scale — and
+does **not** substitute default MUI colors for them.
+
+#### Brand Palette (source of truth)
+
+Sampled from the reference image the user provided.
+
+| Role | Hex | Notes |
+|---|---|---|
+| **Primary** (brand red) | `#D71E28` | Headers, primary actions, brand accents |
+| **Secondary** (gold) | `#FFCD41` | Secondary accents, highlights, callouts |
+| Gold tints | `#FFDE84`, `#FFF0C8`, `#FFF7E2` | Warm surfaces / hover / selected fills |
+| **Accent spectrum** (warm→cool) | `#EB691E` orange · `#D73F26` red-orange · `#C83255` rose · `#AA1E87` magenta · `#823291` purple · `#5A469B` indigo | Sequential/categorical scale for charts, severity, badges |
+| Neutrals (dark→light) | `#141414` · `#3B3331` · `#787070` · `#B5ADAD` · `#F4F0ED` · `#FFFFFF` | Text, dividers, surfaces, backgrounds |
+
+Suggested mode mapping: **light** — background `#F4F0ED`/`#FFFFFF`, text `#141414`, dividers `#B5ADAD`; **dark** — background `#141414`/`#3B3331`, text `#F4F0ED`, dividers `#787070`. Design note: the brand red is also the semantic **error** color — pick a distinct error red (or a spectrum tone) so "primary" and "error" remain visually distinguishable, and verify every foreground/background pair meets WCAG AA (some tones — e.g. gold on white — need a darker text pairing).
+
 **Given** repeated component styling,
 **When** the theme is authored,
 **Then** it sets sensible **component defaults** (e.g. `MuiButton`, `MuiCard`,
@@ -2363,6 +2384,12 @@ So that it reads as a real product.
 **Then** an app name/logo treatment appears in the header, a **favicon** and page
 `<title>` are set, and accent color usage is applied consistently per the theme
 (FR-UI5).
+
+**Given** the brand palette defined in Story 12.1 (Brand Palette — source of truth:
+red `#D71E28`, gold `#FFCD41`, and the accent/neutral ramps),
+**When** the logo/identity is designed,
+**Then** it draws from that same palette so the app, README, and docs read as one
+cohesive product identity.
 
 **Given** the docs and README (Epic 11),
 **When** branding assets exist,

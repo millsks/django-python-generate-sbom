@@ -12,6 +12,7 @@ import TableRow from '@mui/material/TableRow'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { addMember, getMembers, removeMember, transferAdmin, type Member } from '../api/orgs'
+import { ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthProvider'
 import { NoOrgState } from '../components/NoOrgState'
 import { EmptyState, ErrorState, LoadingState } from '../components/PageState'
@@ -23,7 +24,6 @@ export function MembersPage() {
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   function load() {
@@ -45,12 +45,17 @@ export function MembersPage() {
     event.preventDefault()
     setError(null)
     try {
-      await addMember(email, password)
+      await addMember(email)
       setEmail('')
-      setPassword('')
       load()
-    } catch {
-      setError('Could not add member — they may already belong to this org.')
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'no_such_user') {
+        setError('No registered user with that email.')
+      } else if (err instanceof ApiError && err.code === 'already_member') {
+        setError('That user is already a member of this org.')
+      } else {
+        setError('Could not add member.')
+      }
     }
   }
 
@@ -150,14 +155,6 @@ export function MembersPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
               sx={{ flexGrow: 1 }}
-            />
-            <TextField
-              size="small"
-              label="Temp password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
             />
             <Button type="submit" variant="contained">
               Add member

@@ -266,11 +266,7 @@ class MembersView(APIView):
         if not serializer.is_valid():
             return _validation_error(serializer.errors)
         try:
-            user = create_member(
-                org,
-                serializer.validated_data["email"],
-                serializer.validated_data["temp_password"],
-            )
+            user = create_member(org, serializer.validated_data["email"])
         except MembershipError as exc:
             return _membership_error(exc)
         return Response({"user_id": user.pk, "email": user.email}, status=status.HTTP_201_CREATED)

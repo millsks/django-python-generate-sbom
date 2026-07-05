@@ -38,10 +38,10 @@ export function getMembers(): Promise<MembersResponse> {
   return apiRequest<MembersResponse>('/orgs/members/')
 }
 
-export function addMember(email: string, tempPassword: string): Promise<Member> {
+export function addMember(email: string): Promise<Member> {
   return apiRequest<Member>('/orgs/members/', {
     method: 'POST',
-    body: { email, temp_password: tempPassword },
+    body: { email },
   })
 }
 

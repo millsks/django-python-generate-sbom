@@ -118,6 +118,27 @@ class AlreadyMemberError(MembershipError):
     message = "That user is already a member of this org."
 
 
+class NoSuchUserError(MembershipError):
+    """Raised when no registered user matches the supplied email (Story 2.7)."""
+
+    code = "no_such_user"
+    message = "No registered user with that email."
+
+
+class AdminOrgProtectedError(MembershipError):
+    """Raised when an op would leave the ADMIN org without a global admin (Story 2.9)."""
+
+    code = "admin_org_protected"
+    message = "The system admin org must always have at least one global admin."
+
+
+class GlobalAdminError(MembershipError):
+    """Raised when removing a global admin from a single normal org (Story 2.9)."""
+
+    code = "global_admin_protected"
+    message = "A global admin belongs to every org and can't be removed from a single org."
+
+
 class NotAMemberError(MembershipError):
     """Raised when the target user is not a member of the org."""
 
@@ -159,21 +180,57 @@ def revoke_api_key(org: Org, key_id: str) -> bool:
 
 
 def _is_sole_admin(org: Org, user: User) -> bool:
-    """Return True if ``user`` is the only admin of ``org``."""
+    """Return True if ``user`` is the only admin of ``org``.
+
+    Global admins are real ADMIN memberships (Story 2.8), so when one is present
+    a normal admin is *not* the sole admin and may leave or be removed.
+    """
     admins = OrgMembership.objects.filter(org=org, role=OrgMembership.Role.ADMIN)
     return admins.count() == 1 and admins.filter(user=user).exists()
 
 
-def create_member(org: Org, email: str, temp_password: str, role: str = OrgMembership.Role.MEMBER) -> User:
-    """Add a member to ``org``, creating the user account if needed (FR-1.3).
+def _is_last_member(org: Org, user: User) -> bool:
+    """Return True if ``user`` is the only remaining member of ``org``."""
+    members = OrgMembership.objects.filter(org=org)
+    return members.count() == 1 and members.filter(user=user).exists()
 
-    Finds an existing user by email or creates one with the temporary password;
-    then links them to the org. No email is sent — the admin shares credentials
-    out of band.
+
+def _guard_membership_removal(org: Org, user: User) -> None:
+    """Reject a removal/leave that would violate a membership invariant (Story 2.9).
+
+    The rules, in priority order:
+
+    1. **ADMIN org protection.** The distinguished ADMIN org must never lose its
+       last global admin — that would destroy the global-admin tier — so the
+       last member of an ``is_admin_org`` org cannot be removed or leave.
+    2. **Global-admin non-stranding.** A global admin is provisioned as an admin
+       of *every* org (Story 2.8's "admin of ALL orgs" invariant), so they are
+       not removable from a single *normal* org; that would strand them and
+       contradict the invariant. Re-provisioning belongs to the ADMIN-org tier.
+    3. **Last-admin protection.** A normal org must always keep at least one
+       admin (``transfer_admin`` is the escape hatch). Because global admins
+       count as real admins, a normal admin may leave whenever a global admin
+       (or any other admin) remains.
+    """
+    if org.is_admin_org and _is_last_member(org, user):
+        raise AdminOrgProtectedError
+    if not org.is_admin_org and is_global_admin(user):
+        raise GlobalAdminError
+    if _is_sole_admin(org, user):
+        raise LastAdminError
+
+
+def create_member(org: Org, email: str, role: str = OrgMembership.Role.MEMBER) -> User:
+    """Add an existing user to ``org`` by email (Story 2.7, FR-1.3).
+
+    Looks the user up by email (case-insensitive). If no registered user
+    matches, raises ``NoSuchUserError`` — there is no auto-create; an admin can
+    only add someone who has already registered. Raises ``AlreadyMemberError``
+    if they already belong to ``org``.
     """
     user = User.objects.filter(email__iexact=email).first()
     if user is None:
-        user = User.objects.create_user(email=email, password=temp_password)
+        raise NoSuchUserError
     if OrgMembership.objects.filter(org=org, user=user).exists():
         raise AlreadyMemberError
     OrgMembership.objects.create(org=org, user=user, role=role)
@@ -182,12 +239,16 @@ def create_member(org: Org, email: str, temp_password: str, role: str = OrgMembe
 
 
 def remove_member(org: Org, user: User) -> None:
-    """Remove ``user`` from ``org``; rejected if they are the sole admin (FR-1.4)."""
+    """Remove ``user`` from ``org``, enforcing the Story 2.9 edge rules (FR-1.4).
+
+    Empty-org behavior: a normal org is never auto-deleted or left memberless —
+    the last-admin guard keeps at least one admin, and global admins (when
+    seeded) co-own it. The ADMIN org is protected from losing its last member.
+    """
     membership = OrgMembership.objects.filter(org=org, user=user).first()
     if membership is None:
         raise NotAMemberError
-    if _is_sole_admin(org, user):
-        raise LastAdminError
+    _guard_membership_removal(org, user)
     membership.delete()
     logger.info("member_removed", org_id=org.pk, user_id=user.pk)
 
@@ -206,11 +267,15 @@ def transfer_admin(org: Org, caller: User, target: User) -> None:
 
 
 def leave_org(org: Org, user: User) -> None:
-    """Remove the caller's own membership; a sole admin cannot leave (FR-1.7, AC #5)."""
+    """Remove the caller's own membership, enforcing the Story 2.9 edge rules (FR-1.7).
+
+    Mirrors ``remove_member``: a sole admin cannot leave, the last member of the
+    ADMIN org cannot leave, and a global admin cannot leave a single normal org
+    (they belong to every org).
+    """
     membership = OrgMembership.objects.filter(org=org, user=user).first()
     if membership is None:
         raise NotAMemberError
-    if _is_sole_admin(org, user):
-        raise LastAdminError
+    _guard_membership_removal(org, user)
     membership.delete()
     logger.info("member_left", org_id=org.pk, user_id=user.pk)

@@ -670,6 +670,73 @@ single org is handled per the global model (Story 2.8).
 **When** complete,
 **Then** they are covered by tests and `pixi run ci` is green.
 
+<!-- Epic 2 reopened again: Story 2.7 removed the admin's ability to onboard a brand-new
+     person (create_member now raises no_such_user instead of creating). Story 2.10 restores
+     new-user provisioning as an explicit, SEPARATE action that coexists with add-existing.
+     Story 2.11 adds an admin-gated "Organization" control center to the side nav. -->
+
+### Story 2.10: Admin Creates a New User Account (Restore New-User Provisioning)
+
+As an org admin,
+I want to create a brand-new user account and add it to my org in one step,
+So that I can onboard someone who has not registered yet, instead of only adding people
+who already have an account.
+
+**Context (gap):** Story 2.7 changed the "Add member" flow to add an **existing** user by
+email and made `create_member` raise `no_such_user` instead of provisioning an account
+(`services.py:231-233`). That removed the only way an admin could onboard a brand-new person.
+There is no email infrastructure, so the prior model applies: the admin sets a temporary
+password and shares it out-of-band.
+
+**Acceptance Criteria:**
+
+**Given** an admin needs to onboard someone with no account,
+**When** they use a new "create user" action (email + temporary password),
+**Then** a **brand-new user is created and added to the active org** in one step — a **separate**
+action from Story 2.7's add-existing-by-email, with **both coexisting** on the Members page.
+
+**Given** the add-existing flow (Story 2.7),
+**When** this story lands,
+**Then** it is **unchanged**: "add existing" still raises `no_such_user` for an unregistered email;
+only the new "create" action provisions an account.
+
+**Given** a create request whose email is already registered,
+**When** it is processed,
+**Then** a clear error (`email_taken`) is returned — no silent duplicate, no fall-through to adding
+the existing user — telling the admin to use "add existing" instead.
+
+**Given** both actions,
+**When** invoked,
+**Then** they are admin-gated (org admin OR global admin; 403 otherwise), and tests cover create
+success + membership, duplicate-email rejection, add-existing still raising `no_such_user`, and
+permission gating.
+
+### Story 2.11: Org Maintenance Navigation for Admins
+
+As an org admin (or a global admin),
+I want a clear "Organization" control center in the side navigation,
+So that I have one obvious place to manage members, API keys, and org settings.
+
+**Acceptance Criteria:**
+
+**Given** the side navigation,
+**When** the logged-in user is an admin of the active org **or** a global admin (`isAdmin` from
+`useAuth`),
+**Then** an **"Organization"** (org maintenance) entry is visible; a non-admin never sees it.
+
+**Given** the entry,
+**When** followed,
+**Then** it leads to a clear place to administer the org — members (add-existing / create-new /
+remove / make-admin), API keys, create org, and org info — built consistently with the existing
+admin-gated nav (the Members link is already admin-gated, Story 10.1/12.3), either as a new
+consolidated Organization page/route or an admin-gated nav group that reuses the existing
+`MembersPage`/`KeysPage`.
+
+**Given** the shell,
+**When** the entry renders,
+**Then** it uses the existing `NavIcon` vocabulary and active-route styling and closes the mobile
+drawer via `onNavigate`, and tests assert it is present for an admin and absent for a non-admin.
+
 ---
 
 ## Epic 3: Manifest Upload, Job Submission & SBOM Generation
@@ -2004,6 +2071,81 @@ PyPI/conda-forge divergence flag are computed against the right package.
 override precedence, and `pixi run ci` is green (backend coverage ≥90%). conda-forge
 data continues to come from **prefix.dev**, not anaconda.
 
+<!-- Epic 8 reopened: Story 8.22 carries the Version Currency tab's red "conda-forge latest"
+     divergence text into the Excel export so mismatches stay identifiable in the spreadsheet.
+     Frontend-only; extends the 8.12 export (reportSheets/excelExport) using the same
+     latest_mismatch condition the 8.10 UI uses. -->
+
+### Story 8.22: Version-Currency Excel Export Carries the conda-forge-Latest Text Color
+
+As a user exporting the version currency report to Excel,
+I want the "conda-forge Latest" cell to be red when it diverges from the PyPI latest,
+So that mismatches stay identifiable in the spreadsheet exactly as they are in the UI.
+
+**Context (bug):** the Version Currency tab renders the conda-forge-latest text in **red**
+when it diverges from the PyPI latest (Story 8.10), but the Excel export (Story 8.12) copies
+the value as plain text and loses that signal — `versionCurrencySheet` emits
+`conda_latest: pkg.conda_latest ?? ''` with no styling (`reportSheets.ts:30`), and
+`buildWorkbook` only styles hyperlink cells (`excelExport.ts:37-39`).
+
+**Acceptance Criteria:**
+
+**Given** an exported version-currency `.xlsx`,
+**When** a "conda-forge Latest" cell diverges from the PyPI latest,
+**Then** that cell is rendered with a **red font**, mirroring the UI's red divergence text.
+
+**Given** the UI's red-text rule,
+**When** the export decides which cells to color,
+**Then** it uses the **same** condition the UI uses — `latest_mismatch === true` on the version
+entry (`VersionsTab.tsx:179`, `api/reports.ts:62`) — so the export and the on-screen table always
+agree on which cells are flagged; non-mismatch and empty conda values keep the default font.
+
+**Given** the fix,
+**When** complete,
+**Then** a test asserts a mismatched conda-forge-latest cell in the generated sheet has the red
+font (and a non-mismatched cell does not), and `pixi run ci` is green.
+
+<!-- Epic 8 reopened: Story 8.23 puts the PyPI-latest and conda-forge-latest columns side by
+     side in the version currency table (and matches the export), renaming "Latest" to
+     "PyPI Latest" for at-a-glance comparison. Frontend-only; independent of 8.22's red font. -->
+
+### Story 8.23: Version Currency — Side-by-Side PyPI / conda-forge Latest Columns
+
+As a user reading the version currency report,
+I want the "PyPI Latest" and "conda-forge Latest" columns to sit next to each other,
+So that I can compare the two latest versions at a glance without scanning across the other columns.
+
+**Context:** the version currency table shows a "Latest" column (the **PyPI** latest —
+`VersionEntry.latest`, `api/reports.ts:56`; the export already labels it "Latest (PyPI)",
+`reportSheets.ts:18`) separated from "conda-forge Latest" by the Status column
+(`VersionsTab.tsx:31-36,159-161`). Placing the two latest columns adjacent makes PyPI-vs-conda
+comparison direct.
+
+**Acceptance Criteria:**
+
+**Given** the version currency **table**,
+**When** it renders,
+**Then** the "Latest" column is moved to sit immediately **left** of "conda-forge Latest" and its
+header is renamed to **"PyPI Latest"**, so the two latest columns are adjacent in the order
+**PyPI Latest | conda-forge Latest**.
+
+**Given** the renamed column's source,
+**When** labelled,
+**Then** it genuinely shows the **PyPI** latest (verified against `VersionEntry.latest`), so
+"PyPI Latest" is accurate.
+
+**Given** the version-currency Excel export and the Overview "export all" workbook (both via
+`versionCurrencySheet`),
+**When** they are generated,
+**Then** they use the **same** column order and the **"PyPI Latest"** header, so UI and exports match.
+
+**Given** the reorder,
+**When** complete,
+**Then** the default per-tab sort (Story 8.16) still targets its intended column and Story 8.22's
+conditional red font on the conda-forge-latest cells is unaffected; tests assert the tab renders
+"PyPI Latest" immediately before "conda-forge Latest" and the export sheet has that order + label, and
+`pixi run ci` is green.
+
 ---
 
 ## Epic 9: Project Management & CI/CD Workflows
@@ -2313,6 +2455,33 @@ immediately.
 **Then** it lives in the registration page/route (`RegisterPage`) using react-router
 navigation and a cleaned-up timer, and is covered by a test (fake timers assert the redirect
 fires after the delay and is cancelled on unmount).
+
+<!-- Epic 10 reopened: Story 10.4 autofocuses the login email field on mount so a user
+     auto-redirected from registration (Story 10.3) can start typing immediately.
+     Frontend-only; a single-field change on LoginPage. -->
+
+### Story 10.4: Autofocus the Email Field on the Login Page
+
+As a user arriving at the login page (often auto-redirected from registration),
+I want the email field to be focused automatically,
+So that I can start typing my credentials immediately without clicking into the field.
+
+**Acceptance Criteria:**
+
+**Given** the login page renders its form,
+**When** it mounts,
+**Then** the **email** input receives focus automatically, so a user redirected from registration
+(Story 10.3) can type right away.
+
+**Given** the existing already-authenticated short-circuit (`<Navigate>` in `LoginPage`),
+**When** a signed-in visitor is redirected away,
+**Then** focus is applied only when the form is actually shown, and it does not steal focus on a
+mid-typing re-render.
+
+**Given** the behavior,
+**When** implemented,
+**Then** it lives in `LoginPage` (e.g. the email `TextField`'s `autoFocus`) and is covered by a test
+asserting the email input is the focused element after render.
 
 ---
 

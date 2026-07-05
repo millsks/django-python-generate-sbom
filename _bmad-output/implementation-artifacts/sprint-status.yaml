@@ -26,6 +26,10 @@ development_status:
   2-7-admin-add-remove-existing-users-by-email: done
   2-8-global-admin-org-and-cross-org-provisioning: done
   2-9-membership-edge-cases: done
+  # Reopened: 2.10 restores admin new-user provisioning (distinct from add-existing, which
+  # 2.7 left raising no_such_user); 2.11 adds an admin-gated "Organization" nav control center.
+  2-10-admin-create-new-user-account: ready-for-dev
+  2-11-org-maintenance-navigation-for-admins: ready-for-dev
 
   epic-3: done
   3-1-manifest-upload-and-format-detection: done
@@ -65,7 +69,11 @@ development_status:
   # 8.3-8.5 stay backlog until the 8.2 spike settles the direct/transitive mechanism.
   # Reopened: 8.18/8.19 add pixi-based conda environment.yml resolution;
   # 8.21 fixes the PyPI->conda-forge reverse lookup.
-  epic-8: done
+  # Reopened again: 8.22 carries the version-currency conda-forge-latest red divergence
+  # text into the Excel export (mirrors the 8.10 UI rule in the 8.12 export); 8.23 puts the
+  # PyPI-latest and conda-forge-latest columns side by side (table + export), renaming to
+  # "PyPI Latest".
+  epic-8: in-progress
   8-1-broaden-lts-coverage-via-endoflife-date: done
   8-2-spike-direct-vs-transitive-dependency-design: done
   8-3-capture-direct-transitive-relationships-during-resolution: done
@@ -88,6 +96,8 @@ development_status:
   # 8-20 is a deferred/parked option (revisit only if needed); Epic 8's committed scope is done.
   8-20-configurable-conda-solve-platform-and-cuda: backlog
   8-21-fix-pypi-to-conda-forge-reverse-lookup: done
+  8-22-version-currency-excel-conda-forge-color: ready-for-dev
+  8-23-version-currency-pypi-latest-column: ready-for-dev
 
   # Epic 9 — Project Management & CI/CD Workflows (ported from millsks/idp-app,
   # excluding renovate + disabled workflows). External secrets are operator-supplied.
@@ -101,11 +111,13 @@ development_status:
   9-7-adopt-beneficial-pixi-tasks: done
 
   # Epic 10 — UI Navigation & Authenticated Routing (frontend).
-  # Reopened: 10.3 auto-redirects to login ~5s after successful registration.
+  # Reopened: 10.3 auto-redirects to login ~5s after successful registration;
+  # 10.4 autofocuses the login email field so the redirected user can type immediately.
   epic-10: in-progress
   10-1-app-shell-and-auth-aware-navigation: done
   10-2-redirect-to-login-and-back: done
   10-3-auto-redirect-to-login-after-registration: done
+  10-4-autofocus-email-on-login: ready-for-dev
 
   # Epic 11 — Project Documentation (MkDocs Material → GitHub Pages; markdown).
   # 11-1 (site scaffold) is the foundation; 11-2..11-5 add pages/nav to mkdocs.yml;

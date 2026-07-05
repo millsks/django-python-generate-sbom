@@ -16,7 +16,7 @@ development_status:
 
   # Reopened: 2.5-2.9 add the full org-membership model (zero-org users, create-org UI,
   # admin-managed membership by email, a global-admin ADMIN org, and edge cases).
-  epic-2: in-progress
+  epic-2: done
   2-1-user-and-org-data-models-and-registration: done
   2-2-login-session-auth-and-org-switcher: done
   2-3-org-administration-and-membership-management: done
@@ -34,10 +34,10 @@ development_status:
   # the self-service create-org from 2.5/2.6. Gates CreateOrgView on is_global_admin, adds
   # is_global_admin to auth/me + AuthProvider (coordinates with 10.5), and hides the create-org
   # affordances for non-global-admins.
-  2-12-restrict-org-creation-to-global-admins: review
-  2-13-seed-initial-superuser-from-env: review
-  2-14-create-org-dialog-label-clipped: review
-  2-15-reorder-side-navigation: review
+  2-12-restrict-org-creation-to-global-admins: done
+  2-13-seed-initial-superuser-from-env: done
+  2-14-create-org-dialog-label-clipped: done
+  2-15-reorder-side-navigation: done
 
   epic-3: done
   3-1-manifest-upload-and-format-detection: done
@@ -83,7 +83,7 @@ development_status:
   # "PyPI Latest".
   # Reopened again (bugfix): 8.24 fixes the PyPI->conda-forge python-<name> disambiguation
   # (e.g. PyPI xxhash -> conda-forge python-xxhash, not the same-named C library).
-  epic-8: in-progress
+  epic-8: done
   8-1-broaden-lts-coverage-via-endoflife-date: done
   8-2-spike-direct-vs-transitive-dependency-design: done
   8-3-capture-direct-transitive-relationships-during-resolution: done
@@ -108,7 +108,7 @@ development_status:
   8-21-fix-pypi-to-conda-forge-reverse-lookup: done
   8-22-version-currency-excel-conda-forge-color: done
   8-23-version-currency-pypi-latest-column: done
-  8-24-fix-pypi-conda-forge-python-name-disambiguation: review
+  8-24-fix-pypi-conda-forge-python-name-disambiguation: done
 
   # Epic 9 — Project Management & CI/CD Workflows (ported from millsks/idp-app,
   # excluding renovate + disabled workflows). External secrets are operator-supplied.
@@ -132,9 +132,10 @@ development_status:
   10-2-redirect-to-login-and-back: done
   10-3-auto-redirect-to-login-after-registration: done
   10-4-autofocus-email-on-login: done
-  10-5-account-menu-shows-logged-in-user: review
-  10-6-login-submits-on-enter: review
-  10-7-remove-dashboard-login-to-index: review
+  10-5-account-menu-shows-logged-in-user: done
+  10-6-login-submits-on-enter: done
+  10-7-remove-dashboard-login-to-index: done
+  10-8-home-nav-item: review
 
   # Epic 11 — Project Documentation (MkDocs Material → GitHub Pages; markdown).
   # 11-1 (site scaffold) is the foundation; 11-2..11-5 add pages/nav to mkdocs.yml;
@@ -164,7 +165,7 @@ development_status:
   # (@mui/icons-material) + 12-3 layout build on it; 12-4 page polish applies it all;
   # 12-5 branding lands last. Story files contexted just-in-time.
   # Reopened: 12.8 builds a real landing page for the home route (was app name + one line).
-  epic-12: in-progress
+  epic-12: done
   12-1-theme-and-design-system-foundation: done
   12-2-material-icons-adoption: done
   12-3-application-layout-header-footer-side-navigation: done
@@ -172,4 +173,4 @@ development_status:
   12-5-branding-and-visual-identity: done
   12-6-set-the-spa-document-title: done
   12-7-update-the-site-favicon: done
-  12-8-landing-page-front-page: review
+  12-8-landing-page-front-page: done

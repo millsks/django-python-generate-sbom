@@ -2780,6 +2780,33 @@ appear here." The real jobs dashboard is `/history` (Stories 6.1–6.3). Login c
 **When** complete,
 **Then** the login round-trip and default-fallback tests pass against `/`, and `pixi run ci` is green.
 
+<!-- Epic 10 (follow-up): 10.8 adds a Home item to the side nav pointing at the index page (/),
+     now that login lands there (10.7) and the index is a real landing page (12.8). -->
+
+### Story 10.8: Add a Home Side-Nav Item
+
+As an authenticated user,
+I want a "Home" item at the top of the side navigation,
+So that I can return to the index/landing page without relying on the brand mark.
+
+**Acceptance Criteria:**
+
+**Given** the authenticated side navigation,
+**When** it renders,
+**Then** a **Home** entry (→ `/`) is the first item for everyone; the order is **Home, Upload, History,
+Members, API Keys, Organization** (Members and Organization stay admin-gated; non-admins see Home, Upload,
+History, API Keys).
+
+**Given** `/` is a prefix of every route,
+**When** the Home link's active state is computed,
+**Then** it uses react-router's `end` prop so Home is highlighted **only** on the index page, and the
+other items still highlight on their own routes.
+
+**Given** the change,
+**When** complete,
+**Then** tests cover the order (admin + non-admin) and the active-only-on-`/` behavior, and `pixi run ci`
+is green.
+
 ---
 
 ## Epic 11: Project Documentation

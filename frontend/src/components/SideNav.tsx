@@ -19,6 +19,9 @@ interface NavDest {
   to: string
   label: string
   Icon: SvgIconComponent
+  // `/` is a prefix of every route, so the Home link needs NavLink's `end` to be
+  // active only on the index page rather than everywhere.
+  end?: boolean
 }
 
 // `onNavigate` closes the temporary drawer after a selection on mobile; on the
@@ -32,10 +35,11 @@ export function SideNav({
   activeOrg: OrgSummary | null
   onNavigate?: () => void
 }) {
-  // Ordered destinations (Story 2.15); the admin-only Members and Organization links are
-  // interleaved into their correct positions — Members between History and API Keys,
-  // Organization last. Non-admins keep Upload, History, API Keys.
+  // Ordered destinations: Home first (Story 10.8), then the Story 2.15 order — the
+  // admin-only Members and Organization links interleaved (Members between History and
+  // API Keys, Organization last). Non-admins keep Home, Upload, History, API Keys.
   const items: NavDest[] = [
+    { to: '/', label: 'Home', Icon: NavIcon.home, end: true },
     { to: '/upload', label: 'Upload', Icon: NavIcon.upload },
     { to: '/history', label: 'History', Icon: NavIcon.history },
     ...(isAdmin ? [{ to: '/members', label: 'Members', Icon: NavIcon.members }] : []),
@@ -53,6 +57,7 @@ export function SideNav({
               <ListItemButton
                 component={NavLink}
                 to={item.to}
+                end={item.end}
                 onClick={onNavigate}
                 sx={{
                   '&.active': {

@@ -114,9 +114,9 @@ development_status:
   # (@mui/icons-material) + 12-3 layout build on it; 12-4 page polish applies it all;
   # 12-5 branding lands last. Story files contexted just-in-time.
   epic-12: in-progress
-  12-1-theme-and-design-system-foundation: backlog
+  12-1-theme-and-design-system-foundation: done
   12-2-material-icons-adoption: backlog
-  12-3-application-layout-header-footer-side-navigation: backlog
+  12-3-application-layout-header-footer-side-navigation: in-progress
   12-4-page-level-visual-polish-and-states: backlog
   12-5-branding-and-visual-identity: backlog
   12-6-set-the-spa-document-title: done

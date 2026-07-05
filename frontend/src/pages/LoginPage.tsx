@@ -59,6 +59,10 @@ export function LoginPage() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
+          // Focus on arrival so a user redirected here from registration (Story 10.3) can
+          // type immediately. The status==='authed' guard above means this form only renders
+          // for anonymous visitors, so it never steals focus from a signed-in redirect.
+          autoFocus
         />
         <TextField
           label="Password"

@@ -1,5 +1,6 @@
 """Tests for manifest parsers and transitive resolution (Story 3.3)."""
 
+import json
 import subprocess
 from dataclasses import asdict
 from unittest.mock import MagicMock, patch
@@ -134,6 +135,48 @@ def test_conda_solve_runs_subprocess() -> None:
     ):
         specs = conda_solve({"name": "env", "dependencies": ["numpy"]})
     assert specs == [PackageSpec(name="numpy", version="1.26.0")]
+
+
+# A realistic `mamba env create --dry-run --json` payload: the declared deps plus the
+# transitive closure the solver pulls in (mirrors the real solver output shape).
+_CONDA_DRY_RUN_JSON = json.dumps(
+    {
+        "actions": {
+            "LINK": [
+                {"name": "python", "version": "3.11.15"},
+                {"name": "numpy", "version": "1.26.4"},
+                {"name": "click", "version": "8.4.2"},
+                {"name": "libzlib", "version": "1.3.2"},
+                {"name": "pip", "version": "26.1.2"},
+            ]
+        },
+        "dry_run": True,
+        "success": True,
+    }
+)
+
+
+def test_conda_environment_resolves_via_installed_solver() -> None:
+    """A conda environment.yml resolves to conda packages via the solver (bugfix).
+
+    conda/mamba is now an installed runtime dependency; with the solver present the
+    dry-run JSON yields the full package set — declared deps tagged direct, the
+    transitive closure tagged transitive, every package ecosystem=conda.
+    """
+    content = b"name: env\nchannels: [conda-forge]\ndependencies:\n  - python=3.11\n  - numpy=1.26\n  - click\n"
+    completed = MagicMock(stdout=_CONDA_DRY_RUN_JSON)
+    with (
+        patch("generate_sbom.sbom.parsers._conda.shutil.which", return_value="/opt/mamba"),
+        patch("generate_sbom.sbom.parsers._conda.subprocess.run", return_value=completed),
+    ):
+        packages = resolve_packages("conda", content)
+
+    by = {p.name: p for p in packages}
+    assert by["numpy"].version == "1.26.4"
+    assert all(p.ecosystem == "conda" for p in packages)
+    assert {name for name, p in by.items() if p.relationship == "direct"} == {"python", "numpy", "click"}
+    assert by["libzlib"].relationship == "transitive"
+    assert by["pip"].relationship == "transitive"
 
 
 def test_pixi_lock_malformed_yaml_raises() -> None:

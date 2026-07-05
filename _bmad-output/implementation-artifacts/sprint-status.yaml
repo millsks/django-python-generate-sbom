@@ -5,7 +5,7 @@
 #   in-progress    — dev-story implementation underway
 #   review         — implementation complete, awaiting code-review
 #   done           — merged and verified
-last_updated: 2026-07-04
+last_updated: 2026-07-05
 
 development_status:
   epic-1: done
@@ -22,9 +22,9 @@ development_status:
   2-3-org-administration-and-membership-management: done
   2-4-api-key-management: done
   2-5-create-organization-from-the-ui: ready-for-dev
-  2-6-zero-org-users-and-identity-decoupling: in-progress
+  2-6-zero-org-users-and-identity-decoupling: ready-for-dev
   2-7-admin-add-remove-existing-users-by-email: ready-for-dev
-  2-8-global-admin-org-and-cross-org-provisioning: in-progress
+  2-8-global-admin-org-and-cross-org-provisioning: ready-for-dev
   2-9-membership-edge-cases: ready-for-dev
 
   epic-3: done

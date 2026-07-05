@@ -1,4 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import DarkModeIcon from '@mui/icons-material/DarkMode'
+import LightModeIcon from '@mui/icons-material/LightMode'
 import CssBaseline from '@mui/material/CssBaseline'
 import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
@@ -62,7 +64,7 @@ export function ThemeToggle() {
   return (
     <Tooltip title={mode === 'dark' ? 'Switch to light' : 'Switch to dark'}>
       <IconButton onClick={toggle} aria-label="Toggle light/dark theme" color="inherit">
-        {mode === 'dark' ? '☀️' : '🌙'}
+        {mode === 'dark' ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
       </IconButton>
     </Tooltip>
   )

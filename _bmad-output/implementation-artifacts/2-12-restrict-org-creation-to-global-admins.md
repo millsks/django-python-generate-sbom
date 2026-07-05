@@ -31,9 +31,14 @@ so that org provisioning is centrally controlled and regular users can't self-pr
    A zero-org non-admin sees an "ask an admin to add you" empty state with **no** create button.
 4. **Global admin still sees create.** For a global admin the create-org affordances remain
    available and functional on all the above surfaces.
-5. **Tested.** Backend: non-global-admin create → 403 (`not_global_admin`, no org created);
-   global admin → 201. Frontend: each affordance hidden for a non-global-admin and shown for a
-   global admin.
+5. **ADMIN org hidden from the switcher.** The system ADMIN org (`is_admin_org=True`) is **not**
+   shown as a selectable org in the org switcher / org list — it's a system org, not a workspace.
+   Filter it out of the org-listing path (`get_user_orgs` / `OrgListView`). A full global-admin
+   management screen (grant/revoke, ADMIN-org membership) is **out of scope here** — deferred to a
+   later story.
+6. **Tested.** Backend: non-global-admin create → 403 (`not_global_admin`, no org created);
+   global admin → 201; the ADMIN org is excluded from the org list. Frontend: each affordance
+   hidden for a non-global-admin and shown for a global admin.
 
 ## Tasks / Subtasks
 
@@ -79,6 +84,13 @@ so that org provisioning is centrally controlled and regular users can't self-pr
   - [ ] Backend: assert `auth/me` returns `is_global_admin` true for a global admin, false otherwise.
   - [ ] Frontend: `NoOrgState.test.tsx`, `OrgSwitcher.test.tsx`, `OrganizationPage.test.tsx` —
     with `useAuth` mocked `isGlobalAdmin: false`, the create affordance is absent; with `true`, present.
+- [ ] **Task 6 — Hide the ADMIN org from the org list (AC: #5, #6)**
+  - [ ] `backend/generate_sbom/users/selectors.py`: `get_user_orgs` (`selectors.py:10-13`) returns
+    every org the user belongs to, including the ADMIN org. Filter out `is_admin_org=True` so the
+    ADMIN org never appears in `OrgListView` (`/orgs/`, which the switcher calls via `getOrgs()`).
+    Also verify `get_request_org`'s active-org fallback doesn't default a global admin into the ADMIN org.
+  - [ ] Test: a global admin's `/orgs/` response excludes the ADMIN org while still listing the normal
+    orgs they were provisioned into.
 
 ## Dev Notes
 
@@ -119,6 +131,14 @@ Both touch `AuthProvider.tsx:37` (the discarded `getMe()` call) and the `AuthVal
 single `const me = await getMe()` feeds both `user` and `isGlobalAdmin`. Note the dependency in
 both story files. If 10.5 lands first, 2.12 only adds the `is_global_admin` field alongside the
 already-captured `user`.
+
+### Also folded in: hide the ADMIN org from the switcher (global-admin UX)
+
+Per a confirmed decision, this story also **hides the system ADMIN org from the org switcher** (it's a
+meta/system org, not a switchable workspace — see AC #5 / Task 6). This is why the operator "didn't see
+the ADMIN org in the dropdown" originally being surprising: `get_user_orgs` returns it today. A dedicated
+global-admin **management screen** (grant/revoke global admin, manage ADMIN-org membership) is
+**deferred** to a later story — `POST /api/v1/admin/global-admins/` already exists as its backend.
 
 ### Testing standards
 

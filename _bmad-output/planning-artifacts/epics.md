@@ -742,7 +742,9 @@ drawer via `onNavigate`, and tests assert it is present for an admin and absent 
      DELIBERATELY REVERSED — a zero-org user now waits to be added by an admin instead of
      self-provisioning. Backend gates CreateOrgView on services.is_global_admin; frontend hides the
      create-org affordances for non-global-admins. Needs a new is_global_admin signal on auth/me +
-     AuthProvider — coordinate with Story 10.5, which also extends auth/me + AuthProvider. -->
+     AuthProvider — coordinate with Story 10.5, which also extends auth/me + AuthProvider. 2.12 also
+     folds in hiding the ADMIN org from the switcher (global-admin UX); Story 2.13 seeds the initial
+     superuser from env vars. -->
 
 ### Story 2.12: Restrict Organization Creation to Global Admins (Bugfix)
 
@@ -783,6 +785,47 @@ caller **is** a global admin the org is created as today (**201**), gating on `s
 **Then** the create-org affordances remain available, and tests cover backend gating
 (non-global-admin → 403, global admin → 201) and frontend visibility (hidden for non-global-admin,
 shown for global admin).
+
+**Given** the ADMIN org is a system org, not a workspace (and a global admin is auto-provisioned into
+every org),
+**When** the org switcher / org list renders,
+**Then** the ADMIN org (`is_admin_org=True`) is **not** shown as a selectable org — it is filtered from
+the org-listing path (`get_user_orgs` / `OrgListView`). A full global-admin management screen is out of
+scope here (deferred to a later story).
+
+<!-- Epic 2 (bugfix): Story 2.13 seeds the initial superuser from env vars so a fresh stack comes up
+     with a global admin, without the manual createsuperuser step. -->
+
+### Story 2.13: Seed the Initial Superuser from Environment Variables (Bugfix)
+
+As an operator,
+I want the initial superuser (global admin) seeded automatically from environment variables,
+So that a fresh stack comes up with a global admin without a manual `createsuperuser` step.
+
+**Context:** Today the first superuser must be created manually (`docker compose exec web pixi run python
+backend/manage.py createsuperuser`); only then does the `create_superuser` hook make them a global admin
+(Story 2.8). A fresh stack therefore starts with an empty ADMIN org and no one who can create orgs (Story
+2.12), so nothing works until the operator runs the manual step. The `web` service already runs
+`sh -c "pixi run migrate && pixi run web"` — a seed step slots in after `migrate`.
+
+**Acceptance Criteria:**
+
+**Given** `DJANGO_SUPERUSER_EMAIL` and `DJANGO_SUPERUSER_PASSWORD` are set,
+**When** the stack starts (after migrations),
+**Then** an idempotent seed creates that superuser (if absent) via `createsuperuser --noinput` (or an
+equivalent management command), making them a **global admin** through the existing `create_superuser` →
+`grant_global_admin` hook.
+
+**Given** the env vars are unset or the superuser already exists,
+**When** the stack starts,
+**Then** seeding is skipped cleanly (no error, no duplicate) — safe to run on every boot.
+
+**Given** the compose / dev environment,
+**When** documented,
+**Then** the `web` service runs the seed after `migrate` and before `web`, and
+`DJANGO_SUPERUSER_EMAIL`/`DJANGO_SUPERUSER_PASSWORD` are documented in `.env.example`/README as a dev
+convenience (never commit real credentials). Covered by a test of the seed command (idempotent create +
+skip-when-exists).
 
 ---
 

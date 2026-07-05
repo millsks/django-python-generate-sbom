@@ -1,38 +1,40 @@
-// App shell (Story 10.1): a persistent top app bar with auth-aware, role-aware
-// navigation, the org switcher, theme toggle, and an account menu — wrapping the
-// routed pages via <Outlet/>.
+// App shell (Story 10.1, refined in Story 12.3): a fixed app bar with global actions
+// (org switcher, theme toggle, repo/docs links, account menu), a responsive side
+// navigation drawer holding the primary destinations for authenticated users, the
+// routed page in the main region (<Outlet/>), and a footer — all on the 12.1 theme.
 import { useState, type ReactNode } from 'react'
 import { Link as RouterLink, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import AppBar from '@mui/material/AppBar'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Divider from '@mui/material/Divider'
+import Drawer from '@mui/material/Drawer'
 import IconButton from '@mui/material/IconButton'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import Toolbar from '@mui/material/Toolbar'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
+import useMediaQuery from '@mui/material/useMediaQuery'
+import { useTheme } from '@mui/material/styles'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import MenuBookIcon from '@mui/icons-material/MenuBook'
+import MenuIcon from '@mui/icons-material/Menu'
 import { useAuth } from '../auth/AuthProvider'
-import { DOCS_URL, REPO_URL } from '../config'
+import { APP_NAME, DOCS_URL, REPO_URL } from '../config'
 import { ThemeToggle } from '../ThemeModeProvider'
+import { Footer } from './Footer'
 import { OrgSwitcher } from './OrgSwitcher'
+import { SideNav } from './SideNav'
+
+const DRAWER_WIDTH = 240
 
 // Icon link to an external resource (repo / docs) — opens in a new tab with an
 // accessible label and tooltip (Story 11.8).
 function ExternalIconLink({ href, label, children }: { href: string; label: string; children: ReactNode }) {
   return (
     <Tooltip title={label}>
-      <IconButton
-        color="inherit"
-        component="a"
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label={label}
-      >
+      <IconButton color="inherit" component="a" href={href} target="_blank" rel="noopener noreferrer" aria-label={label}>
         {children}
       </IconButton>
     </Tooltip>
@@ -41,12 +43,7 @@ function ExternalIconLink({ href, label, children }: { href: string; label: stri
 
 function NavButton({ to, label }: { to: string; label: string }) {
   return (
-    <Button
-      component={NavLink}
-      to={to}
-      color="inherit"
-      sx={{ '&.active': { textDecoration: 'underline', fontWeight: 700 } }}
-    >
+    <Button component={NavLink} to={to} color="inherit" sx={{ '&.active': { textDecoration: 'underline', fontWeight: 700 } }}>
       {label}
     </Button>
   )
@@ -55,7 +52,11 @@ function NavButton({ to, label }: { to: string; label: string }) {
 export function Layout() {
   const { status, activeOrg, isAdmin, logout } = useAuth()
   const navigate = useNavigate()
+  const theme = useTheme()
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'))
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const authed = status === 'authed'
 
   async function handleLogout() {
     setAnchor(null)
@@ -63,27 +64,20 @@ export function Layout() {
     navigate('/login')
   }
 
-  return (
-    <>
-      <AppBar position="static">
-        <Toolbar sx={{ gap: 1 }}>
-          <Typography
-            variant="h6"
-            component={RouterLink}
-            to="/"
-            sx={{ color: 'inherit', textDecoration: 'none', mr: 2 }}
-          >
-            Generate SBOM
-          </Typography>
+  const closeMobile = () => setMobileOpen(false)
 
-          {status === 'authed' && (
-            <Box component="nav" aria-label="main navigation" sx={{ display: 'flex', gap: 0.5 }}>
-              <NavButton to="/upload" label="Upload" />
-              <NavButton to="/history" label="History" />
-              <NavButton to="/keys" label="API Keys" />
-              {isAdmin && <NavButton to="/members" label="Members" />}
-            </Box>
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <AppBar position="fixed" sx={{ zIndex: (t) => t.zIndex.drawer + 1 }}>
+        <Toolbar sx={{ gap: 1 }}>
+          {authed && isMobile && (
+            <IconButton color="inherit" aria-label="Open navigation" edge="start" onClick={() => setMobileOpen(true)}>
+              <MenuIcon />
+            </IconButton>
           )}
+          <Typography variant="h6" component={RouterLink} to="/" sx={{ color: 'inherit', textDecoration: 'none', mr: 2 }}>
+            {APP_NAME}
+          </Typography>
 
           <Box sx={{ flexGrow: 1 }} />
           <ExternalIconLink href={DOCS_URL} label="Documentation">
@@ -101,14 +95,10 @@ export function Layout() {
             </Box>
           )}
 
-          {status === 'authed' && (
+          {authed && (
             <>
               <OrgSwitcher />
-              <IconButton
-                color="inherit"
-                aria-label="Account menu"
-                onClick={(event) => setAnchor(event.currentTarget)}
-              >
+              <IconButton color="inherit" aria-label="Account menu" onClick={(event) => setAnchor(event.currentTarget)}>
                 👤
               </IconButton>
               <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={() => setAnchor(null)}>
@@ -126,7 +116,39 @@ export function Layout() {
           )}
         </Toolbar>
       </AppBar>
-      <Outlet />
-    </>
+
+      <Box sx={{ display: 'flex', flexGrow: 1 }}>
+        {authed &&
+          (isMobile ? (
+            <Drawer
+              variant="temporary"
+              open={mobileOpen}
+              onClose={closeMobile}
+              ModalProps={{ keepMounted: true }}
+              sx={{ '& .MuiDrawer-paper': { width: DRAWER_WIDTH, display: 'flex', flexDirection: 'column' } }}
+            >
+              <SideNav isAdmin={isAdmin} activeOrg={activeOrg} onNavigate={closeMobile} />
+            </Drawer>
+          ) : (
+            <Drawer
+              variant="permanent"
+              sx={{
+                width: DRAWER_WIDTH,
+                flexShrink: 0,
+                '& .MuiDrawer-paper': { width: DRAWER_WIDTH, boxSizing: 'border-box', display: 'flex', flexDirection: 'column' },
+              }}
+            >
+              <SideNav isAdmin={isAdmin} activeOrg={activeOrg} />
+            </Drawer>
+          ))}
+
+        <Box component="main" sx={{ flexGrow: 1, p: 3, width: '100%', minWidth: 0 }}>
+          <Toolbar />
+          <Outlet />
+        </Box>
+      </Box>
+
+      <Footer />
+    </Box>
   )
 }

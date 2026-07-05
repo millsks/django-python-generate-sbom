@@ -1,0 +1,78 @@
+name: Repository Maintenance
+
+# Scheduled housekeeping: prune old workflow runs and run a non-blocking
+# dependency/security audit. Also runnable on demand via workflow_dispatch.
+
+on:
+  schedule:
+    - cron: "0 2 * * 0" # 02:00 UTC every Sunday
+  workflow_dispatch:
+
+concurrency:
+  group: maintenance-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  cleanup-runs:
+    name: Cleanup Old Workflow Runs
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Delete old workflow runs
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          retain_days: 30
+          keep_minimum_runs: 10
+
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pixi
+        uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          pixi-version: latest
+
+      # The audit is a report, not a gate: findings are surfaced in the job
+      # summary + artifact but never fail the scheduled run (|| true).
+      - name: Backend security scan (bandit)
+        run: pixi run security | tee bandit-report.txt || true
+
+      - name: Frontend dependency audit (npm)
+        run: pixi run fe-security | tee npm-audit-report.txt || true
+
+      - name: Summarize findings
+        if: always()
+        run: |
+          {
+            echo "## Security audit"
+            echo ""
+            echo "Full reports are attached as the \`security-reports\` artifact."
+            echo ""
+            echo "### Backend (bandit)"
+            echo '```'
+            tail -n 25 bandit-report.txt 2>/dev/null || echo "(no report produced)"
+            echo '```'
+            echo "### Frontend (npm audit)"
+            echo '```'
+            tail -n 25 npm-audit-report.txt 2>/dev/null || echo "(no report produced)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload security reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: |
+            bandit-report.txt
+            npm-audit-report.txt
+          retention-days: 30
+          if-no-files-found: warn

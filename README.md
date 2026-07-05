@@ -6,7 +6,70 @@ standard formats (CycloneDX, SPDX), alongside four analysis reports:
 vulnerability findings, license obligations, dependency graph, and version
 currency — through both a web UI and a REST API.
 
-<!-- Badges: CI status, coverage, and PyPI version are added once the project publishes. -->
+<!-- Status -->
+[![CI](https://github.com/millsks/django-python-generate-sbom/actions/workflows/ci.yml/badge.svg)](https://github.com/millsks/django-python-generate-sbom/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/millsks/django-python-generate-sbom/branch/main/graph/badge.svg)](https://codecov.io/gh/millsks/django-python-generate-sbom)
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=millsks_django-python-generate-sbom&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=millsks_django-python-generate-sbom)
+[![Release](https://img.shields.io/github/v/release/millsks/django-python-generate-sbom)](https://github.com/millsks/django-python-generate-sbom/releases)
+[![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-blue)](https://www.python.org/)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+
+<!-- Tooling -->
+[![Docs](https://img.shields.io/badge/docs-mkdocs--material-526cfe)](https://millsks.github.io/django-python-generate-sbom/)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Typed: mypy](https://img.shields.io/badge/typed-mypy-blue)](https://mypy-lang.org/)
+[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg)](https://conventionalcommits.org)
+
+> **Note:** this app is not published to any package index — it ships as
+> self-hostable source with tagged GitHub Releases, so there are no PyPI or
+> conda-forge version badges.
+
+## Overview
+
+Point the service at a Python dependency manifest and it resolves the full
+dependency tree, produces a signed-off SBOM, and enriches it with four analyses
+you can browse in the UI, export to Excel, or pull over the REST API. Everything
+is multi-tenant and scoped to your organization.
+
+**Features:**
+
+- **Multi-format SBOMs** — CycloneDX and SPDX from `requirements.txt` (and
+  prefixed variants), `pyproject.toml`, `pixi.toml` / `pixi.lock`, and conda
+  `environment.yml`, with transitive dependencies resolved.
+- **Vulnerability report** — known advisories (CVE/GHSA) with severity and CVSS.
+- **License compliance** — per-package licenses grouped by legal-risk tier.
+- **Dependency graph** — direct vs. transitive relationships, visualized.
+- **Version currency** — installed vs. latest, LTS tracking, and the
+  conda-forge latest (via prefix.dev) flagged when it diverges from PyPI.
+- **In-app SBOM viewer** and **Excel export** of every report.
+- **Accounts & orgs** — registration, org switching, membership management,
+  and API keys; session and API-key authentication.
+- **Async pipeline** — a Celery workflow with live progress, MinIO artifact
+  storage, and scheduled retention/cleanup.
+- **Web UI** (React 19 + MUI) and a **REST API**, served from one origin.
+
+## Documentation
+
+Full documentation is published with MkDocs Material at
+**<https://millsks.github.io/django-python-generate-sbom/>**:
+
+- **[User Guide](https://millsks.github.io/django-python-generate-sbom/user-guide/)**
+  — accounts, uploading manifests, and reading every report.
+- **[How-To Guides](https://millsks.github.io/django-python-generate-sbom/how-to/)**
+  — task-focused recipes.
+- **[Developer Docs](https://millsks.github.io/django-python-generate-sbom/developer/)**
+  — architecture, local setup, the SBOM pipeline, and testing.
+- **[API Reference](https://millsks.github.io/django-python-generate-sbom/api/)**
+  — the REST endpoints.
+
+Contributions are welcome — see **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+
+## Screenshots
+
+<!-- Screenshots land with the UI polish work (Epic 12); placeholders until then. -->
+
+_Screenshots of the web UI are coming with the UI/visual-design work._
 
 ## Architecture
 
@@ -24,7 +87,7 @@ django-python-generate-sbom/   ← project root (pixi umbrella)
   docker-compose.yml            # full local stack (web, workers, postgres, redis, minio)
 ```
 
-## Installation
+## Quick start
 
 Requires [pixi](https://pixi.sh). Node.js and Python are installed by pixi — no
 separate toolchain setup needed.
@@ -32,28 +95,11 @@ separate toolchain setup needed.
 ```sh
 pixi install          # installs Python + Node environments
 pixi run bootstrap    # installs the pre-commit git hooks
+pixi run ci           # full validation gate (build · type-check · lint · coverage · docs)
 ```
 
-## Quick start
-
-```sh
-pixi run test         # backend unit tests
-pixi run ci           # full validation gate (build · type-check · lint · coverage)
-```
-
-Django management commands run inside the pixi environment:
-
-```sh
-pixi run python backend/manage.py migrate
-```
-
-## Using the web UI
-
-The whole app (React SPA + REST API + admin) is served from a single origin. The
-Docker stack is the simplest way to run it — the SPA is built into the image and
-served by Django, so there is no separate frontend server to start.
-
-### 1. Start the stack
+The Docker stack is the simplest way to run the whole app — the SPA is built into
+the image and served by Django, so there is no separate frontend server to start:
 
 ```sh
 cp .env.example .env          # then edit SECRET_KEY (and any passwords) in .env
@@ -67,56 +113,16 @@ Wait until the `web` service is healthy, then open:
 | <http://localhost:8000> | The web UI (React SPA) |
 | <http://localhost:8000/admin/> | Django admin site |
 | <http://localhost:8000/health/> | Health check (JSON) |
-| <http://localhost:9001> | MinIO console (object storage; login with `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` from `.env`) |
+| <http://localhost:9001> | MinIO console (login with `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` from `.env`) |
 
-### 2. Register and sign in
+Then **register** at `/register` (this creates your account and a personal
+organization), **sign in** at `/login`, and **upload** a manifest at `/upload`.
+All SBOM data is scoped to your active organization. See the
+[User Guide](https://millsks.github.io/django-python-generate-sbom/user-guide/)
+for the full walkthrough.
 
-1. Go to **<http://localhost:8000/register>** and submit your email and a password.
-   This creates your account **and a personal organization** (named from your
-   email prefix) in one step. Registration does not sign you in automatically.
-2. Go to **<http://localhost:8000/login>** and sign in with the same credentials.
-   Login establishes a session cookie; the SPA then routes you to the dashboard.
-
-All SBOM data is scoped to your active organization, so every new account starts
-with its own private workspace.
-
-### 3. Upload a manifest
-
-Open **<http://localhost:8000/upload>** and complete the form:
-
-- **Manifest file** — a Python dependency file (`requirements.txt` and prefixed
-  variants like `dev-requirements.txt`, `pyproject.toml`, `pixi.toml`,
-  `pixi.lock`, or a conda `environment.yml`).
-- **Application ID**, **Component Name**, **Repository URL**, and **Source
-  Branch** — all four are **required**. They are captured as provenance metadata
-  and embedded at the top of the generated SBOM.
-
-Submitting uploads and validates the manifest and reports the detected format. If
-the file or a field is rejected, the page shows the server's reason.
-
-> **SBOM generation** (submit → track progress → download the CycloneDX/SPDX
-> artifact) runs through the REST API today — `POST /api/v1/sbom/generate/`, then
-> poll `GET /api/v1/sbom/status/{task_id}/`, then `GET /api/v1/sbom/result/{task_id}/`
-> (a 303 redirect to a short-lived presigned URL). Wiring that flow into the
-> upload page and dashboard lands in a later epic.
-
-### UI routes and the API they call
-
-| UI route | Purpose | Backing API |
-|---|---|---|
-| `/register` | Create account + personal org | `POST /api/v1/auth/register/` |
-| `/login` · `/logout` | Session sign in / out | `POST /api/v1/auth/login/` · `/logout/` |
-| `/dashboard` | Your jobs and their status | `GET /api/v1/sbom/status/{task_id}/` |
-| `/upload` | Upload & validate a manifest | `POST /api/v1/manifests/upload/` |
-| `/members` | Manage org members | `GET/POST /api/v1/orgs/members/` |
-| `/keys` | Manage API keys for the REST API | `GET/POST /api/v1/keys/` |
-
-Routes other than `/`, `/register`, and `/login` require an active session.
-
-### Admin access (optional)
-
-To reach the Django admin at `/admin/`, create a superuser inside the running
-`web` container:
+To reach the Django admin at `/admin/`, create a superuser in the running `web`
+container:
 
 ```sh
 docker compose exec web pixi run python backend/manage.py createsuperuser
@@ -128,16 +134,17 @@ All tasks run from the project root via `pixi run <task>`:
 
 | Task | Purpose |
 |---|---|
-| `fmt` | Format the backend (`ruff format`) |
-| `lint` | Lint the backend (`ruff check`) |
-| `check` | Type-check the backend (`mypy`, strict) |
-| `test` | Backend unit tests |
-| `test-integration` | Backend integration tests |
+| `fmt` · `lint` · `check` | Format, lint, and type-check the backend (ruff, mypy) |
+| `test` · `test-integration` | Backend unit / integration tests |
 | `cov` | Full test suite with the 90% coverage gate |
+| `fe-lint` · `fe-typecheck` · `fe-test` · `fe-build` | Frontend lint / types / tests / build |
+| `docs-serve` · `docs-build` | Preview / build the documentation site |
 | `build` | Build the backend package distribution |
 | `ci` | Full validation sequence (the merge gate) |
 
-`pixi run ci` must exit 0 before any change is considered done.
+`pixi run ci` must exit 0 before any change is considered done. See the
+[Developer Docs](https://millsks.github.io/django-python-generate-sbom/developer/)
+and [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow.
 
 ## License
 

@@ -19,6 +19,7 @@ import Typography from '@mui/material/Typography'
 import { ApiError } from '../api/client'
 import { getVersions, type VersionEntry, type VersionReport } from '../api/reports'
 import { buildWorkbook, downloadWorkbook } from '../excelExport'
+import { currencyIcon, ExportIcon } from '../icons'
 import { ecosystemLabel, registryUrl } from '../registryLinks'
 import { versionCurrencySheet } from '../reportSheets'
 import { TabFailureNotice } from './TabFailureNotice'
@@ -136,7 +137,7 @@ export function VersionsTab({ taskId }: { taskId: string }) {
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
-        <Button size="small" variant="outlined" onClick={exportExcel}>
+        <Button size="small" variant="outlined" onClick={exportExcel} startIcon={<ExportIcon />}>
           Export to Excel
         </Button>
       </Box>
@@ -163,6 +164,7 @@ export function VersionsTab({ taskId }: { taskId: string }) {
           <TableBody>
             {rows.map((row) => {
               const b = badge(row.currency)
+              const { Icon: CurrencyIcon } = currencyIcon(row.currency)
               return (
                 <TableRow key={row.name}>
                   <TableCell>
@@ -171,7 +173,7 @@ export function VersionsTab({ taskId }: { taskId: string }) {
                   <TableCell>{row.installed}</TableCell>
                   <TableCell>{row.latest ?? '—'}</TableCell>
                   <TableCell>
-                    <Chip size="small" label={b.label} color={b.color} />
+                    <Chip size="small" label={b.label} color={b.color} icon={<CurrencyIcon fontSize="small" />} />
                   </TableCell>
                   <TableCell>
                     <CondaLatestCell condaLatest={row.conda_latest} mismatch={row.latest_mismatch} />

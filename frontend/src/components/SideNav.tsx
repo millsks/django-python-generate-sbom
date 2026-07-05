@@ -7,20 +7,24 @@ import Divider from '@mui/material/Divider'
 import List from '@mui/material/List'
 import ListItem from '@mui/material/ListItem'
 import ListItemButton from '@mui/material/ListItemButton'
+import ListItemIcon from '@mui/material/ListItemIcon'
 import ListItemText from '@mui/material/ListItemText'
 import Toolbar from '@mui/material/Toolbar'
 import Typography from '@mui/material/Typography'
+import type { SvgIconComponent } from '@mui/icons-material'
 import type { OrgSummary } from '../api/auth'
+import { NavIcon } from '../icons'
 
 interface NavDest {
   to: string
   label: string
+  Icon: SvgIconComponent
 }
 
 const NAV_ITEMS: NavDest[] = [
-  { to: '/upload', label: 'Upload' },
-  { to: '/history', label: 'History' },
-  { to: '/keys', label: 'API Keys' },
+  { to: '/upload', label: 'Upload', Icon: NavIcon.upload },
+  { to: '/history', label: 'History', Icon: NavIcon.history },
+  { to: '/keys', label: 'API Keys', Icon: NavIcon.keys },
 ]
 
 // `onNavigate` closes the temporary drawer after a selection on mobile; on the
@@ -34,7 +38,7 @@ export function SideNav({
   activeOrg: OrgSummary | null
   onNavigate?: () => void
 }) {
-  const items = isAdmin ? [...NAV_ITEMS, { to: '/members', label: 'Members' }] : NAV_ITEMS
+  const items = isAdmin ? [...NAV_ITEMS, { to: '/members', label: 'Members', Icon: NavIcon.members }] : NAV_ITEMS
 
   return (
     <>
@@ -56,6 +60,9 @@ export function SideNav({
                   },
                 }}
               >
+                <ListItemIcon sx={{ minWidth: 40, color: 'inherit' }}>
+                  <item.Icon fontSize="small" />
+                </ListItemIcon>
                 <ListItemText primary={item.label} />
               </ListItemButton>
             </ListItem>

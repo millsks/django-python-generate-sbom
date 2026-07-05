@@ -80,6 +80,28 @@ describe('Layout', () => {
     expect(screen.getByRole('link', { name: 'Upload' })).toHaveClass('active')
   })
 
+  it('shows repo and docs links in the header with correct href/target/label (authed)', async () => {
+    mockUseAuth.mockReturnValue(authState())
+    renderAt('/upload')
+
+    const repo = screen.getByRole('link', { name: 'GitHub repository' })
+    expect(repo).toHaveAttribute('href', 'https://github.com/millsks/django-python-generate-sbom')
+    expect(repo).toHaveAttribute('target', '_blank')
+    expect(repo).toHaveAttribute('rel', 'noopener noreferrer')
+
+    const docs = screen.getByRole('link', { name: 'Documentation' })
+    expect(docs).toHaveAttribute('href', 'https://millsks.github.io/django-python-generate-sbom/')
+    expect(docs).toHaveAttribute('target', '_blank')
+    expect(docs).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  it('shows repo and docs links when logged out too', async () => {
+    mockUseAuth.mockReturnValue(authState({ status: 'anon', activeOrg: null }))
+    renderAt('/login')
+    expect(screen.getByRole('link', { name: 'GitHub repository' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Documentation' })).toBeInTheDocument()
+  })
+
   it('logs out from the account menu', async () => {
     const logout = vi.fn().mockResolvedValue(undefined)
     mockUseAuth.mockReturnValue(authState({ logout }))

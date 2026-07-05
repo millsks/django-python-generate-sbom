@@ -1,7 +1,7 @@
 // App shell (Story 10.1): a persistent top app bar with auth-aware, role-aware
 // navigation, the org switcher, theme toggle, and an account menu — wrapping the
 // routed pages via <Outlet/>.
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link as RouterLink, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import AppBar from '@mui/material/AppBar'
 import Box from '@mui/material/Box'
@@ -11,10 +11,33 @@ import IconButton from '@mui/material/IconButton'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import Toolbar from '@mui/material/Toolbar'
+import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
+import GitHubIcon from '@mui/icons-material/GitHub'
+import MenuBookIcon from '@mui/icons-material/MenuBook'
 import { useAuth } from '../auth/AuthProvider'
+import { DOCS_URL, REPO_URL } from '../config'
 import { ThemeToggle } from '../ThemeModeProvider'
 import { OrgSwitcher } from './OrgSwitcher'
+
+// Icon link to an external resource (repo / docs) — opens in a new tab with an
+// accessible label and tooltip (Story 11.8).
+function ExternalIconLink({ href, label, children }: { href: string; label: string; children: ReactNode }) {
+  return (
+    <Tooltip title={label}>
+      <IconButton
+        color="inherit"
+        component="a"
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={label}
+      >
+        {children}
+      </IconButton>
+    </Tooltip>
+  )
+}
 
 function NavButton({ to, label }: { to: string; label: string }) {
   return (
@@ -63,6 +86,12 @@ export function Layout() {
           )}
 
           <Box sx={{ flexGrow: 1 }} />
+          <ExternalIconLink href={DOCS_URL} label="Documentation">
+            <MenuBookIcon />
+          </ExternalIconLink>
+          <ExternalIconLink href={REPO_URL} label="GitHub repository">
+            <GitHubIcon />
+          </ExternalIconLink>
           <ThemeToggle />
 
           {status === 'anon' && (

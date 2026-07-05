@@ -37,6 +37,12 @@ describe('LoginPage', () => {
     mockUseAuth.mockReturnValue({ status: 'anon', refresh: vi.fn().mockResolvedValue(undefined) })
   })
 
+  it('autofocuses the email field on render (Story 10.4)', () => {
+    renderLogin()
+
+    expect(screen.getByLabelText(/email/i)).toHaveFocus()
+  })
+
   it('returns to the intended page after a successful login (Story 10.2)', async () => {
     mockLogin.mockResolvedValue({ org: null })
     renderLogin({ from: { pathname: '/upload' } })

@@ -117,7 +117,7 @@ development_status:
   10-1-app-shell-and-auth-aware-navigation: done
   10-2-redirect-to-login-and-back: done
   10-3-auto-redirect-to-login-after-registration: done
-  10-4-autofocus-email-on-login: ready-for-dev
+  10-4-autofocus-email-on-login: review
 
   # Epic 11 — Project Documentation (MkDocs Material → GitHub Pages; markdown).
   # 11-1 (site scaffold) is the foundation; 11-2..11-5 add pages/nav to mkdocs.yml;

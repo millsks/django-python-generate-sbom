@@ -1,8 +1,8 @@
 """Tests for manifest parsers and transitive resolution (Story 3.3)."""
 
-import json
 import subprocess
 from dataclasses import asdict
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -11,11 +11,14 @@ from generate_sbom.manifests.models import ManifestUpload
 from generate_sbom.sbom.parsers import (
     PackageSpec,
     ResolutionError,
-    SolverUnavailableError,
     resolve_packages,
     tag_relationships,
 )
-from generate_sbom.sbom.parsers._conda import conda_solve, parse_conda_json
+from generate_sbom.sbom.parsers._pixi import (
+    _assert_all_declared_present,
+    _solver_problem,
+    pixi_lock_from_environment,
+)
 from generate_sbom.sbom.parsers._uv import parse_compiled, uv_pip_compile
 
 PIXI_LOCK = b"""
@@ -56,28 +59,46 @@ def test_pixi_toml_extracts_names_excluding_python() -> None:
     assert uv.call_args.args[0] == ["numpy"]
 
 
-def test_conda_uses_solver() -> None:
-    with patch("generate_sbom.sbom.parsers.conda.conda_solve", return_value=_FAKE) as solver:
-        packages = resolve_packages("conda", b"name: env\ndependencies:\n  - numpy\n")
-    solver.assert_called_once()
-    assert {p.name for p in packages} == {"django", "asgiref"}
+# A pixi.lock as pixi writes it from an imported environment: conda entries carry no
+# name/version fields (they live in the URL); the pip: extras are pypi entries.
+_PIXI_LOCK_FROM_ENV = b"""
+version: 6
+packages:
+  - conda: https://conda.anaconda.org/conda-forge/linux-64/numpy-1.26.4-h1234567_0.conda
+  - conda: https://conda.anaconda.org/conda-forge/linux-64/libblas-3.9.0-hb1234_0.conda
+  - pypi: https://files.pythonhosted.org/x/requests-2.34.2-any.whl
+    name: requests
+    version: "2.34.2"
+"""
 
 
-def test_conda_missing_solver_raises_descriptively() -> None:
-    with patch("generate_sbom.sbom.parsers._conda.shutil.which", return_value=None):
-        with pytest.raises(SolverUnavailableError, match="conda/mamba"):
-            conda_solve({"name": "env", "dependencies": ["numpy"]})
+def test_conda_resolves_via_pixi() -> None:
+    """A conda environment.yml is solved via pixi; conda + pip: packages are tagged."""
+    content = b"name: env\nchannels: [conda-forge]\ndependencies:\n  - numpy=1.26\n  - pip:\n    - requests>=2\n"
+    with patch(
+        "generate_sbom.sbom.parsers.conda.pixi_lock_from_environment", return_value=_PIXI_LOCK_FROM_ENV
+    ) as solve:
+        packages = resolve_packages("conda", content)
+    solve.assert_called_once()
+    by = {p.name: p for p in packages}
+    assert by["numpy"].version == "1.26.4"
+    assert (by["numpy"].ecosystem, by["numpy"].relationship) == ("conda", "direct")
+    assert (by["libblas"].ecosystem, by["libblas"].relationship) == ("conda", "transitive")
+    assert (by["requests"].ecosystem, by["requests"].relationship) == ("pypi", "direct")
+
+
+def test_conda_surfaces_solver_error() -> None:
+    """An unsatisfiable environment fails with the real solver problem in the message."""
+    error = ResolutionError("conda environment could not be resolved: nothing provides __cuda")
+    with patch("generate_sbom.sbom.parsers.conda.pixi_lock_from_environment", side_effect=error):
+        with pytest.raises(ResolutionError, match="__cuda"):
+            resolve_packages("conda", b"name: env\ndependencies:\n  - libarrow\n")
 
 
 def test_parse_compiled_extracts_pins() -> None:
     output = "# header\ndjango==5.2.1\nasgiref==3.8.1  # via django\n-e .\n"
     specs = parse_compiled(output)
     assert {(s.name, s.version) for s in specs} == {("django", "5.2.1"), ("asgiref", "3.8.1")}
-
-
-def test_parse_conda_json_extracts_link_actions() -> None:
-    output = '{"actions": {"LINK": [{"name": "numpy", "version": "1.26.0"}]}}'
-    assert parse_conda_json(output) == [PackageSpec(name="numpy", version="1.26.0")]
 
 
 def test_unknown_format_raises() -> None:
@@ -127,58 +148,6 @@ def test_uv_pip_compile_failure_raises() -> None:
             uv_pip_compile(["django"])
 
 
-def test_conda_solve_runs_subprocess() -> None:
-    completed = MagicMock(stdout='{"actions": {"LINK": [{"name": "numpy", "version": "1.26.0"}]}}')
-    with (
-        patch("generate_sbom.sbom.parsers._conda.shutil.which", return_value="/bin/conda"),
-        patch("generate_sbom.sbom.parsers._conda.subprocess.run", return_value=completed),
-    ):
-        specs = conda_solve({"name": "env", "dependencies": ["numpy"]})
-    assert specs == [PackageSpec(name="numpy", version="1.26.0")]
-
-
-# A realistic `mamba env create --dry-run --json` payload: the declared deps plus the
-# transitive closure the solver pulls in (mirrors the real solver output shape).
-_CONDA_DRY_RUN_JSON = json.dumps(
-    {
-        "actions": {
-            "LINK": [
-                {"name": "python", "version": "3.11.15"},
-                {"name": "numpy", "version": "1.26.4"},
-                {"name": "click", "version": "8.4.2"},
-                {"name": "libzlib", "version": "1.3.2"},
-                {"name": "pip", "version": "26.1.2"},
-            ]
-        },
-        "dry_run": True,
-        "success": True,
-    }
-)
-
-
-def test_conda_environment_resolves_via_installed_solver() -> None:
-    """A conda environment.yml resolves to conda packages via the solver (bugfix).
-
-    conda/mamba is now an installed runtime dependency; with the solver present the
-    dry-run JSON yields the full package set — declared deps tagged direct, the
-    transitive closure tagged transitive, every package ecosystem=conda.
-    """
-    content = b"name: env\nchannels: [conda-forge]\ndependencies:\n  - python=3.11\n  - numpy=1.26\n  - click\n"
-    completed = MagicMock(stdout=_CONDA_DRY_RUN_JSON)
-    with (
-        patch("generate_sbom.sbom.parsers._conda.shutil.which", return_value="/opt/mamba"),
-        patch("generate_sbom.sbom.parsers._conda.subprocess.run", return_value=completed),
-    ):
-        packages = resolve_packages("conda", content)
-
-    by = {p.name: p for p in packages}
-    assert by["numpy"].version == "1.26.4"
-    assert all(p.ecosystem == "conda" for p in packages)
-    assert {name for name, p in by.items() if p.relationship == "direct"} == {"python", "numpy", "click"}
-    assert by["libzlib"].relationship == "transitive"
-    assert by["pip"].relationship == "transitive"
-
-
 def test_pixi_lock_malformed_yaml_raises() -> None:
     with pytest.raises(ResolutionError):
         resolve_packages("pixi_lock", b"key: [unclosed")
@@ -225,14 +194,6 @@ def test_pixi_toml_tags_direct_vs_transitive() -> None:
     assert {p.name: p.relationship for p in packages} == {"numpy": "direct", "asgiref": "transitive"}
 
 
-def test_conda_tags_direct_vs_transitive() -> None:
-    resolved = [PackageSpec(name="numpy", version="1.26.0"), PackageSpec(name="libblas", version="3.9.0")]
-    content = b"name: env\ndependencies:\n  - numpy=1.26\n  - pip:\n    - requests>=2\n"
-    with patch("generate_sbom.sbom.parsers.conda.conda_solve", return_value=resolved):
-        packages = resolve_packages("conda", content)
-    assert {p.name: p.relationship for p in packages} == {"numpy": "direct", "libblas": "transitive"}
-
-
 def test_pixi_lock_packages_are_unknown() -> None:
     # pixi.lock is the full solved env with no declared marker → all unknown (never guessed).
     packages = resolve_packages(ManifestUpload.Format.PIXI_LOCK, PIXI_LOCK)
@@ -275,13 +236,6 @@ def test_requirements_packages_are_pypi() -> None:
     assert all(p.ecosystem == "pypi" for p in packages)
 
 
-def test_conda_packages_are_conda() -> None:
-    resolved = [PackageSpec(name="numpy", version="1.26.0"), PackageSpec(name="libblas", version="3.9.0")]
-    with patch("generate_sbom.sbom.parsers.conda.conda_solve", return_value=resolved):
-        packages = resolve_packages("conda", b"name: env\ndependencies:\n  - numpy\n")
-    assert all(p.ecosystem == "conda" for p in packages)
-
-
 def test_pixi_toml_tags_conda_deps_vs_pypi_deps() -> None:
     resolved = [
         PackageSpec(name="numpy", version="1.26.0"),  # declared under [dependencies] → conda
@@ -297,3 +251,117 @@ def test_pixi_toml_tags_conda_deps_vs_pypi_deps() -> None:
 def test_ecosystem_survives_asdict_roundtrip() -> None:
     spec = PackageSpec(name="numpy", version="1.26.0", ecosystem="conda")
     assert PackageSpec(**asdict(spec)).ecosystem == "conda"
+
+
+# --- conda-via-pixi internals (Story 8.19) -------------------------------------------
+
+
+def test_pixi_lock_parses_conda_entry_without_name_fields() -> None:
+    """Modern (v7) conda lock entries carry no name/version — parsed from the URL filename."""
+    lock = (
+        b"version: 6\npackages:\n"
+        b"  - conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.6.17-hbd8a1cb_0.conda\n"
+    )
+    assert resolve_packages("pixi_lock", lock) == [
+        PackageSpec(name="ca-certificates", version="2026.6.17", ecosystem="conda")
+    ]
+
+
+def test_pixi_solve_flags_dropped_declared_deps(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """A declared dep missing from the converted manifest raises with its name."""
+    manifest = tmp_path / "pixi.toml"
+    manifest.write_text('[dependencies]\nnumpy = "*"\n', encoding="utf-8")
+    with pytest.raises(ResolutionError, match="csprocess"):
+        _assert_all_declared_present(manifest, ["numpy", "csprocess"])
+
+
+def test_pixi_solver_problem_extracted_from_tree_output() -> None:
+    """The human-readable solver problem is pulled out of pixi's tree-formatted error."""
+    stderr = (
+        "  x failed to solve the environment\n"
+        "  ╰─▶ Cannot solve the request because of: No candidates were found for foo ==1.0.\n"
+    )
+    assert "No candidates were found for foo" in _solver_problem(stderr)
+
+
+def test_conda_declared_names_skips_invalid_pip_requirement() -> None:
+    from generate_sbom.sbom.parsers.conda import _declared_names
+
+    names = _declared_names({"dependencies": ["numpy=1.26", {"pip": ["===bad===", "requests>=2"]}]})
+    assert names == ["numpy", "requests"]
+
+
+def test_conda_malformed_yaml_raises() -> None:
+    with pytest.raises(ResolutionError):
+        resolve_packages("conda", b"key: [unclosed")
+
+
+def _fake_pixi(manifest_body: str):  # type: ignore[no-untyped-def]
+    """A subprocess.run stand-in: `pixi init` writes a manifest, `pixi lock` writes a lock."""
+
+    def run(cmd, cwd=None, **kwargs):  # type: ignore[no-untyped-def]
+        if "init" in cmd:
+            workspace = Path(cmd[cmd.index("init") + 1])
+            workspace.mkdir(parents=True, exist_ok=True)
+            (workspace / "pixi.toml").write_text(manifest_body, encoding="utf-8")
+        elif "lock" in cmd:
+            (Path(cwd) / "pixi.lock").write_text("version: 6\npackages: []\n", encoding="utf-8")
+        return MagicMock()
+
+    return run
+
+
+def test_pixi_lock_from_environment_orchestrates_init_and_lock(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setattr("generate_sbom.sbom.parsers._pixi.subprocess.run", _fake_pixi('[dependencies]\nnumpy = "*"\n'))
+    lock = pixi_lock_from_environment(b"name: e\ndependencies:\n  - numpy\n", ["numpy"])
+    assert b"packages" in lock
+
+
+def test_pixi_lock_from_environment_surfaces_solver_problem(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    def run(cmd, cwd=None, **kwargs):  # type: ignore[no-untyped-def]
+        if "init" in cmd:
+            workspace = Path(cmd[cmd.index("init") + 1])
+            workspace.mkdir(parents=True, exist_ok=True)
+            (workspace / "pixi.toml").write_text('[dependencies]\nlibarrow = "*"\n', encoding="utf-8")
+            return MagicMock()
+        raise subprocess.CalledProcessError(1, cmd, stderr="  ╰─▶ Cannot solve: nothing provides __cuda\n")
+
+    monkeypatch.setattr("generate_sbom.sbom.parsers._pixi.subprocess.run", run)
+    with pytest.raises(ResolutionError, match="__cuda"):
+        pixi_lock_from_environment(b"name: e\ndependencies:\n  - libarrow\n", ["libarrow"])
+
+
+def test_pixi_lock_from_environment_timeout(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    def run(cmd, cwd=None, **kwargs):  # type: ignore[no-untyped-def]
+        raise subprocess.TimeoutExpired(cmd, 900)
+
+    monkeypatch.setattr("generate_sbom.sbom.parsers._pixi.subprocess.run", run)
+    with pytest.raises(ResolutionError, match="timed out"):
+        pixi_lock_from_environment(b"name: e\ndependencies:\n  - numpy\n", ["numpy"])
+
+
+def test_pixi_lock_from_environment_pixi_missing(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    def run(cmd, cwd=None, **kwargs):  # type: ignore[no-untyped-def]
+        raise FileNotFoundError
+
+    monkeypatch.setattr("generate_sbom.sbom.parsers._pixi.subprocess.run", run)
+    with pytest.raises(ResolutionError, match="pixi is not available"):
+        pixi_lock_from_environment(b"name: e\ndependencies:\n  - numpy\n", ["numpy"])
+
+
+def test_solver_problem_empty_and_unmatched() -> None:
+    assert _solver_problem("") == ""
+    assert _solver_problem(None) == ""
+    assert _solver_problem("just some unrelated noise") == ""
+
+
+def test_pixi_lock_skips_malformed_entries() -> None:
+    """Non-mapping entries, non-string conda URLs, and unparseable filenames are skipped."""
+    lock = (
+        b"version: 6\npackages:\n"
+        b"  - not-a-mapping\n"
+        b"  - conda: {}\n"
+        b"  - conda: https://conda.anaconda.org/conda-forge/noarch/weird.conda\n"
+        b"  - pypi: https://x/requests-2.0-any.whl\n    name: requests\n    version: '2.0'\n"
+    )
+    assert resolve_packages("pixi_lock", lock) == [PackageSpec(name="requests", version="2.0", ecosystem="pypi")]

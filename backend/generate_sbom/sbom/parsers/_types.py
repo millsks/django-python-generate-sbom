@@ -56,7 +56,3 @@ def mark_ecosystem(specs: list[PackageSpec], ecosystem: str) -> list[PackageSpec
 
 class ResolutionError(Exception):
     """A manifest could not be resolved (parse or resolver failure)."""
-
-
-class SolverUnavailableError(ResolutionError):
-    """The conda/mamba solver binary is not available (a required runtime dep)."""

@@ -268,7 +268,7 @@ depends-on = [
   "cov",
   "fe-lint",
   "fe-typecheck",
-  "fe-test",
+  "fe-cov",
   "fe-build",
   "docs-build",
 ]

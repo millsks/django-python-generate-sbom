@@ -5,13 +5,23 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { ResultsPage } from './ResultsPage'
 import { ApiError } from '../api/client'
 import { getJobStatus } from '../api/jobs'
+import { useAuth } from '../auth/AuthProvider'
 
 vi.mock('../api/jobs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/jobs')>()
   return { ...actual, getJobStatus: vi.fn() }
 })
+vi.mock('../auth/AuthProvider', () => ({ useAuth: vi.fn() }))
 
 const mockStatus = getJobStatus as Mock
+const mockAuth = useAuth as Mock
+const AUTHED_WITH_ORG = {
+  status: 'authed' as const,
+  activeOrg: { slug: 'acme', name: 'Acme' },
+  isAdmin: false,
+  refresh: vi.fn(),
+  logout: vi.fn(),
+}
 
 function renderPage() {
   render(
@@ -39,6 +49,7 @@ const SUCCESS = {
 describe('ResultsPage', () => {
   beforeEach(() => {
     mockStatus.mockReset()
+    mockAuth.mockReturnValue(AUTHED_WITH_ORG)
   })
 
   it('renders the tabs in order with Overview active by default', async () => {

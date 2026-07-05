@@ -18,10 +18,13 @@ import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { createKey, getKeys, revokeKey, type ApiKey } from '../api/keys'
 import { getMembers } from '../api/orgs'
+import { useAuth } from '../auth/AuthProvider'
+import { NoOrgState } from '../components/NoOrgState'
 import { EmptyState, ErrorState, LoadingState } from '../components/PageState'
 import { AddActionIcon, DeleteActionIcon, NavIcon } from '../icons'
 
 export function KeysPage() {
+  const { activeOrg } = useAuth()
   const [keys, setKeys] = useState<ApiKey[]>([])
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -67,6 +70,10 @@ export function KeysPage() {
     } catch {
       setError('Could not revoke key.')
     }
+  }
+
+  if (!activeOrg) {
+    return <NoOrgState />
   }
 
   return (

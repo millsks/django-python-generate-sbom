@@ -1,9 +1,11 @@
 // Shared auth state (Story 10.1): a single source of truth for whether the user is
 // signed in, the active org, and whether they admin it — consumed by both the nav
-// shell and ProtectedRoute. There is no user/me endpoint; auth is derived from the
-// active-org call, and admin status from the org membership call.
+// shell and ProtectedRoute. Identity is decoupled from the active org (Story 2.6):
+// auth is derived from the auth/me identity call, the active org is fetched separately
+// (a user with zero orgs is still authed with activeOrg null), and admin status comes
+// from the org membership call.
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { logout as apiLogout, type OrgSummary } from '../api/auth'
+import { getMe, logout as apiLogout, type OrgSummary } from '../api/auth'
 import { getActiveOrg, getMembers } from '../api/orgs'
 
 type Status = 'loading' | 'authed' | 'anon'
@@ -30,10 +32,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false)
 
   const refresh = useCallback(async () => {
+    // Identity first: only a failed auth/me call makes the user anonymous.
+    try {
+      await getMe()
+    } catch {
+      setActiveOrg(null)
+      setIsAdmin(false)
+      setStatus('anon')
+      return
+    }
+    // Authenticated. The active org is fetched separately — a rejected/404 here means
+    // the user simply has no active org, NOT that they are signed out.
     try {
       const org = await getActiveOrg()
       setActiveOrg(org)
-      setStatus('authed')
       try {
         const members = await getMembers()
         setIsAdmin(members.is_admin)
@@ -42,9 +54,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch {
       setActiveOrg(null)
-      setIsAdmin(false)
-      setStatus('anon')
+      setIsAdmin(false) // no active org → no admin rights
     }
+    setStatus('authed')
   }, [])
 
   const logout = useCallback(async () => {

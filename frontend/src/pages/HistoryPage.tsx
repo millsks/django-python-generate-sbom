@@ -39,6 +39,7 @@ import {
 } from '../api/jobs'
 import { useAuth } from '../auth/AuthProvider'
 import { JobStatusBadge } from '../components/JobStatusBadge'
+import { NoOrgState } from '../components/NoOrgState'
 import { EmptyState, ErrorState, LoadingState } from '../components/PageState'
 import { formatDuration } from '../duration'
 import { useJobStatus } from '../hooks/useJobStatus'
@@ -160,7 +161,7 @@ function JobRow({
 }
 
 export function HistoryPage() {
-  const { isAdmin } = useAuth()
+  const { activeOrg, isAdmin } = useAuth()
   const [data, setData] = useState<Paginated<JobListItem> | null>(null)
   const [error, setError] = useState(false)
   const [page, setPage] = useState(1)
@@ -228,6 +229,10 @@ export function HistoryPage() {
       : confirm?.kind === 'selected'
         ? `Delete the stored artifacts for the ${selected.size} selected job(s)? The job records are kept; only the SBOM and report files are removed.`
         : 'Delete the stored artifacts for this job? The job record is kept; only the SBOM and report files are removed.'
+
+  if (!activeOrg) {
+    return <NoOrgState />
+  }
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>

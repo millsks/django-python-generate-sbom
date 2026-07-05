@@ -21,7 +21,8 @@ export function getMe(): Promise<CurrentUser> {
 
 export interface RegisterResponse {
   user: { id: number; email: string }
-  org: OrgSummary
+  // Registration creates no org (Story 2.6 — zero-org users); always null today.
+  org: OrgSummary | null
 }
 
 export function register(email: string, password: string): Promise<RegisterResponse> {

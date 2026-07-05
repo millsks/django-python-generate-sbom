@@ -6,7 +6,7 @@
 services:
   web:
     build: .
-    command: sh -c "pixi run migrate && pixi run web"
+    command: sh -c "pixi run migrate && pixi run seed-superuser && pixi run web"
     env_file: .env
     ports:
       - "8000:8000"

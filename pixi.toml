@@ -127,6 +127,10 @@ cwd = "backend"
 cmd = "python manage.py migrate"
 cwd = "backend"
 
+[tasks.seed-superuser]
+cmd = "python manage.py seed_superuser"
+cwd = "backend"
+
 [tasks.collectstatic]
 cmd = "python manage.py collectstatic --noinput"
 cwd = "backend"

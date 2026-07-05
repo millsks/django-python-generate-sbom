@@ -160,6 +160,11 @@ CELERY_TASK_TIME_LIMIT = env.int("CELERY_TASK_TIME_LIMIT", default=2100)
 # Per-org concurrency gate limit (AD-7 / NFR-4.1); consumed by Epic 3.
 SBOM_MAX_CONCURRENT_JOBS_PER_ORG = env.int("SBOM_MAX_CONCURRENT_JOBS_PER_ORG", default=5)
 
+# Artifact retention window in days (Story 7.1): how long a job's SBOM + analysis-report
+# blobs are kept before the daily cleanup purges them. Job metadata is retained forever.
+# Defaults to 30 days; override via the ARTIFACT_RETENTION_DAYS env var.
+ARTIFACT_RETENTION_DAYS = env.int("ARTIFACT_RETENTION_DAYS", default=30)
+
 # Version-currency LTS registry (FR-5.4): a JSON file path OR inline JSON mapping
 # package name → LTS version string. Extends/overrides the built-in defaults.
 SBOM_LTS_REGISTRY = env.str("SBOM_LTS_REGISTRY", default="")

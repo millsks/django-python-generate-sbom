@@ -1,6 +1,6 @@
 # Story 7.1: Scheduled Artifact Expiry & Cleanup
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -121,8 +121,25 @@ Because the selector filters `result_key__isnull=False`, an already-cleaned job 
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
 
 ### Completion Notes List
 
+- Retention window is now configurable: `ARTIFACT_RETENTION_DAYS` (env-overridable, **default 30 days**, was a fixed `ARTIFACT_TTL_DAYS = 10`) drives `finalize_job`'s `artifacts_expire_at`.
+- `SBOMJob.artifacts_expire_at` already existed on the model — **no migration needed**.
+- Cleanup lives in the sbom service layer as two pure functions (AD-3): `delete_job_artifacts(job)` (per-job blob delete + key-nulling, idempotent when already cleaned — reused by Story 7.2) and `purge_expired_artifacts(now=None)` (the sweep over `artifacts_expire_at__lte=now, result_key__isnull=False`). Job + report rows and all metadata are retained forever.
+- Celery task `purge_expired_artifacts` (queue `pipeline`) delegates to the service; a daily Beat entry (04:00) was added to `config/celery_app.py` alongside the existing parselmouth refresh.
+- Tests: `tests/unit/test_artifact_cleanup.py` (retention default + env override, blob delete/key-nulling/metadata retention, idempotency, expiry selection, explicit-cutoff, task delegation) + `tests/integration/test_artifact_cleanup.py` (real-storage purge round trip, `@pytest.mark.integration`); updated the 30-day assertion in `test_sbom_generation.py`.
+- `pixi run ci` exits 0; backend coverage 94.09% (277 passed), frontend 94 passed.
+
 ### File List
+
+- backend/config/settings/base.py (ARTIFACT_RETENTION_DAYS setting)
+- backend/generate_sbom/sbom/services.py (configurable expiry; delete_job_artifacts + purge_expired_artifacts)
+- backend/generate_sbom/tasks/maintenance.py (purge_expired_artifacts task, queue=pipeline)
+- backend/config/celery_app.py (daily Beat entry)
+- backend/tests/unit/test_artifact_cleanup.py (new)
+- backend/tests/integration/test_artifact_cleanup.py (new)
+- backend/tests/unit/test_sbom_generation.py (30-day expiry assertion)

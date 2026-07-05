@@ -19,6 +19,7 @@ import useMediaQuery from '@mui/material/useMediaQuery'
 import { useTheme } from '@mui/material/styles'
 import ListItemIcon from '@mui/material/ListItemIcon'
 import GitHubIcon from '@mui/icons-material/GitHub'
+import Inventory2Icon from '@mui/icons-material/Inventory2'
 import MenuBookIcon from '@mui/icons-material/MenuBook'
 import MenuIcon from '@mui/icons-material/Menu'
 import { useAuth } from '../auth/AuthProvider'
@@ -77,9 +78,16 @@ export function Layout() {
               <MenuIcon />
             </IconButton>
           )}
-          <Typography variant="h6" component={RouterLink} to="/" sx={{ color: 'inherit', textDecoration: 'none', mr: 2 }}>
-            {APP_NAME}
-          </Typography>
+          <Box
+            component={RouterLink}
+            to="/"
+            sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'inherit', textDecoration: 'none', mr: 2 }}
+          >
+            <Inventory2Icon />
+            <Typography variant="h6" component="span" sx={{ fontWeight: 700, letterSpacing: '.02em', whiteSpace: 'nowrap' }}>
+              {APP_NAME}
+            </Typography>
+          </Box>
 
           <Box sx={{ flexGrow: 1 }} />
           <ExternalIconLink href={DOCS_URL} label="Documentation">

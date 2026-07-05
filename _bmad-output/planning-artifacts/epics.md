@@ -1237,6 +1237,37 @@ So that I can watch a job advance without manually refreshing.
 **When** it is open,
 **Then** no status polling requests are issued.
 
+### Story 6.3: Job Elapsed Time on the History Page
+
+As a user,
+I want to see how long each job took to complete,
+So that I can gauge processing time and spot slow runs at a glance.
+
+**Acceptance Criteria:**
+
+**Given** a completed (or failed) job,
+**When** the jobs list is served,
+**Then** the API exposes the job's total elapsed time — the wall-clock duration from
+`created_at` to `completed_at` — as a computed field (e.g. `elapsed_seconds`), null while
+the job is still running or if `completed_at` is unset.
+
+**Given** the History dashboard table,
+**When** it renders,
+**Then** it shows an **Elapsed** (duration) column, human-formatted (e.g. `1m 23s`,
+`2h 05m`, `450ms`), for finished jobs; a still-running job shows a live/updating
+elapsed (from `created_at` to now) or a dash, consistent with the existing 5s polling.
+
+**Given** the table already supports sorting,
+**When** the Elapsed column is added,
+**Then** it fits the existing column/sort conventions (sortable if the table sorts other
+columns), without disrupting the current columns or live-progress behavior (Story 6.2).
+
+**Given** the change,
+**When** complete,
+**Then** it is covered by tests: the serializer's `elapsed_seconds` computation
+(including the null-while-running case) and the table's formatted rendering, and
+`pixi run ci` is green (backend coverage ≥90%).
+
 ---
 
 ## Epic 7: Artifact Retention & Lifecycle Management

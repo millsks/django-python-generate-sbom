@@ -47,6 +47,30 @@ pixi run flower             # Celery monitoring UI on :5555
 The frontend dev server and build run through their own pixi tasks (`fe-*`); see the
 task list below.
 
+## Creating the initial admin
+
+Migrations seed the distinguished **ADMIN** org (`Org.is_admin_org=True`); members
+of that org are **global admins** (see [Architecture](architecture.md)). There is no
+auto-created "personal" org for the first user — a new account starts with zero
+memberships. Instead, seed a Django **superuser**, which is automatically made a
+global admin:
+
+```sh
+cd backend
+python manage.py createsuperuser        # create_superuser hook → grant_global_admin
+```
+
+`UserManager.create_superuser` calls `grant_global_admin`, so the new superuser is
+written into the ADMIN org and back-filled as an admin of every org. If you created
+superusers before running the seed migration (or need an idempotent catch-up), run:
+
+```sh
+python manage.py bootstrap_admin_org    # ensure the ADMIN org exists; seed all superusers
+```
+
+Under Docker Compose, run these inside the `web` container (`pixi run docker-shell`,
+then the same `python manage.py …` commands).
+
 ## Settings
 
 Django settings are split under `backend/config/settings/`:

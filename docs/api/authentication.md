@@ -34,7 +34,11 @@ key; requests with neither are rejected.
 
 ## `POST /api/v1/auth/register/`
 
-Create a new user and their personal organization. **No authentication.**
+Create a new user account. **No authentication.** A new user starts with **no
+organizations** — registration does not create a personal org, so `org` is
+always `null`. A user joins an org by being
+[added as a member](organizations.md#post-apiv1orgsmembers) by an admin, or by
+[creating one](organizations.md#post-apiv1orgscreate).
 
 **Request body**
 
@@ -48,7 +52,7 @@ Create a new user and their personal organization. **No authentication.**
 ```json
 {
   "user": { "id": 1, "email": "you@example.com" },
-  "org": { "slug": "you-example-com", "name": "you@example.com" }
+  "org": null
 }
 ```
 
@@ -84,3 +88,21 @@ authentication.** Sets `sessionid` and `csrftoken` cookies.
 Invalidate the current session. **Authentication required.**
 
 **Response `204 No Content`.**
+
+---
+
+## `GET /api/v1/auth/me/`
+
+Return the currently authenticated user's identity. **Authentication required.**
+This is the SPA's identity signal — a logged-in user with **zero organizations**
+is still authenticated and gets a `200` here.
+
+**Response `200 OK`**
+
+```json
+{ "id": 1, "email": "you@example.com" }
+```
+
+**Errors** — `401` when the request carries no valid session or API key. (The
+API accepts either scheme, and its API-key challenge sets a `WWW-Authenticate`
+header, so an anonymous request renders as `401`, not `403`.)

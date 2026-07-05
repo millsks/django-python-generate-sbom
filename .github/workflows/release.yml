@@ -48,6 +48,10 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    # 'released' is true when a release was actually cut (not a no-op / no-change run),
+    # so the docs republish (Story 11.10) can be gated on it.
+    outputs:
+      released: ${{ steps.should_skip.outputs.skip != 'true' }}
 
     steps:
       # -----------------------------------------------------------------------
@@ -299,3 +303,21 @@ jobs:
         run: |
           echo "Release created: ${{ steps.create_release.outputs.url }}"
           ls -lh backend/dist/ dist/*-frontend-*.tar.gz 2>/dev/null || true
+
+  # ---------------------------------------------------------------------------
+  # Rebuild + republish the documentation site after a release is cut (Story
+  # 11.10). Reuses Story 11.1's build/deploy via the reusable docs workflow — no
+  # duplicated mkdocs build/deploy. Skipped on a no-op (no-change) release run.
+  # The shared `concurrency: group: pages` in docs.yml serializes this with the
+  # on-push docs deploy so the two can't clobber each other.
+  # ---------------------------------------------------------------------------
+  publish-docs:
+    name: Publish documentation
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/docs.yml
+    secrets: inherit

@@ -2279,6 +2279,41 @@ success; the round-trip is covered by a test.
 **Then** I am sent to the default authenticated page rather than shown the form again
 (optional but recommended).
 
+<!-- Epic 10 reopened: Story 10.3 adds a post-registration auto-redirect to login so users
+     don't have to click the login link manually. Frontend-only; reuses the existing
+     registration flow (api/auth.register) and react-router navigation. Independent of the
+     Epic 2 registration-response change (2.6) — this is navigation-after-success only. -->
+
+### Story 10.3: Auto-Redirect to Login After Registration
+
+As a newly registered user,
+I want to be taken to the login page automatically after I register,
+So that I don't have to find and click a login link to continue.
+
+**Acceptance Criteria:**
+
+**Given** I have just registered successfully,
+**When** the registration success state renders,
+**Then** a brief confirmation is shown and the app **automatically navigates to `/login`
+after ~5 seconds** without requiring a manual click.
+
+**Given** the pending redirect,
+**When** the success state is shown,
+**Then** the user is told what will happen (e.g. "Registration successful — redirecting to
+login…"), and the existing manual login link remains available so an impatient user can go
+immediately.
+
+**Given** I leave the page before the timer fires (I click the login link or navigate away),
+**When** the component unmounts,
+**Then** the pending timer is cleared so no navigation or state update happens after unmount
+(no stray redirect, no memory-leak warning).
+
+**Given** the behavior,
+**When** implemented,
+**Then** it lives in the registration page/route (`RegisterPage`) using react-router
+navigation and a cleaned-up timer, and is covered by a test (fake timers assert the redirect
+fires after the delay and is cancelled on unmount).
+
 ---
 
 ## Epic 11: Project Documentation
@@ -2651,6 +2686,117 @@ current site) without failing the workflow.
 **Then** it relies on the same GitHub Pages setup (Source = GitHub Actions) and App
 token/permissions already configured — no new external secret beyond those from
 Stories 11.1 and 9.3.
+
+<!-- Epic 11 reopened (documentation reconciliation). The Epic 2 org-membership rework
+     (zero-org users, create-org UI, add-existing-member-by-email, the global-admin ADMIN
+     org, and the new auth/me endpoint) makes parts of the Epic 11 docs out of date.
+     Stories 11.11-11.14 review and update the documentation to match the shipped system.
+     PREREQUISITE: these are implemented AFTER Epic 2 is done, so the docs reflect the
+     final behavior (they are contexted into story files just-in-time at that point).
+     11.11-11.13 are audience-scoped and largely independent (different files); 11.14 is a
+     cross-cutting sweep run last. Covers the existing FR-DOC2/3/4/5/7/9. -->
+
+### Story 11.11: User-Facing Documentation Reconciliation (Org Membership)
+
+As an end user,
+I want the User Guide and How-To guides to match how accounts and organizations actually work,
+So that the instructions I follow don't lead me into errors or dead ends.
+
+**Acceptance Criteria:**
+
+**Given** Epic 2 changed registration so new users start with **zero** organizations,
+**When** `docs/user-guide/accounts-and-organizations.md` is reviewed,
+**Then** it reflects: a newly registered user has no org and is shown a "create one or ask
+an admin to add you" state (not a personal org), how to **create an organization** from the
+UI, switching orgs, and that platform (global) admins oversee all orgs (FR-DOC2).
+
+**Given** Epic 2 changed member management to **add an existing user by email** (no more
+temp-password auto-create) and defined membership edge cases,
+**When** `docs/how-to/manage-organization.md` ("Invite a member / switch organizations") is
+reviewed,
+**Then** it documents adding a member by their registered email (and the "no such user"
+outcome), removing members, the last-admin rule, and create/switch org — with no references
+to temporary passwords or auto-created accounts (FR-DOC3).
+
+**Given** the reconciliation,
+**When** complete,
+**Then** any stale screenshots or wording in these pages are updated, and `pixi run
+docs-build` (`mkdocs build --strict`) stays green.
+
+### Story 11.12: API Reference & OpenAPI/Swagger Reconciliation
+
+As an API consumer,
+I want the REST API reference and the generated OpenAPI/Swagger to match the live endpoints,
+So that I can integrate against accurate request/response contracts.
+
+**Acceptance Criteria:**
+
+**Given** Epic 2 added `GET /api/v1/auth/me/` and changed `POST /auth/register/` to return
+`org: null` (zero-org registration),
+**When** `docs/api/authentication.md` is reviewed,
+**Then** it documents the new `auth/me` identity endpoint (auth required, returns the current
+user) and the updated register response, alongside login/logout (FR-DOC5).
+
+**Given** Epic 2 changed add-member to an email-only payload (dropping `temp_password`) and
+added create-org / global-admin provisioning,
+**When** `docs/api/organizations.md` is reviewed,
+**Then** the members endpoint request/response, the create-org endpoint, and the global-admin
+behavior are accurate.
+
+**Given** the backend serves a generated OpenAPI schema + Swagger UI (Story 11.9),
+**When** the API changed,
+**Then** the generated schema reflects the new/changed endpoints (regenerate any committed
+schema artifact if present), and the docs match what Swagger renders (FR-DOC9). `mkdocs build
+--strict` stays green.
+
+### Story 11.13: Developer Documentation Reconciliation (Global-Admin Model)
+
+As a developer/contributor,
+I want the developer docs to describe the org-membership and global-admin model as built,
+So that I can reason about permissions and set up an environment correctly.
+
+**Acceptance Criteria:**
+
+**Given** Epic 2 introduced the system **ADMIN** org (`Org.is_admin_org`) whose members are
+global admins provisioned as admins of all orgs,
+**When** `docs/developer/architecture.md` is reviewed,
+**Then** it documents the global-admin tier as a deliberate cross-org superuser tier, how
+permission checks treat global admins as org admins everywhere, and the zero-org/identity
+decoupling (auth is independent of org membership) (FR-DOC4).
+
+**Given** the data model changed (`is_admin_org` flag; users may have zero memberships),
+**When** `docs/developer/data-model.md` is reviewed,
+**Then** the `Org`/`OrgMembership`/`User` descriptions and any diagram reflect the flag, the
+zero-org state, and global-admin memberships.
+
+**Given** the initial superuser is now seeded into the ADMIN org (via the `bootstrap_admin_org`
+management command / superuser hook rather than an auto-created personal org),
+**When** `docs/developer/setup.md` is reviewed,
+**Then** the first-run/superuser bootstrap steps are accurate. `mkdocs build --strict` stays green.
+
+### Story 11.14: Cross-Cutting Documentation Audit & Refresh
+
+As a maintainer,
+I want a final sweep of all documentation for drift beyond the org-membership changes,
+So that the published docs and README are trustworthy after the recent epics.
+
+**Acceptance Criteria:**
+
+**Given** the README is the project front page (Story 11.7),
+**When** it is reviewed,
+**Then** any personal-org / registration wording is corrected and the overview, quick start,
+and screenshots reflect the current app (FR-DOC7).
+
+**Given** recent UI work (Epic 12 visual polish, Epic 10 navigation) may have dated
+screenshots or descriptions across the docs,
+**When** the full `docs/` tree is audited,
+**Then** stale screenshots, navigation descriptions, and prose are refreshed, and the
+auto-generated code reference (mkdocstrings) still renders.
+
+**Given** the docs site enforces link integrity,
+**When** the audit completes,
+**Then** `pixi run docs-build` (`mkdocs build --strict`) passes with no broken links/nav, and
+anything found but out of scope for 11.11-11.13 is fixed here or explicitly noted.
 
 ---
 

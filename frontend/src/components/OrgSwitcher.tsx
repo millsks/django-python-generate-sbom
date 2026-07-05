@@ -32,7 +32,7 @@ export function OrgSwitcher() {
 
   return (
     <FormControl size="small" sx={{ minWidth: 200 }}>
-      <InputLabel id="org-switcher-label" sx={{ color: 'text.secondary', '&.Mui-focused': { color: 'primary.main' } }}>
+      <InputLabel id="org-switcher-label" sx={{ color: 'inherit', '&.Mui-focused': { color: 'inherit' } }}>
         Org
       </InputLabel>
       <Select
@@ -40,14 +40,15 @@ export function OrgSwitcher() {
         label="Org"
         value={active}
         onChange={handleChange}
-        // Solid surface + dark text so the switcher stays readable on the red app bar
-        // (the closed control was transparent → org name blended into the banner).
+        // Inherit the surrounding text color so the switcher is legible in BOTH places it
+        // renders: white in the red app bar, and dark on the light dashboard page. (A fixed
+        // white background/text looked out of place in the banner and was invisible on the page.)
         sx={{
-          bgcolor: 'background.paper',
-          color: 'text.primary',
-          '& .MuiSvgIcon-root': { color: 'text.secondary' },
+          color: 'inherit',
+          '& .MuiOutlinedInput-notchedOutline': { borderColor: 'currentColor' },
+          '& .MuiSvgIcon-root': { color: 'inherit' },
         }}
-        // Match the open dropdown menu to the same solid surface.
+        // The open list keeps a solid surface (theme background.paper) so it stays readable.
         MenuProps={{ slotProps: { paper: { sx: { bgcolor: 'background.paper' } } } }}
       >
         {orgs.map((org) => (

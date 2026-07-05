@@ -941,6 +941,103 @@ links. A non-admin could open `/members` by URL and even call the API.
 so nothing probes an admin-only endpoint to learn its role. Tests cover the redirect, the 403, and the
 auth/me flag; `pixi run ci` is green.
 
+<!-- Epic 2 reopened (bugfix): user-reported access-control gaps. 2.18 restricts a zero-org user to
+     the home page and stops the system ADMIN org ever acting as a working org (the session path now
+     excludes it, matching the fallback). 2.19 hides the org switcher unless there is more than one org
+     to switch between. 2.20 adds the missing inverse of "Make admin" — demote an admin back to member
+     (guarded so the org keeps ≥1 admin and global admins stay admins). All three overlap Story 13.1
+     (routes, OrgSwitcher, AuthProvider, MembersPage, users backend) and are implemented AFTER 13.1. -->
+
+### Story 2.18: Restrict Zero-Org Users to the Home Page; the ADMIN Org Is Never a Working Org (Bugfix)
+
+As a signed-in user with no organization (and as a global admin),
+I want to only reach the home page and never have the system ADMIN org act as my workspace,
+So that I can't upload or view history "in" an org I don't really work in.
+
+**Context:** `get_request_org`'s fallback already excludes the ADMIN org (Story 2.12), but its **session
+path** (`memberships.filter(org_id=active_id)`) does not — so a pinned `active_org_id` at the ADMIN org
+still resolves it as the active org, letting a global admin (a member of the ADMIN org) work "in" Admin.
+The home "Upload a manifest" CTA is unconditional, and org-scoped pages render `NoOrgState` but are still
+reachable by a zero-org user (no redirect).
+
+**Acceptance Criteria:**
+
+**Given** any user (including a global admin) with a pinned `active_org_id`,
+**When** `get_request_org` resolves the active org,
+**Then** the ADMIN org is never returned — the session path validates the pinned id against a NON-admin
+membership (as the fallback already does), so a user whose only membership is the ADMIN org resolves to
+**no active org** (zero-org).
+
+**Given** an authenticated user with no active org,
+**When** they hit any org-scoped route (`/upload`, `/history`, `/keys`, `/members`, `/organization`,
+`/results/*`),
+**Then** a route guard REDIRECTS them to `/` (home); only home (plus `/login`, `/register`, and any
+global-admin screen) is reachable — enforced at the route, not just the per-page `NoOrgState`.
+
+**Given** a zero-org user on the home page,
+**When** it renders,
+**Then** there is NO "Upload a manifest" CTA; instead the `NoOrgState` copy ("ask an admin to add you")
+is shown. Backend org-scoped endpoints keep denying with no active org (defense in depth). Tests cover
+the ADMIN org never being active (session + fallback), the zero-org redirect, and the hidden home CTA.
+
+### Story 2.19: Hide the Org Switcher When the User Has One or Fewer Orgs (Bugfix)
+
+As a user who belongs to a single organization,
+I want no pointless org-switcher dropdown,
+So that the header only offers a switch control when there is actually something to switch to.
+
+**Context:** `OrgSwitcher` renders the dropdown whenever `orgs.length > 0`, so a user with exactly one
+org gets a `Select` with a single item and nothing to switch to. `getOrgs()` already returns only
+non-ADMIN orgs (`get_user_orgs`), so the fix is a length check of `> 1`.
+
+**Acceptance Criteria:**
+
+**Given** a user with more than one switchable (non-ADMIN) org,
+**When** the switcher renders,
+**Then** the dropdown appears with a `MenuItem` per org. With exactly one org, no dropdown — the org
+name is shown statically (or the control omitted; the active org already appears in the account menu and
+side-nav footer). With zero orgs, no dropdown.
+
+**Given** the create-org affordance,
+**When** the switcher renders,
+**Then** it stays **global-admin-only** (Story 2.12) — a non-admin never sees it; a user who sees it IS a
+global admin. This story does not loosen that gate.
+
+**Given** the change,
+**When** complete,
+**Then** tests cover `>1` org → dropdown, exactly `1` → no dropdown (name shown), `0` → create affordance
+only for a global admin; `pixi run ci` is green.
+
+### Story 2.20: Admin Can Demote Another Admin to Member (Bugfix)
+
+As an org admin,
+I want to demote another admin back to a member without removing them from the org,
+So that I can correct an over-promotion without kicking the person out.
+
+**Context:** The Members page only offers "Remove" and (on non-admin rows) "Make admin"; there is no way
+to drop an admin back to `member` while keeping them in the org. "Make admin" (Story 2.16,
+`promote_member_to_admin`) promotes, but has no inverse — demotion existed only inside the removed
+`transfer_admin`.
+
+**Acceptance Criteria:**
+
+**Given** an admin demotes another admin,
+**When** it runs,
+**Then** a new `demote_admin_to_member(org, target)` sets that org's membership `role = member` for that
+org only (no other-org effect), via an admin-gated `POST /orgs/demote-admin/` with `{user_id}` returning
+**204** — mirroring `promote-admin/`.
+
+**Given** the demote,
+**When** the target is the org's last admin or a global admin,
+**Then** it is blocked: `LastAdminError` (the org must keep ≥1 admin) or `GlobalAdminError` (global admins
+stay admins of every org — Stories 2.8/2.9), each surfaced with distinct UI copy.
+
+**Given** the Members page,
+**When** it renders an `admin`-role row,
+**Then** a "Make member" action sits beside "Remove", wired to the demote endpoint. Tests cover the
+promote↔demote round-trip, blocked last-admin and global-admin demotes, per-org scoping (a two-org
+admin's other-org role unchanged), and a non-admin caller → 403.
+
 ---
 
 ## Epic 3: Manifest Upload, Job Submission & SBOM Generation

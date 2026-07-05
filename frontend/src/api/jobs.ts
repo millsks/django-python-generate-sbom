@@ -77,6 +77,7 @@ export interface JobListItem {
   output_format: string
   status: string
   failure_reason: string | null
+  elapsed_seconds: number | null // wall-clock time to complete; null while running (Story 6.3)
 }
 
 export interface Paginated<T> {

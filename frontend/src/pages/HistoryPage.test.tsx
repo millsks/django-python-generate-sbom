@@ -39,6 +39,7 @@ const JOB = {
   output_format: 'cyclonedx-json',
   status: 'SUCCESS',
   failure_reason: null,
+  elapsed_seconds: 83,
 }
 
 function renderPage() {
@@ -61,6 +62,15 @@ describe('HistoryPage', () => {
     expect(within(row).getByText('cyclonedx-json')).toBeInTheDocument()
     expect(within(row).getByText('Completed')).toBeInTheDocument() // status badge
     expect(within(row).getByRole('link', { name: 'View' })).toHaveAttribute('href', '/results/abc-123')
+  })
+
+  it('shows the formatted elapsed time for a finished job', async () => {
+    mockList.mockResolvedValue(page([JOB])) // elapsed_seconds: 83
+    renderPage()
+
+    const table = await screen.findByRole('table')
+    expect(within(table).getByText('Elapsed')).toBeInTheDocument() // column header
+    expect(within(within(table).getAllByRole('row')[1]).getByText('1m 23s')).toBeInTheDocument()
   })
 
   it('shows the failure reason on a FAILED row', async () => {

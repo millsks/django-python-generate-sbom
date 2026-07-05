@@ -20,6 +20,7 @@ import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { listJobs, TERMINAL_STATUSES, type JobListItem, type Paginated } from '../api/jobs'
 import { JobStatusBadge } from '../components/JobStatusBadge'
+import { formatDuration } from '../duration'
 import { useJobStatus } from '../hooks/useJobStatus'
 
 const PAGE_SIZE = 25
@@ -35,6 +36,19 @@ function JobRow({ job }: { job: JobListItem }) {
   const status = live?.status ?? job.status
   const failureReason = live?.failure_reason ?? job.failure_reason
   const inProgress = !TERMINAL_STATUSES.includes(status)
+
+  // Elapsed: the serialized value for jobs already finished at list time; the live
+  // completion for jobs that finish while polling; and a live created→now duration
+  // (refreshed each 5s poll) for still-running jobs (Story 6.3).
+  const createdMs = new Date(job.created_at).getTime()
+  const elapsedSeconds =
+    job.elapsed_seconds != null
+      ? job.elapsed_seconds
+      : live?.completed_at
+        ? (new Date(live.completed_at).getTime() - createdMs) / 1000
+        : inProgress
+          ? (Date.now() - createdMs) / 1000
+          : null
 
   return (
     <TableRow>
@@ -58,6 +72,7 @@ function JobRow({ job }: { job: JobListItem }) {
           </Typography>
         )}
       </TableCell>
+      <TableCell>{formatDuration(elapsedSeconds)}</TableCell>
       <TableCell>
         <Link component={RouterLink} to={`/results/${job.task_id}`}>
           View
@@ -150,6 +165,7 @@ export function HistoryPage() {
                   <TableCell>Format</TableCell>
                   <TableCell>Output</TableCell>
                   <TableCell>Status</TableCell>
+                  <TableCell>Elapsed</TableCell>
                   <TableCell>Results</TableCell>
                 </TableRow>
               </TableHead>

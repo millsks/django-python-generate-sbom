@@ -1,5 +1,7 @@
 """Tests for the jobs-list selector and endpoint (Story 6.1)."""
 
+from datetime import timedelta
+
 import pytest
 from django.core.files.base import ContentFile
 from rest_framework.test import APIClient
@@ -7,6 +9,7 @@ from rest_framework.test import APIClient
 from generate_sbom.manifests.models import ManifestUpload
 from generate_sbom.sbom.models import SBOMJob
 from generate_sbom.sbom.selectors import get_jobs
+from generate_sbom.sbom.serializers import JobListSerializer
 from generate_sbom.users.models import Org, User
 from generate_sbom.users.services import register_user
 
@@ -87,6 +90,19 @@ def test_endpoint_paginates_and_serializes() -> None:
     assert row["manifest_format"] == "requirements"
     assert row["output_format"] == "cyclonedx-json"
     assert row["status"] == "SUCCESS"
+    assert row["elapsed_seconds"] is None  # no completion timestamp yet
+
+
+@pytest.mark.django_db
+def test_serializer_elapsed_seconds_for_completed_and_running_jobs() -> None:
+    alice, org = _org("alice@example.com")
+    done = _job(org, alice, status="SUCCESS")
+    done.completed_at = done.created_at + timedelta(seconds=90)
+    done.save(update_fields=["completed_at"])
+    running = _job(org, alice, status="PROGRESS")  # completed_at is None
+
+    assert JobListSerializer(done).data["elapsed_seconds"] == 90.0
+    assert JobListSerializer(running).data["elapsed_seconds"] is None
 
 
 @pytest.mark.django_db

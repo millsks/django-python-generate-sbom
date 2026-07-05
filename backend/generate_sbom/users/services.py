@@ -58,6 +58,14 @@ def grant_global_admin(user: User) -> None:
     logger.info("global_admin_granted", user_id=user.pk)
 
 
+def list_global_admins() -> list[User]:
+    """Return the current global admins (ADMIN-org members), ordered by email (Story 13.1)."""
+    admin_org = get_the_admin_org()
+    if admin_org is None:
+        return []
+    return list(User.objects.filter(org_memberships__org=admin_org).order_by("email"))
+
+
 def _unique_org_slug(name: str) -> str:
     """Return a unique slug derived from ``name``."""
     base = slugify(name) or "org"
@@ -146,6 +154,13 @@ class GlobalAdminError(MembershipError):
     message = "A global admin belongs to every org and can't be removed from a single org."
 
 
+class LastGlobalAdminError(MembershipError):
+    """Raised when revoking would remove the last global admin (Story 13.1)."""
+
+    code = "last_global_admin"
+    message = "There must always be at least one global admin."
+
+
 class NotAMemberError(MembershipError):
     """Raised when the target user is not a member of the org."""
 
@@ -158,6 +173,43 @@ class ApiKeyLimitError(MembershipError):
 
     code = "api_key_limit_reached"
     message = "This org has reached the maximum of 10 active API keys."
+
+
+def grant_global_admin_by_email(email: str) -> User:
+    """Grant global admin to a registered user looked up by email (Story 13.1).
+
+    Raises ``NoSuchUserError`` if no registered user matches the email — there is
+    no auto-create, mirroring the add-existing-member flow (Story 2.7).
+    """
+    user = User.objects.filter(email__iexact=email).first()
+    if user is None:
+        raise NoSuchUserError
+    grant_global_admin(user)
+    return user
+
+
+@transaction.atomic
+def revoke_global_admin(user: User) -> None:
+    """Revoke ``user``'s global-admin status (Story 13.1).
+
+    Removes them from the ADMIN org AND demotes their role to ``member`` in every
+    non-admin org — the decided semantics: fully revoke the elevated access (a
+    per-org admin can re-promote them later if needed). Raises
+    ``LastGlobalAdminError`` if they are the last global admin (the tier must
+    never be left empty, cf. Story 2.9). A no-op if they are not a global admin.
+    """
+    admin_org = get_the_admin_org()
+    if admin_org is None:
+        return
+    if not OrgMembership.objects.filter(org=admin_org, user=user).exists():
+        return
+    if not OrgMembership.objects.filter(org=admin_org).exclude(user=user).exists():
+        raise LastGlobalAdminError
+    OrgMembership.objects.filter(org=admin_org, user=user).delete()
+    OrgMembership.objects.filter(org__is_admin_org=False, user=user, role=OrgMembership.Role.ADMIN).update(
+        role=OrgMembership.Role.MEMBER
+    )
+    logger.info("global_admin_revoked", user_id=user.pk)
 
 
 def create_api_key(org: Org, name: str) -> tuple[OrgApiKey, str]:

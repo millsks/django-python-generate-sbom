@@ -3,10 +3,10 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { SideNav } from './SideNav'
 
-function renderNav(isAdmin: boolean, initialPath = '/') {
+function renderNav(isAdmin: boolean, initialPath = '/', isGlobalAdmin = false) {
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
-      <SideNav isAdmin={isAdmin} activeOrg={{ slug: 'acme', name: 'Acme' }} />
+      <SideNav isAdmin={isAdmin} isGlobalAdmin={isGlobalAdmin} activeOrg={{ slug: 'acme', name: 'Acme' }} />
     </MemoryRouter>,
   )
 }
@@ -30,6 +30,16 @@ describe('SideNav', () => {
     expect(labels).toEqual(['Home', 'Upload', 'History', 'API Keys'])
     expect(screen.queryByRole('link', { name: /organization/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /members/i })).not.toBeInTheDocument()
+  })
+
+  it('shows a global-admin-only "Global Admins" entry for a global admin (Story 13.1)', () => {
+    renderNav(true, '/', true)
+    expect(screen.getByRole('link', { name: /global admins/i })).toHaveAttribute('href', '/platform/global-admins')
+  })
+
+  it('hides "Global Admins" for a non-global-admin', () => {
+    renderNav(true, '/', false)
+    expect(screen.queryByRole('link', { name: /global admins/i })).not.toBeInTheDocument()
   })
 
   it('marks Home active only on the index route', () => {

@@ -105,7 +105,7 @@ def test_only_global_admin_can_grant_global_admin() -> None:
     # A non-global-admin (alice) is rejected.
     alice_client = APIClient()
     alice_client.post("/api/v1/auth/login/", {"email": "alice@example.com", "password": "pw12345678"}, format="json")
-    denied = alice_client.post("/api/v1/admin/global-admins/", {"user_id": bob.pk}, format="json")
+    denied = alice_client.post("/api/v1/admin/global-admins/", {"email": "bob@example.com"}, format="json")
     assert denied.status_code == 403
     assert denied.data["code"] == "not_global_admin"
     assert is_global_admin(bob) is False
@@ -113,22 +113,21 @@ def test_only_global_admin_can_grant_global_admin() -> None:
     # A global admin (root) may grant it.
     root_client = APIClient()
     root_client.post("/api/v1/auth/login/", {"email": "root@example.com", "password": "pw12345678"}, format="json")
-    granted = root_client.post("/api/v1/admin/global-admins/", {"user_id": bob.pk}, format="json")
+    granted = root_client.post("/api/v1/admin/global-admins/", {"email": "bob@example.com"}, format="json")
     assert granted.status_code == 201
     assert is_global_admin(bob) is True
 
 
 @pytest.mark.django_db
-def test_grant_global_admin_missing_user_returns_404() -> None:
-    """Granting global admin to a non-existent user returns 404 (guard path)."""
+def test_grant_global_admin_unknown_email_returns_400() -> None:
+    """Granting global admin to an unregistered email returns 400 no_such_user (Story 13.1)."""
     User.objects.create_superuser(email="root@example.com", password="pw12345678")
-    client = APIClient()
-    client.post("/api/v1/auth/login/", {"email": "root@example.com", "password": "pw12345678"}, format="json")
+    client = _login("root@example.com")
 
-    response = client.post("/api/v1/admin/global-admins/", {"user_id": 999999}, format="json")
+    response = client.post("/api/v1/admin/global-admins/", {"email": "ghost@example.com"}, format="json")
 
-    assert response.status_code == 404
-    assert response.data["code"] == "not_found"
+    assert response.status_code == 400
+    assert response.data["code"] == "no_such_user"
 
 
 @pytest.mark.django_db
@@ -171,3 +170,57 @@ def test_org_list_excludes_the_admin_org() -> None:
     slugs = {o["slug"] for o in response.data}
     assert "acme" in slugs
     assert "admin" not in slugs
+
+
+@pytest.mark.django_db
+def test_list_global_admins() -> None:
+    """GET lists the current global admins by email (Story 13.1)."""
+    User.objects.create_superuser(email="root@example.com", password="pw12345678")
+    bob = register_user(email="bob@example.com", password="pw12345678")
+    grant_global_admin(bob)
+
+    response = _login("root@example.com").get("/api/v1/admin/global-admins/")
+
+    assert response.status_code == 200
+    assert {a["email"] for a in response.data["global_admins"]} == {"root@example.com", "bob@example.com"}
+
+
+@pytest.mark.django_db
+def test_revoke_global_admin_removes_and_demotes_everywhere() -> None:
+    """Revoke removes ADMIN-org membership AND demotes to member in every org (Story 13.1)."""
+    User.objects.create_superuser(email="root@example.com", password="pw12345678")
+    alice = register_user(email="alice@example.com", password="pw12345678")
+    org = create_org(name="Team", admin_user=alice)  # provisions root as admin
+    bob = register_user(email="bob@example.com", password="pw12345678")
+    grant_global_admin(bob)  # bob becomes admin of Team too
+    assert OrgMembership.objects.filter(org=org, user=bob, role="admin").exists()
+
+    response = _login("root@example.com").delete(f"/api/v1/admin/global-admins/{bob.pk}/")
+
+    assert response.status_code == 204
+    assert is_global_admin(bob) is False
+    # Demoted to member in the normal org (not removed).
+    assert OrgMembership.objects.get(org=org, user=bob).role == "member"
+
+
+@pytest.mark.django_db
+def test_revoke_last_global_admin_is_blocked() -> None:
+    """Revoking the last global admin is blocked — the tier must not be emptied (Story 13.1)."""
+    root = User.objects.create_superuser(email="root@example.com", password="pw12345678")
+
+    response = _login("root@example.com").delete(f"/api/v1/admin/global-admins/{root.pk}/")
+
+    assert response.status_code == 400
+    assert response.data["code"] == "last_global_admin"
+    assert is_global_admin(root) is True
+
+
+@pytest.mark.django_db
+def test_global_admin_list_and_revoke_require_global_admin() -> None:
+    """GET/DELETE on the global-admins endpoints are 403 for a non-global-admin (Story 13.1)."""
+    root = User.objects.create_superuser(email="root@example.com", password="pw12345678")
+    register_user(email="alice@example.com", password="pw12345678")
+    alice_client = _login("alice@example.com")
+
+    assert alice_client.get("/api/v1/admin/global-admins/").status_code == 403
+    assert alice_client.delete(f"/api/v1/admin/global-admins/{root.pk}/").status_code == 403

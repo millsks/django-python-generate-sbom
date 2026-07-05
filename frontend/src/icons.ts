@@ -3,6 +3,7 @@
 // palette (SvgIcon `color` prop), never hard-coded values.
 import type { SvgIconComponent } from '@mui/icons-material'
 import AccountCircleIcon from '@mui/icons-material/AccountCircle'
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 import AddIcon from '@mui/icons-material/Add'
 import AttachFileIcon from '@mui/icons-material/AttachFile'
 import BugReportIcon from '@mui/icons-material/BugReport'
@@ -43,6 +44,7 @@ export const NavIcon = {
   keys: VpnKeyIcon,
   members: GroupIcon,
   organization: BusinessIcon,
+  globalAdmins: AdminPanelSettingsIcon,
 } as const
 
 // --- Primary actions ---

@@ -67,3 +67,23 @@ export function promoteAdmin(userId: number): Promise<void> {
 export function leaveOrg(): Promise<void> {
   return apiRequest<void>('/orgs/leave/', { method: 'POST' })
 }
+
+// --- Global-admin (platform) management (Story 13.1) — all global-admin-only. ---
+export interface GlobalAdmin {
+  user_id: number
+  email: string
+}
+
+export function listGlobalAdmins(): Promise<{ global_admins: GlobalAdmin[] }> {
+  return apiRequest<{ global_admins: GlobalAdmin[] }>('/admin/global-admins/')
+}
+
+// Grant global admin to a registered user by email (added to the ADMIN org + admin of every org).
+export function grantGlobalAdmin(email: string): Promise<GlobalAdmin> {
+  return apiRequest<GlobalAdmin>('/admin/global-admins/', { method: 'POST', body: { email } })
+}
+
+// Revoke global admin: removes them from the ADMIN org and demotes to member in every org.
+export function revokeGlobalAdmin(userId: number): Promise<void> {
+  return apiRequest<void>(`/admin/global-admins/${userId}/`, { method: 'DELETE' })
+}

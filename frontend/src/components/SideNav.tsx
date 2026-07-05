@@ -28,10 +28,12 @@ interface NavDest {
 // permanent desktop drawer it is omitted.
 export function SideNav({
   isAdmin,
+  isGlobalAdmin,
   activeOrg,
   onNavigate,
 }: {
   isAdmin: boolean
+  isGlobalAdmin: boolean
   activeOrg: OrgSummary | null
   onNavigate?: () => void
 }) {
@@ -45,6 +47,9 @@ export function SideNav({
     ...(isAdmin ? [{ to: '/members', label: 'Members', Icon: NavIcon.members }] : []),
     { to: '/keys', label: 'API Keys', Icon: NavIcon.keys },
     ...(isAdmin ? [{ to: '/organization', label: 'Organization', Icon: NavIcon.organization }] : []),
+    ...(isGlobalAdmin
+      ? [{ to: '/platform/global-admins', label: 'Global Admins', Icon: NavIcon.globalAdmins }]
+      : []),
   ]
 
   return (

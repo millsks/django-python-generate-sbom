@@ -68,7 +68,15 @@ nav:
       - Exporting & Downloading: user-guide/exporting-and-downloading.md
       - Job History: user-guide/job-history.md
       - API Keys: user-guide/api-keys.md
-  - How-To: how-to/index.md
+  - How-To:
+      - Overview: how-to/index.md
+      - Generate an SBOM: how-to/generate-sbom.md
+      - Interpret the vulnerability report: how-to/interpret-vulnerabilities.md
+      - Check license compliance: how-to/check-license-compliance.md
+      - Find outdated dependencies: how-to/find-outdated-dependencies.md
+      - Export a report to Excel: how-to/export-to-excel.md
+      - Create and use an API key: how-to/manage-api-keys.md
+      - Invite a member / switch organizations: how-to/manage-organization.md
   - Developer: developer/index.md
   - API Reference: api/index.md
   - Contributing: contributing.md

@@ -1,6 +1,6 @@
 # Story 9.1: Comprehensive CI Workflow
 
-Status: ready-for-dev
+Status: review
 
 <!-- Ports idp-app/.github/workflows/ci.yml, adapted to this repo's pixi/ruff/mypy/oxlint/vitest toolchain. -->
 
@@ -57,6 +57,44 @@ Upload each with `codecov/codecov-action@v5` under a distinct `flags:` (`backend
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Completion Notes List
 
+- Replaced the scaffold `ci.yml` with 7 jobs: **backend-quality** (lint, fmt-check,
+  mypy, bandit), **backend-test** (`needs: backend-quality`) → Codecov `backend` flag,
+  **frontend-quality** (oxlint, tsc), **frontend-test** (`needs: frontend-quality`) →
+  Codecov `frontend` flag, **backend-build**, **frontend-build** (each `needs` its
+  quality job), and **docker-build** (`needs` both quality jobs; buildx build, no push,
+  gha cache). `concurrency` cancels superseded runs; every job uses
+  `prefix-dev/setup-pixi@v0.8.1` + `pixi run`.
+- Backend coverage: new `cov-xml` pixi task = `pytest --cov=generate_sbom --cov-branch
+  --cov-report=xml` (+ term-missing + `--cov-fail-under=90`), producing
+  `backend/coverage.xml`. The existing `cov` task (local gate) is unchanged.
+- Frontend coverage: added `test:coverage` script (`vitest run --coverage`) + `fe-cov`
+  pixi task, and vitest coverage config (provider `v8`, reporters `text`+`lcov`) →
+  `frontend/coverage/lcov.info`. `@vitest/coverage-v8` was already a dev dep.
+- Both coverages upload via `codecov/codecov-action@v5` with distinct `flags`
+  (`backend` / `frontend`) and `fail_ci_if_error: false` (so CI is green before the
+  operator wires Codecov). `codecov.yml` defines both flags + named components with
+  path scoping so each is tracked independently.
+- Wired `fmt-check`, `security`, and `fe-typecheck` into the local `ci` umbrella (the
+  gates Story 9.7 left for 9.1) so `pixi run ci` mirrors the CI quality jobs.
+- `coverage.xml` was already gitignored; added `coverage` to `frontend/.gitignore`.
+- **Decision — no Python matrix:** the pixi umbrella pins python 3.13 in
+  pixi.toml/pixi.lock, so a per-version matrix is cosmetic (setup-pixi runs the locked
+  env regardless). Dropped the scaffold's fake matrix and documented that a true
+  multi-version matrix needs separate pixi environments (deferred).
+- **Operator prerequisites:** enable the Codecov integration for the repo; if the repo
+  is private, add a `CODECOV_TOKEN` secret. `docker-build` uses GitHub Actions cache
+  (no registry/secret needed).
+- `pixi run ci` exits 0 (all 12 tasks); `ci.yml` + `codecov.yml` validated as YAML.
+
 ### File List
+
+- `.github/workflows/ci.yml` (rewritten)
+- `codecov.yml` (new)
+- `pixi.toml` (added `cov-xml`, `fe-cov`; wired `fmt-check`/`security`/`fe-typecheck` into `ci`)
+- `frontend/package.json` (added `test:coverage` script)
+- `frontend/vitest.config.ts` (v8 coverage config)
+- `frontend/.gitignore` (ignore `coverage`)

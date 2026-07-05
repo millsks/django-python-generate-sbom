@@ -112,6 +112,12 @@ cwd = "backend"
 cmd = "pytest tests/ --cov=generate_sbom --cov-report=html"
 cwd = "backend"
 
+# CI coverage: same gate as `cov` plus branch coverage and a machine-readable
+# coverage.xml (backend/coverage.xml) for the Codecov upload (Story 9.1).
+[tasks.cov-xml]
+cmd = "pytest tests/ --cov=generate_sbom --cov-branch --cov-report=xml --cov-report=term-missing --cov-fail-under=90"
+cwd = "backend"
+
 # --- Server / ops tasks — also the Docker service commands ---
 [tasks.migrate]
 cmd = "python manage.py migrate"
@@ -223,6 +229,28 @@ cmd = "npm audit --audit-level=high"
 cwd = "frontend"
 depends-on = ["fe-install"]
 
-# Unified CI gate across both backend and frontend (AD-13 pixi umbrella).
+# Frontend tests with v8 coverage → frontend/coverage/lcov.info for the Codecov
+# upload (Story 9.1). Vitest coverage config lives in vitest.config.ts.
+[tasks.fe-cov]
+cmd = "npm run test:coverage"
+cwd = "frontend"
+depends-on = ["fe-install"]
+
+# Unified CI gate across both backend and frontend (AD-13 pixi umbrella). Mirrors
+# the GitHub CI quality jobs: ruff lint + format-check, mypy, bandit (backend);
+# oxlint + tsc (frontend); full coverage; and both builds. Story 9.1 wired the
+# format-check / security / typecheck gates in so local == CI.
 [tasks.ci]
-depends-on = ["precommit", "build", "check", "lint", "cov", "fe-lint", "fe-test", "fe-build"]
+depends-on = [
+  "precommit",
+  "build",
+  "check",
+  "lint",
+  "fmt-check",
+  "security",
+  "cov",
+  "fe-lint",
+  "fe-typecheck",
+  "fe-test",
+  "fe-build",
+]

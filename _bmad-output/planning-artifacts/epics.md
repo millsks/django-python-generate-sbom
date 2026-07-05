@@ -3583,3 +3583,54 @@ section lays out the upload → resolve/analyze → review → export flow.
 **Then** the page uses MUI theme components and palette colors only (no hard-coded colors), reads well in
 both light and dark, is responsive down to mobile, and is covered by a test (headline, the `/upload` CTA,
 the docs link, and the feature tiles). `pixi run ci` is green.
+
+---
+
+## Epic 13: Platform Administration
+
+The system has a global-admin tier — members of the distinguished **ADMIN** org (`Org.is_admin_org`,
+Story 2.8) who are provisioned as admins of every org. But there is **no UI to manage it**: granting is
+backend-only (`POST /api/v1/admin/global-admins/`), and there is no way to list current global admins or
+**revoke** the status. This epic adds a global-admin-only management screen. (Distinct from ordinary
+org-admin management, which is strictly per-org — Stories 2.3 / 2.7 / 2.16.)
+
+### Story 13.1: Global-Admin Management Screen
+
+As a global admin,
+I want a screen to see, grant, and revoke global admins,
+So that I can manage the platform's superuser tier without shell or DB access.
+
+**Context:** `services.grant_global_admin` (Story 2.8) exists but is only exposed by a bare grant
+endpoint; there is no list, no revoke, and no UI. `is_global_admin` is on `auth/me` (Story 2.12) for
+gating, and Story 2.17 introduces the admin-route + API-authorization pattern this screen reuses (gated on
+global-admin here). Revoke is new; its semantics were decided with the product owner (below).
+
+**Acceptance Criteria:**
+
+**Given** the caller is a **global admin**,
+**When** they open the global-admin screen (a new global-admin-only route + a nav entry shown only when
+`isGlobalAdmin`),
+**Then** they see the current global admins (the ADMIN-org members, by email). A non-global-admin is
+blocked at BOTH the route (redirected) and the API (403) — nav hiding is not the gate (cf. Story 2.17).
+
+**Given** a global admin grants global admin **by email**,
+**When** the email matches a registered user,
+**Then** that user is granted global admin via `grant_global_admin` (added to the ADMIN org + provisioned
+as admin of every org); an unknown email returns a clear error (no auto-create).
+
+**Given** a global admin **revokes** another global admin,
+**When** the revoke is confirmed,
+**Then** the target is **removed from the ADMIN org AND demoted to `member` in every non-admin org** (the
+decided semantics — fully revoke the elevated access; pre-global roles are not tracked, so all their admin
+roles drop to member, and an org admin can re-promote them per-org if needed).
+
+**Given** the revoke would remove the **last** global admin,
+**When** attempted,
+**Then** it is blocked — the ADMIN org must never lose its last member (Story 2.9) — with a clear error. A
+global admin may revoke themselves as long as they are not the last.
+
+**Given** the change,
+**When** complete,
+**Then** backend endpoints exist to **list** and **revoke** global admins (grant exists; extend it to
+accept email if needed), all global-admin-gated; the screen (list / grant-by-email / revoke with a
+confirm) is covered by tests, and `pixi run ci` is green.

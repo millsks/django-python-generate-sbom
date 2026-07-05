@@ -174,6 +174,13 @@ PARSELMOUTH_MAPPING_URL = env.str(
     "PARSELMOUTH_MAPPING_URL",
     default="https://raw.githubusercontent.com/prefix-dev/parselmouth/main/files/compressed_mapping.json",
 )
+# Authoritative per-package PyPI→conda lookup (Story 8.24), used only to disambiguate the
+# ~1.5% of PyPI names with multiple conda candidates. `<base>/<normalized-name>.json`.
+# Set empty to disable the per-package network call (falls back to the bulk map).
+PARSELMOUTH_PYPI_TO_CONDA_URL = env.str(
+    "PARSELMOUTH_PYPI_TO_CONDA_URL",
+    default="https://conda-mapping.prefix.dev/pypi-to-conda-v1/conda-forge/",
+)
 
 # --- Structured logging (NFR-5.3) ---
 # JSON by default (production); local.py overrides to the console renderer.

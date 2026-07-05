@@ -53,7 +53,7 @@ function NavButton({ to, label }: { to: string; label: string }) {
 }
 
 export function Layout() {
-  const { status, activeOrg, isAdmin, logout } = useAuth()
+  const { status, user, activeOrg, isAdmin, logout } = useAuth()
   const navigate = useNavigate()
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
@@ -112,14 +112,19 @@ export function Layout() {
                 <AccountIcon />
               </IconButton>
               <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={() => setAnchor(null)}>
-                {activeOrg && (
+                {user && (
                   <MenuItem disabled sx={{ opacity: '1 !important' }}>
-                    <Typography variant="body2" color="text.secondary">
-                      {activeOrg.name}
-                    </Typography>
+                    <Box>
+                      <Typography variant="body2">{user.email}</Typography>
+                      {activeOrg && (
+                        <Typography variant="caption" color="text.secondary">
+                          {activeOrg.name}
+                        </Typography>
+                      )}
+                    </Box>
                   </MenuItem>
                 )}
-                {activeOrg && <Divider />}
+                {user && <Divider />}
                 <MenuItem onClick={handleLogout}>
                   <ListItemIcon>
                     <LogoutActionIcon fontSize="small" />

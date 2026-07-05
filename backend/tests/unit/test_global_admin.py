@@ -142,3 +142,32 @@ def test_grant_global_admin_noop_without_admin_org() -> None:
     grant_global_admin(user)  # must not raise
 
     assert is_global_admin(user) is False
+
+
+def _login(email: str, password: str = "pw12345678") -> APIClient:
+    client = APIClient()
+    client.post("/api/v1/auth/login/", {"email": email, "password": password}, format="json")
+    return client
+
+
+@pytest.mark.django_db
+def test_auth_me_reports_global_admin_status() -> None:
+    """auth/me returns is_global_admin true for a global admin, false otherwise (Story 2.12)."""
+    User.objects.create_superuser(email="root@example.com", password="pw12345678")
+    register_user(email="alice@example.com", password="pw12345678")
+
+    assert _login("root@example.com").get("/api/v1/auth/me/").data["is_global_admin"] is True
+    assert _login("alice@example.com").get("/api/v1/auth/me/").data["is_global_admin"] is False
+
+
+@pytest.mark.django_db
+def test_org_list_excludes_the_admin_org() -> None:
+    """The ADMIN org is never listed in /orgs/, even for a global admin (Story 2.12)."""
+    root = User.objects.create_superuser(email="root@example.com", password="pw12345678")
+    create_org(name="Acme", admin_user=root)  # global admins are auto-provisioned into every org
+
+    response = _login("root@example.com").get("/api/v1/orgs/")
+
+    slugs = {o["slug"] for o in response.data}
+    assert "acme" in slugs
+    assert "admin" not in slugs

@@ -34,7 +34,7 @@ development_status:
   # the self-service create-org from 2.5/2.6. Gates CreateOrgView on is_global_admin, adds
   # is_global_admin to auth/me + AuthProvider (coordinates with 10.5), and hides the create-org
   # affordances for non-global-admins.
-  2-12-restrict-org-creation-to-global-admins: ready-for-dev
+  2-12-restrict-org-creation-to-global-admins: review
   2-13-seed-initial-superuser-from-env: ready-for-dev
 
   epic-3: done
@@ -127,7 +127,7 @@ development_status:
   10-2-redirect-to-login-and-back: done
   10-3-auto-redirect-to-login-after-registration: done
   10-4-autofocus-email-on-login: done
-  10-5-account-menu-shows-logged-in-user: ready-for-dev
+  10-5-account-menu-shows-logged-in-user: review
   10-6-login-submits-on-enter: ready-for-dev
 
   # Epic 11 — Project Documentation (MkDocs Material → GitHub Pages; markdown).

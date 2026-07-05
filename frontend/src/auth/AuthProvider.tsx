@@ -5,15 +5,17 @@
 // (a user with zero orgs is still authed with activeOrg null), and admin status comes
 // from the org membership call.
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { getMe, logout as apiLogout, type OrgSummary } from '../api/auth'
+import { getMe, logout as apiLogout, type CurrentUser, type OrgSummary } from '../api/auth'
 import { getActiveOrg, getMembers } from '../api/orgs'
 
 type Status = 'loading' | 'authed' | 'anon'
 
 interface AuthValue {
   status: Status
+  user: CurrentUser | null
   activeOrg: OrgSummary | null
   isAdmin: boolean
+  isGlobalAdmin: boolean
   refresh: () => Promise<void>
   logout: () => Promise<void>
 }
@@ -28,19 +30,27 @@ export function useAuth(): AuthValue {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>('loading')
+  const [user, setUser] = useState<CurrentUser | null>(null)
   const [activeOrg, setActiveOrg] = useState<OrgSummary | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isGlobalAdmin, setIsGlobalAdmin] = useState(false)
 
   const refresh = useCallback(async () => {
-    // Identity first: only a failed auth/me call makes the user anonymous.
+    // Identity first: only a failed auth/me call makes the user anonymous. The one
+    // getMe() result feeds both the current user (Story 10.5) and global-admin (2.12).
+    let me: CurrentUser
     try {
-      await getMe()
+      me = await getMe()
     } catch {
+      setUser(null)
+      setIsGlobalAdmin(false)
       setActiveOrg(null)
       setIsAdmin(false)
       setStatus('anon')
       return
     }
+    setUser(me)
+    setIsGlobalAdmin(me.is_global_admin)
     // Authenticated. The active org is fetched separately — a rejected/404 here means
     // the user simply has no active org, NOT that they are signed out.
     try {
@@ -63,6 +73,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await apiLogout()
     } finally {
+      setUser(null)
+      setIsGlobalAdmin(false)
       setActiveOrg(null)
       setIsAdmin(false)
       setStatus('anon')
@@ -74,8 +86,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh])
 
   const value = useMemo<AuthValue>(
-    () => ({ status, activeOrg, isAdmin, refresh, logout }),
-    [status, activeOrg, isAdmin, refresh, logout],
+    () => ({ status, user, activeOrg, isAdmin, isGlobalAdmin, refresh, logout }),
+    [status, user, activeOrg, isAdmin, isGlobalAdmin, refresh, logout],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

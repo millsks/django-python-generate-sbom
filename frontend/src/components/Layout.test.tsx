@@ -29,8 +29,10 @@ const mockGetOrgs = getOrgs as Mock
 type Auth = ReturnType<typeof useAuth>
 const authState = (over: Partial<Auth> = {}): Auth => ({
   status: 'authed',
+  user: { id: 1, email: 'me@example.com', is_global_admin: false },
   activeOrg: { slug: 'acme', name: 'Acme' },
   isAdmin: false,
+  isGlobalAdmin: false,
   refresh: vi.fn(),
   logout: vi.fn(),
   ...over,
@@ -180,5 +182,23 @@ describe('Layout', () => {
     await userEvent.click(screen.getByRole('button', { name: /account menu/i }))
     await userEvent.click(screen.getByRole('menuitem', { name: 'Logout' }))
     expect(logout).toHaveBeenCalled()
+  })
+
+  it('shows the logged-in user (not the org) in the account menu (Story 10.5)', async () => {
+    mockUseAuth.mockReturnValue(authState({ user: { id: 7, email: 'alice@example.com', is_global_admin: false } }))
+    renderAt()
+
+    await userEvent.click(screen.getByRole('button', { name: /account menu/i }))
+    expect(await screen.findByText('alice@example.com')).toBeInTheDocument()
+  })
+
+  it('shows the user in the account menu even with no active org', async () => {
+    mockUseAuth.mockReturnValue(
+      authState({ user: { id: 7, email: 'alice@example.com', is_global_admin: false }, activeOrg: null }),
+    )
+    renderAt()
+
+    await userEvent.click(screen.getByRole('button', { name: /account menu/i }))
+    expect(await screen.findByText('alice@example.com')).toBeInTheDocument()
   })
 })

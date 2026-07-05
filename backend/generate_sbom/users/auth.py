@@ -22,7 +22,7 @@ def get_request_org(request: Request) -> Org | None:
 
     Api-Key requests carry the org on ``request.auth.org``. Session requests use
     the session's active org (validated against membership), falling back to the
-    user's first membership and pinning it in the session.
+    user's first non-ADMIN membership and pinning it in the session.
     """
     if isinstance(request.auth, OrgApiKey):
         return request.auth.org
@@ -38,7 +38,10 @@ def get_request_org(request: Request) -> Org | None:
         if membership is not None:
             return membership.org
 
-    membership = memberships.first()
+    # Fall back to a real workspace, never the system ADMIN org (Story 2.12) — a
+    # global admin is a member of every org, so an unfiltered first() could pin them
+    # to the ADMIN org.
+    membership = memberships.filter(org__is_admin_org=False).first()
     if membership is None:
         return None
     request.session[SESSION_ACTIVE_ORG] = membership.org_id

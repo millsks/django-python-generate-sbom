@@ -51,6 +51,12 @@ markdown_extensions:
   - pymdownx.superfences
   - pymdownx.highlight:
       anchor_linenums: true
+  - pymdownx.snippets:
+      # Include repo-root files (e.g. CONTRIBUTING.md) into docs pages without
+      # duplication. Resolved from the repo root, where `pixi run docs-build` runs.
+      base_path:
+        - .
+      check_paths: true
 
 nav:
   - Home: index.md

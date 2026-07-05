@@ -7,6 +7,7 @@ PENDING via ``create_job``. DRF views never write status otherwise.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime, timedelta
 from typing import cast
 
@@ -171,6 +172,15 @@ def delete_job_artifacts(job: SBOMJob) -> bool:
     SBOMJob.objects.filter(task_id=job.task_id).update(result_key=None)
     logger.info("job_artifacts_deleted", task_id=str(job.task_id), org_id=job.org_id, blobs=len(report_keys) + 1)
     return True
+
+
+def delete_artifacts_for_jobs(jobs: Iterable[SBOMJob]) -> int:
+    """Delete artifacts for each job via ``delete_job_artifacts``; return how many were purged.
+
+    On-demand (Story 7.2) bulk primitive: reuses the single-job cleanup so there is no
+    duplicated deletion logic (AD-3). Jobs already cleaned are skipped and not counted.
+    """
+    return sum(1 for job in jobs if delete_job_artifacts(job))
 
 
 def purge_expired_artifacts(now: datetime | None = None) -> int:

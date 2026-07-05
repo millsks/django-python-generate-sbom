@@ -101,3 +101,18 @@ export function listJobs(query: JobsQuery = {}): Promise<Paginated<JobListItem>>
   const qs = params.toString()
   return apiRequest<Paginated<JobListItem>>(`/sbom/jobs/${qs ? `?${qs}` : ''}`)
 }
+
+// Delete one job's artifacts on demand (Story 7.2). The job record is retained;
+// only the SBOM + report blobs are removed. Idempotent.
+export function deleteJobArtifacts(taskId: string): Promise<{ task_id: string; deleted: boolean }> {
+  return apiRequest(`/sbom/jobs/${taskId}/artifacts/`, { method: 'DELETE' })
+}
+
+// Bulk-delete artifacts: a selected list of the org's jobs, or (admin) the whole org.
+export function bulkDeleteArtifacts(opts: {
+  taskIds?: string[]
+  all?: boolean
+}): Promise<{ deleted: number; requested?: number; scope?: string }> {
+  const body = opts.all ? { all: true } : { task_ids: opts.taskIds ?? [] }
+  return apiRequest('/sbom/jobs/artifacts/bulk-delete/', { method: 'POST', body })
+}

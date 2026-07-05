@@ -1,17 +1,36 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { HistoryPage } from './HistoryPage'
-import { getJobStatus, listJobs } from '../api/jobs'
+import { bulkDeleteArtifacts, deleteJobArtifacts, getJobStatus, listJobs } from '../api/jobs'
+import { useAuth } from '../auth/AuthProvider'
 
 vi.mock('../api/jobs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/jobs')>()
-  return { ...actual, listJobs: vi.fn(), getJobStatus: vi.fn() }
+  return {
+    ...actual,
+    listJobs: vi.fn(),
+    getJobStatus: vi.fn(),
+    deleteJobArtifacts: vi.fn(),
+    bulkDeleteArtifacts: vi.fn(),
+  }
 })
+vi.mock('../auth/AuthProvider', () => ({ useAuth: vi.fn() }))
+
 const mockList = listJobs as Mock
 const mockJobStatus = getJobStatus as Mock
+const mockDelete = deleteJobArtifacts as Mock
+const mockBulk = bulkDeleteArtifacts as Mock
+const mockAuth = useAuth as Mock
+
+beforeEach(() => {
+  // Default: a signed-in non-admin. Admin-only affordances are opt-in per test.
+  mockAuth.mockReturnValue({ status: 'authed', activeOrg: null, isAdmin: false, refresh: vi.fn(), logout: vi.fn() })
+  mockDelete.mockResolvedValue({ task_id: 'abc-123', deleted: true })
+  mockBulk.mockResolvedValue({ deleted: 1 })
+})
 
 function jobStatus(overrides: Record<string, unknown> = {}) {
   return {
@@ -123,5 +142,51 @@ describe('HistoryPage', () => {
 
     expect(await screen.findByText('Failed')).toBeInTheDocument()
     expect(screen.getByText('soft_timeout')).toBeInTheDocument()
+  })
+
+  it('deletes a single job’s artifacts after confirmation and refreshes', async () => {
+    mockList.mockResolvedValue(page([JOB]))
+    renderPage()
+    await screen.findByRole('table')
+
+    await userEvent.click(screen.getByRole('button', { name: /delete artifacts for requirements\.txt/i }))
+    // A confirmation dialog opens; only on confirm does the API fire.
+    expect(mockDelete).not.toHaveBeenCalled()
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }))
+
+    expect(mockDelete).toHaveBeenCalledWith('abc-123')
+    expect(mockList.mock.calls.length).toBeGreaterThan(1) // re-fetched after delete
+  })
+
+  it('bulk-deletes the selected jobs’ artifacts', async () => {
+    mockList.mockResolvedValue(page([JOB]))
+    renderPage()
+    await screen.findByRole('table')
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /select requirements\.txt/i }))
+    await userEvent.click(screen.getByRole('button', { name: /delete selected \(1\)/i }))
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }))
+
+    expect(mockBulk).toHaveBeenCalledWith({ taskIds: ['abc-123'] })
+  })
+
+  it('offers org-wide delete to admins and calls the all-org endpoint', async () => {
+    mockAuth.mockReturnValue({ status: 'authed', activeOrg: null, isAdmin: true, refresh: vi.fn(), logout: vi.fn() })
+    mockList.mockResolvedValue(page([JOB]))
+    renderPage()
+    await screen.findByRole('table')
+
+    await userEvent.click(screen.getByRole('button', { name: /delete all artifacts/i }))
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }))
+
+    expect(mockBulk).toHaveBeenCalledWith({ all: true })
+  })
+
+  it('hides the org-wide delete button from non-admins', async () => {
+    mockList.mockResolvedValue(page([JOB]))
+    renderPage()
+    await screen.findByRole('table')
+
+    expect(screen.queryByRole('button', { name: /delete all artifacts/i })).not.toBeInTheDocument()
   })
 })

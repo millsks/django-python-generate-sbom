@@ -47,6 +47,13 @@ def test_redoc_endpoint_renders_without_auth() -> None:
     assert b"redoc" in response.content.lower()
 
 
+def test_api_docs_enabled_by_default() -> None:
+    """API_DOCS_ENABLED defaults to True (docs enabled) when the env var is unset."""
+    from django.conf import settings
+
+    assert settings.API_DOCS_ENABLED is True
+
+
 def test_docs_endpoints_are_disabled_when_api_docs_disabled() -> None:
     """With API_DOCS_ENABLED=False the doc routes are not registered (404)."""
     import config.urls

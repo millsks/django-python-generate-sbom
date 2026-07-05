@@ -8,6 +8,10 @@ import { getOrgs, switchOrg, type OrgListItem } from '../api/orgs'
 import { CreateOrgDialog } from './CreateOrgDialog'
 import { AddActionIcon } from '../icons'
 
+// Sentinel Select value for the "create a new org" item, so choosing it opens the
+// create dialog (Story 2.5) instead of trying to switch to a non-existent org.
+const CREATE_ORG_VALUE = '__create-org__'
+
 export function OrgSwitcher() {
   const [orgs, setOrgs] = useState<OrgListItem[]>([])
   const [active, setActive] = useState('')
@@ -25,6 +29,11 @@ export function OrgSwitcher() {
 
   async function handleChange(event: SelectChangeEvent) {
     const slug = event.target.value
+    if (slug === CREATE_ORG_VALUE) {
+      // Keep the current org selected; the dialog drives the actual switch on success.
+      setCreateOpen(true)
+      return
+    }
     setActive(slug)
     await switchOrg(slug)
     window.location.reload()
@@ -50,32 +59,39 @@ export function OrgSwitcher() {
   }
 
   return (
-    <FormControl size="small" sx={{ minWidth: 200 }}>
-      <InputLabel id="org-switcher-label" sx={{ color: 'inherit', '&.Mui-focused': { color: 'inherit' } }}>
-        Org
-      </InputLabel>
-      <Select
-        labelId="org-switcher-label"
-        label="Org"
-        value={active}
-        onChange={handleChange}
-        // Inherit the surrounding text color so the switcher is legible in BOTH places it
-        // renders: white in the red app bar, and dark on the light dashboard page. (A fixed
-        // white background/text looked out of place in the banner and was invisible on the page.)
-        sx={{
-          color: 'inherit',
-          '& .MuiOutlinedInput-notchedOutline': { borderColor: 'currentColor' },
-          '& .MuiSvgIcon-root': { color: 'inherit' },
-        }}
-        // The open list keeps a solid surface (theme background.paper) so it stays readable.
-        MenuProps={{ slotProps: { paper: { sx: { bgcolor: 'background.paper' } } } }}
-      >
-        {orgs.map((org) => (
-          <MenuItem key={org.slug} value={org.slug}>
-            {org.name}
+    <>
+      <FormControl size="small" sx={{ minWidth: 200 }}>
+        <InputLabel id="org-switcher-label" sx={{ color: 'inherit', '&.Mui-focused': { color: 'inherit' } }}>
+          Org
+        </InputLabel>
+        <Select
+          labelId="org-switcher-label"
+          label="Org"
+          value={active}
+          onChange={handleChange}
+          // Inherit the surrounding text color so the switcher is legible in BOTH places it
+          // renders: white in the red app bar, and dark on the light dashboard page. (A fixed
+          // white background/text looked out of place in the banner and was invisible on the page.)
+          sx={{
+            color: 'inherit',
+            '& .MuiOutlinedInput-notchedOutline': { borderColor: 'currentColor' },
+            '& .MuiSvgIcon-root': { color: 'inherit' },
+          }}
+          // The open list keeps a solid surface (theme background.paper) so it stays readable.
+          MenuProps={{ slotProps: { paper: { sx: { bgcolor: 'background.paper' } } } }}
+        >
+          {orgs.map((org) => (
+            <MenuItem key={org.slug} value={org.slug}>
+              {org.name}
+            </MenuItem>
+          ))}
+          <MenuItem value={CREATE_ORG_VALUE} sx={{ borderTop: 1, borderColor: 'divider', gap: 1 }}>
+            <AddActionIcon fontSize="small" />
+            New organization
           </MenuItem>
-        ))}
-      </Select>
-    </FormControl>
+        </Select>
+      </FormControl>
+      <CreateOrgDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+    </>
   )
 }

@@ -10,17 +10,35 @@ vi.mock('../api/keys', () => ({
   createKey: vi.fn(),
   revokeKey: vi.fn(),
 }))
-vi.mock('../api/orgs', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../api/orgs')>()
-  return { ...actual, getMembers: vi.fn().mockResolvedValue({ members: [], is_admin: false }) }
-})
 vi.mock('../auth/AuthProvider', () => ({ useAuth: vi.fn() }))
 const mockAuth = useAuth as Mock
+const authState = (over: Record<string, unknown>) => ({
+  status: 'authed',
+  activeOrg: { slug: 'acme', name: 'Acme' },
+  isAdmin: false,
+  refresh: vi.fn(),
+  logout: vi.fn(),
+  ...over,
+})
 
 describe('KeysPage', () => {
   it('shows the no-org state when there is no active org', async () => {
-    mockAuth.mockReturnValue({ status: 'authed', activeOrg: null, isAdmin: false, refresh: vi.fn(), logout: vi.fn() })
+    mockAuth.mockReturnValue(authState({ activeOrg: null }))
     render(<KeysPage />)
     expect(await screen.findByText(NO_ORG_MESSAGE)).toBeInTheDocument()
+  })
+
+  it('shows the create-key form only for an admin (isAdmin from useAuth)', async () => {
+    mockAuth.mockReturnValue(authState({ isAdmin: true }))
+    render(<KeysPage />)
+    expect(await screen.findByRole('button', { name: /create key/i })).toBeInTheDocument()
+  })
+
+  it('hides the create-key form for a non-admin member', async () => {
+    mockAuth.mockReturnValue(authState({ isAdmin: false }))
+    render(<KeysPage />)
+    // Wait for load to settle, then assert the admin-only control is absent.
+    await screen.findByRole('heading', { name: /api keys/i })
+    expect(screen.queryByRole('button', { name: /create key/i })).not.toBeInTheDocument()
   })
 })

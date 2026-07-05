@@ -12,7 +12,7 @@ const mockAuth = useAuth as Mock
 function authValue(over: Record<string, unknown> = {}) {
   return {
     status: 'authed',
-    user: { id: 1, email: 'me@example.com', is_global_admin: false },
+    user: { id: 1, email: 'me@example.com', is_admin: false, is_global_admin: false },
     activeOrg: { slug: 'acme', name: 'Acme' },
     isAdmin: true,
     isGlobalAdmin: false,

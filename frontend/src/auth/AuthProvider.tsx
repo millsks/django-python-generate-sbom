@@ -1,12 +1,13 @@
 // Shared auth state (Story 10.1): a single source of truth for whether the user is
-// signed in, the active org, and whether they admin it — consumed by both the nav
-// shell and ProtectedRoute. Identity is decoupled from the active org (Story 2.6):
-// auth is derived from the auth/me identity call, the active org is fetched separately
-// (a user with zero orgs is still authed with activeOrg null), and admin status comes
-// from the org membership call.
+// signed in, the active org, and whether they admin it — consumed by the nav shell
+// and the route guards. Identity is decoupled from the active org (Story 2.6): auth
+// is derived from the auth/me identity call, and admin flags (isAdmin / isGlobalAdmin)
+// come from that SAME call (Story 2.17), so the client never probes an admin-only
+// endpoint to learn its role. The active org is fetched separately (a user with zero
+// orgs is still authed with activeOrg null).
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { getMe, logout as apiLogout, type CurrentUser, type OrgSummary } from '../api/auth'
-import { getActiveOrg, getMembers } from '../api/orgs'
+import { getActiveOrg } from '../api/orgs'
 
 type Status = 'loading' | 'authed' | 'anon'
 
@@ -51,20 +52,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setUser(me)
     setIsGlobalAdmin(me.is_global_admin)
-    // Authenticated. The active org is fetched separately — a rejected/404 here means
-    // the user simply has no active org, NOT that they are signed out.
+    setIsAdmin(me.is_admin) // admin of the active org, straight from auth/me (Story 2.17)
+    // The active org is fetched separately — a rejected/404 here means the user simply
+    // has no active org, NOT that they are signed out.
     try {
-      const org = await getActiveOrg()
-      setActiveOrg(org)
-      try {
-        const members = await getMembers()
-        setIsAdmin(members.is_admin)
-      } catch {
-        setIsAdmin(false) // authed but membership lookup failed → treat as non-admin
-      }
+      setActiveOrg(await getActiveOrg())
     } catch {
       setActiveOrg(null)
-      setIsAdmin(false) // no active org → no admin rights
     }
     setStatus('authed')
   }, [])

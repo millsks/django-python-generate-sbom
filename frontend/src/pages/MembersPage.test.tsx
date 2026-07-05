@@ -3,7 +3,7 @@ import type { Mock } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MembersPage } from './MembersPage'
-import { addMember, createMemberUser, getMembers } from '../api/orgs'
+import { addMember, createMemberUser, getMembers, promoteAdmin } from '../api/orgs'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthProvider'
 import { NO_ORG_MESSAGE } from '../components/NoOrgState'
@@ -16,7 +16,7 @@ vi.mock('../api/orgs', async (importOriginal) => {
     addMember: vi.fn(),
     createMemberUser: vi.fn(),
     removeMember: vi.fn(),
-    transferAdmin: vi.fn(),
+    promoteAdmin: vi.fn(),
   }
 })
 vi.mock('../auth/AuthProvider', () => ({ useAuth: vi.fn() }))
@@ -24,6 +24,7 @@ const mockAuth = useAuth as Mock
 const mockGetMembers = getMembers as Mock
 const mockAddMember = addMember as Mock
 const mockCreateMemberUser = createMemberUser as Mock
+const mockPromoteAdmin = promoteAdmin as Mock
 
 beforeEach(() => {
   mockGetMembers.mockResolvedValue({ members: [], is_admin: false })
@@ -116,5 +117,19 @@ describe('MembersPage', () => {
     await user.click(screen.getByRole('button', { name: /create user/i }))
 
     expect(await screen.findByText(/already exists/i)).toBeInTheDocument()
+  })
+
+  it('promotes a member to admin via "Make admin" (Story 2.16)', async () => {
+    mockGetMembers.mockResolvedValue({
+      members: [{ user_id: 2, email: 'bob@example.com', role: 'member', joined_at: '2026-01-01' }],
+      is_admin: true,
+    })
+    mockPromoteAdmin.mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    render(<MembersPage />)
+
+    await user.click(await screen.findByRole('button', { name: /make admin/i }))
+
+    await waitFor(() => expect(mockPromoteAdmin).toHaveBeenCalledWith(2))
   })
 })

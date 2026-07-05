@@ -17,8 +17,8 @@ from .views import (
     OrgListView,
     OrgMeView,
     OrgSwitchView,
+    PromoteAdminView,
     RegisterView,
-    TransferAdminView,
 )
 
 urlpatterns = [
@@ -31,7 +31,7 @@ urlpatterns = [
     path("orgs/switch/", OrgSwitchView.as_view(), name="org-switch"),
     path("orgs/me/", OrgMeView.as_view(), name="org-me"),
     path("orgs/leave/", LeaveOrgView.as_view(), name="org-leave"),
-    path("orgs/transfer-admin/", TransferAdminView.as_view(), name="org-transfer-admin"),
+    path("orgs/promote-admin/", PromoteAdminView.as_view(), name="org-promote-admin"),
     path("orgs/members/", MembersView.as_view(), name="org-members"),
     path("orgs/members/create-user/", CreateMemberUserView.as_view(), name="org-member-create-user"),
     path("orgs/members/<int:user_id>/", MemberDetailView.as_view(), name="org-member-detail"),

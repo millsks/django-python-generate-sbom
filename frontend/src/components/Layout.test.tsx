@@ -29,7 +29,7 @@ const mockGetOrgs = getOrgs as Mock
 type Auth = ReturnType<typeof useAuth>
 const authState = (over: Partial<Auth> = {}): Auth => ({
   status: 'authed',
-  user: { id: 1, email: 'me@example.com', is_global_admin: false },
+  user: { id: 1, email: 'me@example.com', is_admin: false, is_global_admin: false },
   activeOrg: { slug: 'acme', name: 'Acme' },
   isAdmin: false,
   isGlobalAdmin: false,
@@ -185,7 +185,7 @@ describe('Layout', () => {
   })
 
   it('shows the logged-in user (not the org) in the account menu (Story 10.5)', async () => {
-    mockUseAuth.mockReturnValue(authState({ user: { id: 7, email: 'alice@example.com', is_global_admin: false } }))
+    mockUseAuth.mockReturnValue(authState({ user: { id: 7, email: 'alice@example.com', is_admin: false, is_global_admin: false } }))
     renderAt()
 
     await userEvent.click(screen.getByRole('button', { name: /account menu/i }))
@@ -194,7 +194,7 @@ describe('Layout', () => {
 
   it('shows the user in the account menu even with no active org', async () => {
     mockUseAuth.mockReturnValue(
-      authState({ user: { id: 7, email: 'alice@example.com', is_global_admin: false }, activeOrg: null }),
+      authState({ user: { id: 7, email: 'alice@example.com', is_admin: false, is_global_admin: false }, activeOrg: null }),
     )
     renderAt()
 

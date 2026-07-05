@@ -215,9 +215,9 @@ def _guard_membership_removal(org: Org, user: User) -> None:
        not removable from a single *normal* org; that would strand them and
        contradict the invariant. Re-provisioning belongs to the ADMIN-org tier.
     3. **Last-admin protection.** A normal org must always keep at least one
-       admin (``transfer_admin`` is the escape hatch). Because global admins
-       count as real admins, a normal admin may leave whenever a global admin
-       (or any other admin) remains.
+       admin (promoting another member first, then leaving, is the escape hatch).
+       Because global admins count as real admins, a normal admin may leave
+       whenever a global admin (or any other admin) remains.
     """
     if org.is_admin_org and _is_last_member(org, user):
         raise AdminOrgProtectedError
@@ -278,17 +278,24 @@ def remove_member(org: Org, user: User) -> None:
     logger.info("member_removed", org_id=org.pk, user_id=user.pk)
 
 
-def transfer_admin(org: Org, caller: User, target: User) -> None:
-    """Promote ``target`` to admin; demote ``caller`` if they were the sole admin (FR-1.5)."""
-    target_membership = OrgMembership.objects.filter(org=org, user=target).first()
-    if target_membership is None:
+def promote_member_to_admin(org: Org, target: User) -> None:
+    """Promote ``target`` to admin of ``org`` (Story 2.16, replaces the old transfer).
+
+    This *adds* an admin — an org may have any number of admins — and demotes no
+    one. The previous ``transfer_admin`` demoted the caller when they were the
+    sole admin, which (a) surprised users clicking "Make admin" and (b) could
+    strip a global admin of their admin rights, violating Story 2.8. There is no
+    demotion path anymore, so a global admin can never be dropped below admin.
+    Raises ``NotAMemberError`` if ``target`` does not belong to ``org``; a no-op
+    (idempotent) if they are already an admin.
+    """
+    membership = OrgMembership.objects.filter(org=org, user=target).first()
+    if membership is None:
         raise NotAMemberError
-    caller_was_sole_admin = _is_sole_admin(org, caller)
-    target_membership.role = OrgMembership.Role.ADMIN
-    target_membership.save(update_fields=["role"])
-    if caller_was_sole_admin:
-        OrgMembership.objects.filter(org=org, user=caller).update(role=OrgMembership.Role.MEMBER)
-    logger.info("admin_transferred", org_id=org.pk, from_user_id=caller.pk, to_user_id=target.pk)
+    if membership.role != OrgMembership.Role.ADMIN:
+        membership.role = OrgMembership.Role.ADMIN
+        membership.save(update_fields=["role"])
+    logger.info("member_promoted_to_admin", org_id=org.pk, user_id=target.pk)
 
 
 def leave_org(org: Org, user: User) -> None:

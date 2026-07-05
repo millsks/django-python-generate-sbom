@@ -58,8 +58,10 @@ export function removeMember(userId: number): Promise<void> {
   return apiRequest<void>(`/orgs/members/${userId}/`, { method: 'DELETE' })
 }
 
-export function transferAdmin(userId: number): Promise<void> {
-  return apiRequest<void>('/orgs/transfer-admin/', { method: 'POST', body: { user_id: userId } })
+// Promote a member to admin of the active org (Story 2.16). Adds an admin — demotes
+// no one; an org may have multiple admins. Replaces the old transfer-admin.
+export function promoteAdmin(userId: number): Promise<void> {
+  return apiRequest<void>('/orgs/promote-admin/', { method: 'POST', body: { user_id: userId } })
 }
 
 export function leaveOrg(): Promise<void> {

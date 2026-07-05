@@ -135,6 +135,10 @@ a _global admin_ with oversight of every organization. See the
 [Developer Docs](https://millsks.github.io/django-python-generate-sbom/developer/)
 for the org-membership and global-admin model.
 
+Alternatively, set `DJANGO_SUPERUSER_EMAIL` and `DJANGO_SUPERUSER_PASSWORD` in `.env` and the
+`web` container **auto-seeds** that superuser (as a global admin) on startup — no manual step
+(dev convenience; never commit real credentials).
+
 ## Development
 
 All tasks run from the project root via `pixi run <task>`:

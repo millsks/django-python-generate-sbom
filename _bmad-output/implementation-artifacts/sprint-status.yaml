@@ -35,7 +35,7 @@ development_status:
   # is_global_admin to auth/me + AuthProvider (coordinates with 10.5), and hides the create-org
   # affordances for non-global-admins.
   2-12-restrict-org-creation-to-global-admins: review
-  2-13-seed-initial-superuser-from-env: ready-for-dev
+  2-13-seed-initial-superuser-from-env: review
 
   epic-3: done
   3-1-manifest-upload-and-format-detection: done
@@ -128,7 +128,7 @@ development_status:
   10-3-auto-redirect-to-login-after-registration: done
   10-4-autofocus-email-on-login: done
   10-5-account-menu-shows-logged-in-user: review
-  10-6-login-submits-on-enter: ready-for-dev
+  10-6-login-submits-on-enter: review
 
   # Epic 11 — Project Documentation (MkDocs Material → GitHub Pages; markdown).
   # 11-1 (site scaffold) is the foundation; 11-2..11-5 add pages/nav to mkdocs.yml;

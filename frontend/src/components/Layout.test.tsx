@@ -67,6 +67,21 @@ describe('Layout', () => {
     expect(within(nav).queryByRole('link', { name: 'Members' })).not.toBeInTheDocument()
   })
 
+  it('shows the brand mark (Inventory2 icon + app name) linking home', async () => {
+    mockUseAuth.mockReturnValue(authState())
+    renderAt('/upload')
+
+    const brand = screen.getByRole('link', { name: 'Generate SBOM' })
+    expect(brand).toHaveAttribute('href', '/')
+    expect(within(brand).getByTestId('Inventory2Icon')).toBeInTheDocument()
+  })
+
+  it('shows the brand mark when logged out too', async () => {
+    mockUseAuth.mockReturnValue(authState({ status: 'anon', activeOrg: null }))
+    renderAt('/login')
+    expect(screen.getByRole('link', { name: 'Generate SBOM' })).toBeInTheDocument()
+  })
+
   it('shows Members only for admins', async () => {
     mockUseAuth.mockReturnValue(authState({ isAdmin: true }))
     renderAt()

@@ -132,4 +132,18 @@ describe('MembersPage', () => {
 
     await waitFor(() => expect(mockPromoteAdmin).toHaveBeenCalledWith(2))
   })
+
+  it('shows an error when "Make admin" fails', async () => {
+    mockGetMembers.mockResolvedValue({
+      members: [{ user_id: 2, email: 'bob@example.com', role: 'member', joined_at: '2026-01-01' }],
+      is_admin: true,
+    })
+    mockPromoteAdmin.mockRejectedValue(new Error('boom'))
+    const user = userEvent.setup()
+    render(<MembersPage />)
+
+    await user.click(await screen.findByRole('button', { name: /make admin/i }))
+
+    expect(await screen.findByText(/could not make admin/i)).toBeInTheDocument()
+  })
 })

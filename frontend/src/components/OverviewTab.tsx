@@ -13,6 +13,7 @@ import Typography from '@mui/material/Typography'
 import type { JobStatus, ReportSummary } from '../api/jobs'
 import { getLicenses, getVersions, getVulnerabilities } from '../api/reports'
 import { buildWorkbook, downloadWorkbook, type SheetSpec } from '../excelExport'
+import { DownloadActionIcon, ExportIcon } from '../icons'
 import { licensesSheet, versionCurrencySheet, vulnerabilitiesSheet } from '../reportSheets'
 
 // Tab indices in the shell's fixed order (5.1; SBOM inserted at 1 in 8.6).
@@ -91,14 +92,14 @@ export function OverviewTab({ status, onNavigate }: { status: JobStatus; onNavig
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
         {status.result_url ? (
-          <Button variant="contained" href={status.result_url}>
+          <Button variant="contained" href={status.result_url} startIcon={<DownloadActionIcon />}>
             Download SBOM{status.output_format ? ` (${status.output_format})` : ''}
           </Button>
         ) : (
           <Alert severity="warning">The SBOM artifact is not available for this job.</Alert>
         )}
         {anyReportAvailable && (
-          <Button variant="outlined" onClick={exportAll} disabled={exporting}>
+          <Button variant="outlined" onClick={exportAll} disabled={exporting} startIcon={<ExportIcon />}>
             {exporting ? 'Exporting…' : 'Export all to Excel'}
           </Button>
         )}

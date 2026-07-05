@@ -8,6 +8,7 @@ import MenuItem from '@mui/material/MenuItem'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { DEFAULT_OUTPUT_FORMAT, generateSbom, OUTPUT_FORMATS } from '../api/jobs'
+import { ChooseFileIcon, UploadActionIcon } from '../icons'
 
 export function UploadPage() {
   const navigate = useNavigate()
@@ -58,7 +59,7 @@ export function UploadPage() {
         sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
       >
         {error && <Alert severity="error">{error}</Alert>}
-        <Button variant="outlined" component="label">
+        <Button variant="outlined" component="label" startIcon={<ChooseFileIcon />}>
           {file ? file.name : 'Choose file'}
           <input type="file" hidden onChange={handleFile} />
         </Button>
@@ -99,7 +100,7 @@ export function UploadPage() {
             </MenuItem>
           ))}
         </TextField>
-        <Button type="submit" variant="contained" disabled={submitting}>
+        <Button type="submit" variant="contained" disabled={submitting} startIcon={<UploadActionIcon />}>
           {submitting ? 'Generating…' : 'Generate SBOM'}
         </Button>
       </Box>

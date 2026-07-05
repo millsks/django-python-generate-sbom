@@ -17,10 +17,12 @@ import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import useMediaQuery from '@mui/material/useMediaQuery'
 import { useTheme } from '@mui/material/styles'
+import ListItemIcon from '@mui/material/ListItemIcon'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import MenuBookIcon from '@mui/icons-material/MenuBook'
 import MenuIcon from '@mui/icons-material/Menu'
 import { useAuth } from '../auth/AuthProvider'
+import { AccountIcon, LogoutActionIcon } from '../icons'
 import { APP_NAME, DOCS_URL, REPO_URL } from '../config'
 import { ThemeToggle } from '../ThemeModeProvider'
 import { Footer } from './Footer'
@@ -99,7 +101,7 @@ export function Layout() {
             <>
               <OrgSwitcher />
               <IconButton color="inherit" aria-label="Account menu" onClick={(event) => setAnchor(event.currentTarget)}>
-                👤
+                <AccountIcon />
               </IconButton>
               <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={() => setAnchor(null)}>
                 {activeOrg && (
@@ -110,7 +112,12 @@ export function Layout() {
                   </MenuItem>
                 )}
                 {activeOrg && <Divider />}
-                <MenuItem onClick={handleLogout}>Logout</MenuItem>
+                <MenuItem onClick={handleLogout}>
+                  <ListItemIcon>
+                    <LogoutActionIcon fontSize="small" />
+                  </ListItemIcon>
+                  Logout
+                </MenuItem>
               </Menu>
             </>
           )}

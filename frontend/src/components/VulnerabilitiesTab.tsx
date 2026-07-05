@@ -21,8 +21,20 @@ import Typography from '@mui/material/Typography'
 import { ApiError } from '../api/client'
 import { getVulnerabilities, type VulnerabilityReport } from '../api/reports'
 import { buildWorkbook, downloadWorkbook } from '../excelExport'
+import { ExportIcon, severityIcon } from '../icons'
 import { vulnerabilitiesSheet } from '../reportSheets'
 import { TabFailureNotice } from './TabFailureNotice'
+
+// Severity cell: the shared severity icon + label (one vocabulary across the app).
+function SeverityCell({ severity }: { severity: string }) {
+  const { Icon, color } = severityIcon(severity)
+  return (
+    <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+      <Icon color={color} fontSize="small" titleAccess={severity} />
+      {severity}
+    </Box>
+  )
+}
 
 const SEVERITY_RANK: Record<string, number> = { Critical: 4, High: 3, Medium: 2, Low: 1, Unknown: 0 }
 const SEVERITIES = ['Critical', 'High', 'Medium', 'Low', 'Unknown']
@@ -131,7 +143,7 @@ export function VulnerabilitiesTab({ taskId, totalPackages }: { taskId: string; 
             </MenuItem>
           ))}
         </TextField>
-        <Button size="small" variant="outlined" onClick={exportExcel}>
+        <Button size="small" variant="outlined" onClick={exportExcel} startIcon={<ExportIcon />}>
           Export to Excel
         </Button>
       </Box>
@@ -161,7 +173,9 @@ export function VulnerabilitiesTab({ taskId, totalPackages }: { taskId: string; 
                 <TableCell>{row.version}</TableCell>
                 <TableCell>{row.ids}</TableCell>
                 <TableCell>{row.cvss ?? '—'}</TableCell>
-                <TableCell>{row.severity}</TableCell>
+                <TableCell>
+                  <SeverityCell severity={row.severity} />
+                </TableCell>
                 <TableCell>
                   <Link href={row.advisory} target="_blank" rel="noopener">
                     View

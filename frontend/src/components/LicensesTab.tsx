@@ -20,6 +20,7 @@ import Typography from '@mui/material/Typography'
 import { ApiError } from '../api/client'
 import { getLicenses, type LicenseReport } from '../api/reports'
 import { buildWorkbook, downloadWorkbook } from '../excelExport'
+import { AccordionExpandIcon, CollapseAllIcon, ExpandAllIcon, ExportIcon } from '../icons'
 import { licensesSheet } from '../reportSheets'
 import { TabFailureNotice } from './TabFailureNotice'
 
@@ -82,20 +83,20 @@ export function LicensesTab({ taskId }: { taskId: string }) {
     <Box>
       {report.tiers.length > 0 && (
         <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
-          <Button size="small" onClick={expandAll}>
+          <Button size="small" onClick={expandAll} startIcon={<ExpandAllIcon />}>
             Expand all
           </Button>
-          <Button size="small" onClick={collapseAll}>
+          <Button size="small" onClick={collapseAll} startIcon={<CollapseAllIcon />}>
             Collapse all
           </Button>
-          <Button size="small" variant="outlined" onClick={exportExcel} sx={{ ml: 'auto' }}>
+          <Button size="small" variant="outlined" onClick={exportExcel} sx={{ ml: 'auto' }} startIcon={<ExportIcon />}>
             Export to Excel
           </Button>
         </Stack>
       )}
       {[...report.tiers].sort(byTierRank).map((tier) => (
         <Accordion key={tier.tier} expanded={expanded.has(tier.tier)} onChange={toggleTier(tier.tier)}>
-          <AccordionSummary expandIcon={<span aria-hidden>▾</span>}>
+          <AccordionSummary expandIcon={<AccordionExpandIcon />}>
             <Typography sx={{ fontWeight: 600 }}>
               {tier.tier}
               {SIGNALS[tier.tier] ? ` — ${SIGNALS[tier.tier]}` : ''} ({tier.packages.length})

@@ -17,6 +17,7 @@ import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { createKey, getKeys, revokeKey, type ApiKey } from '../api/keys'
 import { getMembers } from '../api/orgs'
+import { AddActionIcon, DeleteActionIcon } from '../icons'
 
 export function KeysPage() {
   const [keys, setKeys] = useState<ApiKey[]>([])
@@ -92,7 +93,7 @@ export function KeysPage() {
               </TableCell>
               {isAdmin && (
                 <TableCell>
-                  <Button size="small" color="error" onClick={() => handleRevoke(key.id)}>
+                  <Button size="small" color="error" onClick={() => handleRevoke(key.id)} startIcon={<DeleteActionIcon />}>
                     Revoke
                   </Button>
                 </TableCell>
@@ -114,7 +115,7 @@ export function KeysPage() {
             onChange={(e) => setName(e.target.value)}
             required
           />
-          <Button type="submit" variant="contained">
+          <Button type="submit" variant="contained" startIcon={<AddActionIcon />}>
             Create key
           </Button>
         </Box>

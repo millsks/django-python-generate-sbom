@@ -20,8 +20,16 @@ import { VulnerabilitiesTab } from '../components/VulnerabilitiesTab'
 import { LicensesTab } from '../components/LicensesTab'
 import { DepGraph } from '../components/DepGraph'
 import { VersionsTab } from '../components/VersionsTab'
+import { TabIcon } from '../icons'
 
-const TAB_LABELS = ['Overview', 'SBOM', 'Vulnerabilities', 'Licenses', 'Dependency Graph', 'Version Currency']
+const TABS = [
+  { label: 'Overview', Icon: TabIcon.overview },
+  { label: 'SBOM', Icon: TabIcon.sbom },
+  { label: 'Vulnerabilities', Icon: TabIcon.vulnerabilities },
+  { label: 'Licenses', Icon: TabIcon.licenses },
+  { label: 'Dependency Graph', Icon: TabIcon.graph },
+  { label: 'Version Currency', Icon: TabIcon.versions },
+] as const
 
 function TabPanel({ index, value, children }: { index: number; value: number; children: ReactNode }) {
   return (
@@ -84,9 +92,15 @@ export function ResultsPage() {
       <Typography variant="h4" component="h1" gutterBottom>
         SBOM Results
       </Typography>
-      <Tabs value={tab} onChange={(_event, next: number) => setTab(next)} aria-label="results tabs">
-        {TAB_LABELS.map((label) => (
-          <Tab key={label} label={label} />
+      <Tabs
+        value={tab}
+        onChange={(_event, next: number) => setTab(next)}
+        aria-label="results tabs"
+        variant="scrollable"
+        scrollButtons="auto"
+      >
+        {TABS.map(({ label, Icon }) => (
+          <Tab key={label} label={label} icon={<Icon fontSize="small" />} iconPosition="start" />
         ))}
       </Tabs>
 

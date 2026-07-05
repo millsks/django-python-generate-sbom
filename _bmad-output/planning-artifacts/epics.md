@@ -1251,9 +1251,13 @@ So that storage does not grow unbounded while job history is preserved.
 
 **Acceptance Criteria:**
 
-**Given** a job that completed more than 10 days ago,
+**Given** a job whose artifacts have passed the configured retention period,
 **When** the daily cleanup runs,
 **Then** its artifact blobs (SBOM + all analysis reports) are deleted from the storage backend and `result_key` on the `SBOMJob` and `artifact_key` on every related `AnalysisReport` are nulled (FR-8.1, FR-8.2, AD-6).
+
+**Given** the retention window,
+**When** `artifacts_expire_at` is computed (at job creation/completion),
+**Then** it uses a configurable retention period that **defaults to 30 days** and is overridable via a setting / env var (e.g. `ARTIFACT_RETENTION_DAYS`), so operators can change it without a code change.
 
 **Given** the cleanup selector,
 **When** it identifies expired jobs,

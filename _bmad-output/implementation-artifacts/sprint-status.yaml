@@ -48,8 +48,8 @@ development_status:
   6-1-jobs-list-api-and-dashboard-table: done
   6-2-live-progress-polling: done
 
-  epic-7: ready-for-dev
-  7-1-scheduled-artifact-expiry-and-cleanup: ready-for-dev
+  epic-7: in-progress
+  7-1-scheduled-artifact-expiry-and-cleanup: in-progress
   7-2-manual-and-bulk-artifact-deletion: ready-for-dev
   7-3-expired-artifact-ui-indication: ready-for-dev
 

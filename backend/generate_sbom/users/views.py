@@ -32,6 +32,7 @@ from .services import (
     create_member,
     create_member_user,
     create_org,
+    demote_admin_to_member,
     grant_global_admin_by_email,
     is_global_admin,
     leave_org,
@@ -396,6 +397,35 @@ class PromoteAdminView(APIView):
             )
         try:
             promote_member_to_admin(org, target)
+        except MembershipError as exc:
+            return _membership_error(exc)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class DemoteAdminView(APIView):
+    """Demote an admin to member (POST /orgs/demote-admin/, admin only, Story 2.20).
+
+    The inverse of ``PromoteAdminView``: same admin gate, same ``UserIdSerializer``,
+    same 204. Guards (via the service) block demoting the org's last admin or a
+    global admin, surfacing the standard membership-error envelope.
+    """
+
+    def post(self, request: Request) -> Response:
+        """Demote the target admin to member."""
+        org = get_admin_org(request)
+        if org is None:
+            return Response(_NOT_ADMIN, status=status.HTTP_403_FORBIDDEN)
+        serializer = UserIdSerializer(data=request.data)
+        if not serializer.is_valid():
+            return _validation_error(serializer.errors)
+        target = User.objects.filter(pk=serializer.validated_data["user_id"]).first()
+        if target is None:
+            return Response(
+                {"error": "That user is not a member of this org.", "code": "not_a_member"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        try:
+            demote_admin_to_member(org, target)
         except MembershipError as exc:
             return _membership_error(exc)
         return Response(status=status.HTTP_204_NO_CONTENT)

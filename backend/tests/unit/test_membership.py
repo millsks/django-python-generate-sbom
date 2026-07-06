@@ -5,11 +5,15 @@ from rest_framework.test import APIClient
 
 from generate_sbom.users.models import Org, OrgMembership, User
 from generate_sbom.users.services import (
+    AdminOrgProtectedError,
     create_org,
+    demote_admin_to_member,
     grant_global_admin,
     is_global_admin,
+    leave_org,
     promote_member_to_admin,
     register_user,
+    remove_member,
 )
 
 LAST_ADMIN_ERROR = "An org must always have at least one admin."
@@ -250,6 +254,95 @@ def test_promote_endpoint_grants_no_access_to_other_orgs() -> None:
     assert is_global_admin(bob) is False
 
 
+# --- Story 2.20: demote an admin back to member ---------------------------
+
+
+@pytest.mark.django_db
+def test_promote_then_demote_round_trips_to_member() -> None:
+    """Promote then demote returns the target's role to member (Story 2.20)."""
+    _register_with_org("alice@example.com", "Alice")
+    client = _client("alice@example.com")
+    bob = _add_member(client, "bob@example.com")
+
+    promote = client.post("/api/v1/orgs/promote-admin/", {"user_id": bob.pk}, format="json")
+    demote = client.post("/api/v1/orgs/demote-admin/", {"user_id": bob.pk}, format="json")
+
+    assert promote.status_code == 204
+    assert demote.status_code == 204
+    assert OrgMembership.objects.get(org__slug="alice", user=bob).role == "member"
+
+
+@pytest.mark.django_db
+def test_demote_last_admin_rejected() -> None:
+    """Demoting the org's sole admin is blocked — an org must keep an admin (Story 2.20)."""
+    alice = _register_with_org("alice@example.com", "Alice")
+    client = _client("alice@example.com")
+
+    response = client.post("/api/v1/orgs/demote-admin/", {"user_id": alice.pk}, format="json")
+
+    assert response.status_code == 400
+    assert response.data["code"] == "last_admin"
+    assert OrgMembership.objects.get(org__slug="alice", user=alice).role == "admin"
+
+
+@pytest.mark.django_db
+def test_demote_global_admin_rejected() -> None:
+    """Demoting a global admin is blocked — they must stay admin of every org (Story 2.20)."""
+    gadmin = _make_global_admin("gadmin@example.com")
+    _register_with_org("alice@example.com", "Alice")  # gadmin back-filled as admin
+    client = _client("alice@example.com")
+
+    response = client.post("/api/v1/orgs/demote-admin/", {"user_id": gadmin.pk}, format="json")
+
+    assert response.status_code == 400
+    assert response.data["code"] == "global_admin_protected"
+    assert OrgMembership.objects.get(org__slug="alice", user=gadmin).role == "admin"
+
+
+@pytest.mark.django_db
+def test_demote_is_per_org_only() -> None:
+    """Demoting bob in org A leaves his admin role in org B untouched (Story 2.20)."""
+    _register_with_org("alice@example.com", "Alice")
+    _register_with_org("carol@example.com", "Carol")
+    alice_org = Org.objects.get(slug="alice")
+    carol_org = Org.objects.get(slug="carol")
+    bob = _add_member(_client("alice@example.com"), "bob@example.com")
+    OrgMembership.objects.create(org=carol_org, user=bob, role=OrgMembership.Role.ADMIN)
+    promote_member_to_admin(alice_org, bob)
+
+    demote_admin_to_member(alice_org, bob)
+
+    assert OrgMembership.objects.get(org=alice_org, user=bob).role == "member"
+    assert OrgMembership.objects.get(org=carol_org, user=bob).role == "admin"  # unchanged
+
+
+@pytest.mark.django_db
+def test_demote_requires_admin() -> None:
+    """demote-admin is admin-gated: a plain member gets 403 (Story 2.20)."""
+    alice = _register_with_org("alice@example.com", "Alice")
+    admin_client = _client("alice@example.com")
+    _add_member(admin_client, "bob@example.com")
+
+    response = _client("bob@example.com").post("/api/v1/orgs/demote-admin/", {"user_id": alice.pk}, format="json")
+
+    assert response.status_code == 403
+    assert response.data["code"] == "not_admin"
+    assert OrgMembership.objects.get(org__slug="alice", user=alice).role == "admin"
+
+
+@pytest.mark.django_db
+def test_demote_non_member_rejected() -> None:
+    """Demoting a user who is not a member of the org returns not_a_member (Story 2.20)."""
+    _register_with_org("alice@example.com", "Alice")
+    stranger = register_user(email="stranger@example.com", password="pw12345678")
+    client = _client("alice@example.com")
+
+    response = client.post("/api/v1/orgs/demote-admin/", {"user_id": stranger.pk}, format="json")
+
+    assert response.status_code == 400
+    assert response.data["code"] == "not_a_member"
+
+
 @pytest.mark.django_db
 def test_non_sole_admin_can_leave() -> None:
     _register_with_org("alice@example.com", "Alice")
@@ -387,24 +480,30 @@ def test_global_admin_cannot_leave_normal_org() -> None:
 
 @pytest.mark.django_db
 def test_last_member_of_admin_org_cannot_be_removed() -> None:
+    """The ADMIN-org last-member guard holds at the service level (Story 2.9).
+
+    The ADMIN org is never a working org via the API (Story 2.18) — a global admin
+    resolves to zero-org rather than the ADMIN org — so this invariant is enforced
+    on ``remove_member`` directly, as defense in depth, not through an org-scoped
+    endpoint.
+    """
     gadmin = _make_global_admin("gadmin@example.com")
     admin_org = Org.objects.get(is_admin_org=True)
     assert OrgMembership.objects.filter(org=admin_org).count() == 1
-    client = _client("gadmin@example.com")  # active org is the ADMIN org
 
-    response = client.delete(f"/api/v1/orgs/members/{gadmin.pk}/")
+    with pytest.raises(AdminOrgProtectedError):
+        remove_member(admin_org, gadmin)
 
-    assert response.status_code == 400
-    assert response.data["code"] == "admin_org_protected"
     assert OrgMembership.objects.filter(org=admin_org, user=gadmin).exists()
 
 
 @pytest.mark.django_db
 def test_last_member_of_admin_org_cannot_leave() -> None:
-    _make_global_admin("gadmin@example.com")
-    client = _client("gadmin@example.com")  # active org is the ADMIN org
+    """The ADMIN-org last-member guard holds for ``leave_org`` too (Story 2.9/2.18)."""
+    gadmin = _make_global_admin("gadmin@example.com")
+    admin_org = Org.objects.get(is_admin_org=True)
 
-    response = client.post("/api/v1/orgs/leave/")
+    with pytest.raises(AdminOrgProtectedError):
+        leave_org(admin_org, gadmin)
 
-    assert response.status_code == 400
-    assert response.data["code"] == "admin_org_protected"
+    assert OrgMembership.objects.filter(org=admin_org, user=gadmin).exists()

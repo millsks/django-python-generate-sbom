@@ -350,6 +350,29 @@ def promote_member_to_admin(org: Org, target: User) -> None:
     logger.info("member_promoted_to_admin", org_id=org.pk, user_id=target.pk)
 
 
+def demote_admin_to_member(org: Org, target: User) -> None:
+    """Demote ``target`` from admin back to member of ``org`` (Story 2.20).
+
+    The inverse of ``promote_member_to_admin``: it affects ``target``'s role in
+    ``org`` only, never their membership in any other org. Guards mirror the
+    removal invariants (Story 2.9): a global admin must stay an admin of every org
+    (``GlobalAdminError``) and an org must keep at least one admin
+    (``LastAdminError``). Raises ``NotAMemberError`` if ``target`` does not belong
+    to ``org``; a no-op (idempotent) if they are already a member.
+    """
+    membership = OrgMembership.objects.filter(org=org, user=target).first()
+    if membership is None:
+        raise NotAMemberError
+    if is_global_admin(target):
+        raise GlobalAdminError
+    if _is_sole_admin(org, target):
+        raise LastAdminError
+    if membership.role != OrgMembership.Role.MEMBER:
+        membership.role = OrgMembership.Role.MEMBER
+        membership.save(update_fields=["role"])
+    logger.info("admin_demoted_to_member", org_id=org.pk, user_id=target.pk)
+
+
 def leave_org(org: Org, user: User) -> None:
     """Remove the caller's own membership, enforcing the Story 2.9 edge rules (FR-1.7).
 

@@ -4,6 +4,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { AuthProvider, useAuth } from './AuthProvider'
 import { getActiveOrg } from '../api/orgs'
+import { getAppConfig } from '../api/config'
 import { getMe, logout as apiLogout, type CurrentUser } from '../api/auth'
 
 vi.mock('../api/orgs', async (importOriginal) => {
@@ -14,8 +15,10 @@ vi.mock('../api/auth', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/auth')>()
   return { ...actual, getMe: vi.fn(), logout: vi.fn() }
 })
+vi.mock('../api/config', () => ({ getAppConfig: vi.fn() }))
 const mockGetMe = getMe as Mock
 const mockGetActiveOrg = getActiveOrg as Mock
+const mockGetAppConfig = getAppConfig as Mock
 const mockLogout = apiLogout as Mock
 
 // auth/me now carries the admin flags (Story 2.17), so AuthProvider derives isAdmin
@@ -29,12 +32,13 @@ const me = (over: Partial<CurrentUser> = {}): CurrentUser => ({
 })
 
 function Probe() {
-  const { status, activeOrg, isAdmin, logout } = useAuth()
+  const { status, activeOrg, isAdmin, apiDocsEnabled, logout } = useAuth()
   return (
     <div>
       <span>status:{status}</span>
       <span>org:{activeOrg?.name ?? '-'}</span>
       <span>admin:{String(isAdmin)}</span>
+      <span>apidocs:{String(apiDocsEnabled)}</span>
       <button onClick={() => void logout()}>do-logout</button>
     </div>
   )
@@ -52,6 +56,7 @@ describe('AuthProvider', () => {
     mockGetMe.mockReset()
     mockGetActiveOrg.mockReset()
     mockLogout.mockReset()
+    mockGetAppConfig.mockResolvedValue({ api_docs_enabled: false })
   })
 
   it('resolves to authed with the org and admin flag from auth/me', async () => {
@@ -80,6 +85,23 @@ describe('AuthProvider', () => {
     expect(await screen.findByText('status:authed')).toBeInTheDocument()
     expect(screen.getByText('org:-')).toBeInTheDocument()
     expect(screen.getByText('admin:false')).toBeInTheDocument()
+  })
+
+  it('exposes apiDocsEnabled from the public config endpoint (Story 11.20)', async () => {
+    mockGetMe.mockResolvedValue(me())
+    mockGetActiveOrg.mockResolvedValue({ slug: 'acme', name: 'Acme' })
+    mockGetAppConfig.mockResolvedValueOnce({ api_docs_enabled: true })
+    renderProbe()
+    expect(await screen.findByText('apidocs:true')).toBeInTheDocument()
+  })
+
+  it('defaults apiDocsEnabled to false when the config fetch fails', async () => {
+    mockGetMe.mockResolvedValue(me())
+    mockGetActiveOrg.mockResolvedValue({ slug: 'acme', name: 'Acme' })
+    mockGetAppConfig.mockRejectedValueOnce(new Error('500'))
+    renderProbe()
+    expect(await screen.findByText('status:authed')).toBeInTheDocument()
+    expect(screen.getByText('apidocs:false')).toBeInTheDocument()
   })
 
   it('logout ends the session', async () => {

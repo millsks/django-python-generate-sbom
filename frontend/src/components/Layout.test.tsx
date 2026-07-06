@@ -33,6 +33,7 @@ const authState = (over: Partial<Auth> = {}): Auth => ({
   activeOrg: { slug: 'acme', name: 'Acme' },
   isAdmin: false,
   isGlobalAdmin: false,
+  apiDocsEnabled: false,
   refresh: vi.fn(),
   logout: vi.fn(),
   ...over,
@@ -152,6 +153,31 @@ describe('Layout', () => {
     renderAt('/login')
     expect(screen.getByRole('link', { name: 'GitHub repository' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Documentation' })).toBeInTheDocument()
+  })
+
+  it('shows the API-docs link with correct href/target/rel/label when enabled (authed)', async () => {
+    mockUseAuth.mockReturnValue(authState({ apiDocsEnabled: true }))
+    renderAt('/upload')
+
+    const apiDocs = screen.getByRole('link', { name: 'API docs' })
+    expect(apiDocs).toHaveAttribute('href', '/api/docs/')
+    expect(apiDocs).toHaveAttribute('target', '_blank')
+    expect(apiDocs).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  it('shows the API-docs link when enabled and logged out too', async () => {
+    mockUseAuth.mockReturnValue(authState({ status: 'anon', activeOrg: null, apiDocsEnabled: true }))
+    renderAt('/login')
+    expect(screen.getByRole('link', { name: 'API docs' })).toBeInTheDocument()
+  })
+
+  it('omits the API-docs link entirely when disabled, keeping the docs/repo links', async () => {
+    mockUseAuth.mockReturnValue(authState({ apiDocsEnabled: false }))
+    renderAt('/upload')
+
+    expect(screen.queryByRole('link', { name: 'API docs' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Documentation' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'GitHub repository' })).toBeInTheDocument()
   })
 
   it('renders a footer with app name, version, and doc/repo/license links', async () => {

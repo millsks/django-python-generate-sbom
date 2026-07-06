@@ -94,7 +94,11 @@ development_status:
   # "PyPI Latest".
   # Reopened again (bugfix): 8.24 fixes the PyPI->conda-forge python-<name> disambiguation
   # (e.g. PyPI xxhash -> conda-forge python-xxhash, not the same-named C library).
-  epic-8: done
+  # Reopened again (bugfix): 8.25 writes each package's license INTO the generated SBOM document
+  # (CycloneDX component.licenses / SPDX licenseConcluded) so the SBOM tab Components License
+  # column and the raw blob stop showing "—". Resolved at Phase 3 generation using the SAME
+  # normalization the Phase 5 licenses report uses (AD-6 preserved; no downstream blob rewrite).
+  epic-8: in-progress
   8-1-broaden-lts-coverage-via-endoflife-date: done
   8-2-spike-direct-vs-transitive-dependency-design: done
   8-3-capture-direct-transitive-relationships-during-resolution: done
@@ -120,6 +124,7 @@ development_status:
   8-22-version-currency-excel-conda-forge-color: done
   8-23-version-currency-pypi-latest-column: done
   8-24-fix-pypi-conda-forge-python-name-disambiguation: done
+  8-25-include-license-in-sbom-document: ready-for-dev
 
   # Epic 9 — Project Management & CI/CD Workflows (ported from millsks/idp-app,
   # excluding renovate + disabled workflows). External secrets are operator-supplied.

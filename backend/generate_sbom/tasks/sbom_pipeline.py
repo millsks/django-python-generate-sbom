@@ -23,6 +23,7 @@ from celery.exceptions import SoftTimeLimitExceeded
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 
+from generate_sbom.analysis.services import license as license_service
 from generate_sbom.analysis.services.reports import write_report
 from generate_sbom.sbom import services
 from generate_sbom.sbom.models import SBOMJob
@@ -155,8 +156,11 @@ def generate_sbom_document(self: Any, prev: dict[str, Any]) -> dict[str, Any]:
         _report(self, task_id, 45, "generate SBOM document")
         packages = [PackageSpec(**spec) for spec in prev["packages"]]
         provenance = services.build_provenance(job.manifest)
+        # Resolve each package's license here (I/O), then hand it to the pure serializer (Story 8.25).
+        # Same normalization Phase 5 uses, over the cached PyPI session — no doubled external load.
+        license_map = license_service.build_license_map(packages)
         try:
-            content, media_type = services.generate_sbom_document(packages, job.output_format, provenance)
+            content, media_type = services.generate_sbom_document(packages, job.output_format, provenance, license_map)
         except services.SBOMGenerationError:
             services.update_job_status(task_id, SBOMJob.Status.FAILED, failure_reason="sbom_generation_failed")
             raise

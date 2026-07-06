@@ -54,14 +54,23 @@ def sbom_extension(output_format: str) -> str:
 
 
 def generate_sbom_document(
-    packages: list[PackageSpec], output_format: str, provenance: Provenance
+    packages: list[PackageSpec],
+    output_format: str,
+    provenance: Provenance,
+    license_map: dict[tuple[str, str], str | None] | None = None,
 ) -> tuple[bytes, str]:
-    """Serialize the resolved package list to an SBOM document (bytes, media_type)."""
+    """Serialize the resolved package list to an SBOM document (bytes, media_type).
+
+    ``license_map`` (keyed by ``(name, version)``, Story 8.25) supplies each component's
+    resolved license; it is resolved by the caller (Phase 3 task) to keep this serializer
+    pure/I/O-free (Story 3.4). A missing/``None`` value emits no license entry (AC #2).
+    """
+    resolved = license_map or {}
     try:
         if output_format in (CYCLONEDX_JSON, CYCLONEDX_XML):
-            text = _generate_cyclonedx(packages, provenance, output_format)
+            text = _generate_cyclonedx(packages, provenance, output_format, resolved)
         elif output_format == SPDX_JSON:
-            text = _generate_spdx(packages, provenance)
+            text = _generate_spdx(packages, provenance, resolved)
         else:
             raise SBOMGenerationError(f"Unknown output format: {output_format!r}")
     except SBOMGenerationError:
@@ -71,8 +80,14 @@ def generate_sbom_document(
     return text.encode("utf-8"), _MEDIA_TYPES[output_format]
 
 
-def _generate_cyclonedx(packages: list[PackageSpec], provenance: Provenance, output_format: str) -> str:
+def _generate_cyclonedx(
+    packages: list[PackageSpec],
+    provenance: Provenance,
+    output_format: str,
+    license_map: dict[tuple[str, str], str | None],
+) -> str:
     """Build a CycloneDX 1.6 document (JSON or XML) with provenance metadata."""
+    from cyclonedx.contrib.license.factories import LicenseFactory
     from cyclonedx.model import ExternalReference, ExternalReferenceType, Property, XsUri
     from cyclonedx.model.bom import Bom
     from cyclonedx.model.component import Component, ComponentType
@@ -92,6 +107,7 @@ def _generate_cyclonedx(packages: list[PackageSpec], provenance: Provenance, out
     root.properties.add(Property(name="vcs:branch", value=provenance.source_branch))
     bom.metadata.component = root
 
+    license_factory = LicenseFactory()
     components = []
     direct_components = []
     for pkg in packages:
@@ -102,6 +118,10 @@ def _generate_cyclonedx(packages: list[PackageSpec], provenance: Provenance, out
             bom_ref=f"{pkg.name}@{pkg.version}",
         )
         component.properties.add(Property(name="sbom:relationship", value=pkg.relationship))
+        # Emit the resolved license (SPDX id, expression, or free-text name); none if unknown (AC #2).
+        license_value = license_map.get((pkg.name, pkg.version))
+        if license_value:
+            component.licenses.add(license_factory.make_from_string(license_value))
         bom.components.add(component)
         components.append(component)
         if pkg.relationship == DIRECT:
@@ -134,7 +154,9 @@ def _order_metadata_before_components(text: str) -> str:
     return json.dumps(ordered, indent=2)
 
 
-def _generate_spdx(packages: list[PackageSpec], provenance: Provenance) -> str:
+def _generate_spdx(
+    packages: list[PackageSpec], provenance: Provenance, license_map: dict[tuple[str, str], str | None]
+) -> str:
     """Build an SPDX 2.3 JSON document; embed provenance best-effort (FR-3.8)."""
     from lib4sbom.data.document import SBOMDocument
     from lib4sbom.data.package import SBOMPackage
@@ -164,6 +186,10 @@ def _generate_spdx(packages: list[PackageSpec], provenance: Provenance) -> str:
         entry.set_version(pkg.version)
         entry.set_type("library")
         entry.set_purl(f"pkg:pypi/{pkg.name}@{pkg.version}")
+        # Concluded == declared from the resolved license; NOASSERTION when unknown (AC #2).
+        license_value = license_map.get((pkg.name, pkg.version)) or "NOASSERTION"
+        entry.set_licenseconcluded(license_value)
+        entry.set_licensedeclared(license_value)
         packages_dict[(pkg.name, pkg.version)] = entry.get_package()
         if pkg.relationship == DIRECT:  # root DEPENDS_ON each direct package (Story 8.4)
             rel = SBOMRelationship()

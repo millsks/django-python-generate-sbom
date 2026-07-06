@@ -1,6 +1,7 @@
 """Tests for SBOM generation, Phase 3/8 tasks, and the result endpoint (Story 3.4)."""
 
 import json
+from collections.abc import Iterator
 from dataclasses import asdict
 from datetime import timedelta
 from unittest.mock import patch
@@ -11,6 +12,7 @@ from django.core.files.storage import default_storage
 from rest_framework.test import APIClient
 
 from generate_sbom.manifests.models import ManifestUpload
+from generate_sbom.sbom.document import _cyclonedx_license, _spdx_license
 from generate_sbom.sbom.generation import (
     Provenance,
     SBOMGenerationError,
@@ -33,8 +35,50 @@ PROV = Provenance(
 )
 _NO_UPDATE = "celery.app.task.Task.update_state"
 
+# One map exercising every CycloneDX license shape (Story 8.25, AC #1/#2).
+LICENSED_PKGS = [
+    PackageSpec(name="django", version="5.2.1"),  # known SPDX id
+    PackageSpec(name="dual", version="1.0"),  # SPDX expression
+    PackageSpec(name="weird", version="2.0"),  # non-SPDX free text → named license
+    PackageSpec(name="asgiref", version="3.8.1"),  # unknown → no license entry
+]
+LICENSE_MAP: dict[tuple[str, str], str | None] = {
+    ("django", "5.2.1"): "BSD-3-Clause",
+    ("dual", "1.0"): "Apache-2.0 OR MIT",
+    ("weird", "2.0"): "Weird Custom License",
+    ("asgiref", "3.8.1"): None,
+}
+
 
 # --- pure serializers (AC #1, #2, #3) -------------------------------------------------
+
+
+def test_cyclonedx_emits_license_per_component_via_shared_map() -> None:
+    content, _ = generate_sbom_document(LICENSED_PKGS, "cyclonedx-json", PROV, LICENSE_MAP)
+    components = {c["name"]: c for c in json.loads(content)["components"]}
+    # Known SPDX id, SPDX expression, and free-text name each surface via the viewer parse-back.
+    assert _cyclonedx_license(components["django"].get("licenses")) == "BSD-3-Clause"
+    assert _cyclonedx_license(components["dual"].get("licenses")) == "Apache-2.0 OR MIT"
+    assert _cyclonedx_license(components["weird"].get("licenses")) == "Weird Custom License"
+    # Unknown license → no entry (AC #2), which the viewer maps back to None → "—".
+    assert not components["asgiref"].get("licenses")
+    assert _cyclonedx_license(components["asgiref"].get("licenses")) is None
+
+
+def test_cyclonedx_without_license_map_omits_all_licenses() -> None:
+    content, _ = generate_sbom_document(PKGS, "cyclonedx-json", PROV)
+    assert all(not c.get("licenses") for c in json.loads(content)["components"])
+
+
+def test_spdx_sets_license_concluded_and_noassertion() -> None:
+    content, _ = generate_sbom_document(LICENSED_PKGS, "spdx-json", PROV, LICENSE_MAP)
+    packages = {p["name"]: p for p in json.loads(content)["packages"]}
+    assert packages["django"]["licenseConcluded"] == "BSD-3-Clause"
+    assert packages["django"]["licenseDeclared"] == "BSD-3-Clause"
+    assert _spdx_license(packages["django"]) == "BSD-3-Clause"
+    # Unknown → NOASSERTION, which the viewer treats as no license (AC #2).
+    assert packages["asgiref"]["licenseConcluded"] == "NOASSERTION"
+    assert _spdx_license(packages["asgiref"]) is None
 
 
 def test_cyclonedx_json_embeds_provenance() -> None:
@@ -101,6 +145,13 @@ def test_sbom_extension_maps_formats() -> None:
 @pytest.fixture(autouse=True)
 def _tmp_media(settings: pytest.FixtureRequest, tmp_path: object) -> None:
     settings.MEDIA_ROOT = str(tmp_path)  # type: ignore[attr-defined]
+
+
+@pytest.fixture(autouse=True)
+def _no_license_network() -> Iterator[None]:
+    """Phase 3 now resolves licenses over PyPI; stub the resolver so task tests never hit the network."""
+    with patch("generate_sbom.tasks.sbom_pipeline.license_service.build_license_map", return_value={}):
+        yield
 
 
 def _make_job(output_format: str = "cyclonedx-json", email: str = "alice@example.com") -> SBOMJob:

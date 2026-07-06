@@ -72,6 +72,24 @@ def test_license_expression_and_families() -> None:
 
 
 @responses.activate
+def test_build_license_map_matches_phase5_normalization() -> None:
+    """The shared resolver yields the same SPDX values Phase 5 records — no divergence (Story 8.25)."""
+    _mock_pypi("mit-pkg", info={"classifiers": [CLASSIFIER["mit"]]})
+    _mock_pypi("apache-pkg", info={"license_expression": "Apache-2.0"})
+    responses.add(responses.GET, f"{license_service.PYPI_JSON_URL}/down-pkg/1.0/json", status=503)
+    packages = [_pkg("mit-pkg"), _pkg("apache-pkg"), _pkg("down-pkg")]
+    session = _session()
+
+    license_map = license_service.build_license_map(packages, session=session)
+
+    assert license_map == {("mit-pkg", "1.0"): "MIT", ("apache-pkg", "1.0"): "Apache-2.0", ("down-pkg", "1.0"): None}
+    # Parity guard: the same values Phase 5's classify report derives from _extract_license (AC #4).
+    report = license_service.classify(packages, session=session)
+    reported = {p["name"]: p["license"] for tier in report["tiers"] for p in tier["packages"]}
+    assert reported == {"mit-pkg": "MIT", "apache-pkg": "Apache-2.0", "down-pkg": "UNKNOWN"}
+
+
+@responses.activate
 def test_pypi_failure_degrades_to_unknown() -> None:
     responses.add(responses.GET, f"{license_service.PYPI_JSON_URL}/down-pkg/1.0/json", status=503)
 

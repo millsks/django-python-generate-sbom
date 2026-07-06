@@ -35,6 +35,16 @@ describe('SbomTab', () => {
     expect(within(rows[0]).getByText('asgiref')).toBeInTheDocument()
   })
 
+  it('renders — for a component with no license (Story 8.25)', async () => {
+    mockGet.mockResolvedValue(DOC)
+    render(<SbomTab taskId="t" />)
+
+    const table = await screen.findByRole('table')
+    const asgirefRow = within(table).getByText('asgiref').closest('tr') as HTMLElement
+    // asgiref carries license: null — its only em-dash cell is the License column.
+    expect(within(asgirefRow).getByText('—')).toBeInTheDocument()
+  })
+
   it('toggles to the raw document view', async () => {
     mockGet.mockResolvedValue(DOC)
     render(<SbomTab taskId="t" />)

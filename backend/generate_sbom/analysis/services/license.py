@@ -90,6 +90,19 @@ def _extract_license(session: http.CachedLimiterSession, pkg: PackageSpec) -> st
     return None
 
 
+def build_license_map(
+    packages: list[PackageSpec], *, session: http.CachedLimiterSession | None = None
+) -> dict[tuple[str, str], str | None]:
+    """Resolve each package's SPDX-ish license, keyed by ``(name, version)`` (Story 8.25).
+
+    Uses the same ``_extract_license`` normalization the Phase 5 report relies on, so the
+    SBOM document and the Licenses tab derive from one source and cannot diverge (AC #4).
+    Shares the cached PyPI session, so Phase 3 warms the cache Phase 5 later reads.
+    """
+    session = session or http.pypi_session()
+    return {(pkg.name, pkg.version): _extract_license(session, pkg) for pkg in packages}
+
+
 def _classify_license(spdx: str | None) -> str:
     """Place an SPDX id into one of the four tiers (AC #2/#4)."""
     if not spdx:

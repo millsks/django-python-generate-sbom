@@ -22,7 +22,7 @@ development_status:
   # home page and stops the ADMIN org acting as a workspace (session path now excludes it); 2.19 hides
   # the org switcher unless there is >1 org; 2.20 adds demote-admin-to-member (the inverse of 2.16's
   # promote). All three overlap Story 13.1 and are implemented AFTER 13.1.
-  epic-2: in-progress
+  epic-2: done
   2-1-user-and-org-data-models-and-registration: done
   2-2-login-session-auth-and-org-switcher: done
   2-3-org-administration-and-membership-management: done
@@ -46,9 +46,9 @@ development_status:
   2-15-reorder-side-navigation: done
   2-16-fix-make-admin-and-protect-global-admin: done
   2-17-admin-route-and-api-authorization: done
-  2-18-restrict-zero-org-users-to-home: review
-  2-19-hide-org-switcher-for-single-org: review
-  2-20-demote-admin-to-member: review
+  2-18-restrict-zero-org-users-to-home: done
+  2-19-hide-org-switcher-for-single-org: done
+  2-20-demote-admin-to-member: done
 
   epic-3: done
   3-1-manifest-upload-and-format-detection: done
@@ -130,7 +130,7 @@ development_status:
   8-22-version-currency-excel-conda-forge-color: done
   8-23-version-currency-pypi-latest-column: done
   8-24-fix-pypi-conda-forge-python-name-disambiguation: done
-  8-25-include-license-in-sbom-document: ready-for-dev
+  8-25-include-license-in-sbom-document: review
 
   # Epic 9 — Project Management & CI/CD Workflows (ported from millsks/idp-app,
   # excluding renovate + disabled workflows). External secrets are operator-supplied.

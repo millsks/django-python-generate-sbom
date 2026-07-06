@@ -17,7 +17,7 @@ import { DownloadActionIcon, ExportIcon } from '../icons'
 import { licensesSheet, versionCurrencySheet, vulnerabilitiesSheet } from '../reportSheets'
 
 // Tab indices in the shell's fixed order (5.1; SBOM inserted at 1 in 8.6).
-const TAB = { vulnerabilities: 2, licenses: 3, versions: 5 }
+const TAB = { vulnerabilities: 2, licenses: 3, versions: 4 }
 
 const num = (value: unknown): number => (typeof value === 'number' ? value : 0)
 

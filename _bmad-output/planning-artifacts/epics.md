@@ -3455,6 +3455,126 @@ auto-generated code reference (mkdocstrings) still renders.
 **Then** `pixi run docs-build` (`mkdocs build --strict`) passes with no broken links/nav, and
 anything found but out of scope for 11.11-11.13 is fixed here or explicitly noted.
 
+<!-- Epic 11 reopened AGAIN (documentation reconciliation, 2nd pass). The first pass (11.11-11.14)
+     only covered the INITIAL Epic 2 org-membership work. A lot merged since — through Story 13.1
+     (global-admin management screen): the admin tier (per-org admin vs. global admin), create-org
+     gating to global admins, add-by-email + create-new-user, promote (not transfer) + demote,
+     admin-route + API authorization, the global-admin management screen, and the version-currency
+     PyPI-Latest / Excel-divergence / conda-forge python-<name> changes (8.22-8.24). Stories
+     11.15-11.18 reconcile the published docs to this state. PREREQUISITE: implement against the
+     then-current merged state (at minimum through 13.1); recommended after Stories 2.18-2.20 merge
+     so the org-access refinements land in one pass. 11.15-11.17 are audience-scoped; 11.18 is the
+     cross-cutting sweep run last. Covers FR-DOC2/3/4/5/7/9. -->
+
+### Story 11.15: User-Facing Documentation Reconciliation (Admin Tier, 2nd Pass)
+
+As an end user,
+I want the User Guide and How-To guides to reflect the current roles, admin actions, and zero-org experience,
+So that the instructions I follow match what the app actually does now.
+
+**Acceptance Criteria:**
+
+**Given** the system now has three role tiers (member / org-admin / global-admin) and a refined zero-org
+experience (Stories 2.8, 2.12, 2.18, 2.19),
+**When** `docs/user-guide/accounts-and-organizations.md` is reviewed,
+**Then** it documents the member/org-admin/global-admin roles, the zero-org experience (no org on
+registration → restricted to home until an admin adds them), org switching (switcher hidden for a single
+org), and that creating an organization is restricted to global admins (the ADMIN org hidden from the
+switcher) (FR-DOC2).
+
+**Given** the admin toolkit grew (add-existing-by-email, create-new-user, promote, demote, remove),
+**When** `docs/how-to/manage-organization.md` is reviewed,
+**Then** it documents adding a member by registered email (+ "no such user"), creating a new user account
+(Story 2.10), promoting a member to admin (not "transfer" — Story 2.16), demoting admin→member (Story 2.20),
+and removing a member with the last-admin rule — with no "transfer admin" wording (FR-DOC3).
+
+**Given** the global-admin management screen shipped (Story 13.1),
+**When** the user-facing docs are updated,
+**Then** they describe the global-admin management flow (global-admin-only visibility; list current global
+admins; grant by email; revoke = remove-from-ADMIN + demote-everywhere, with the last-global-admin guard),
+stale screenshots/wording are updated, and `pixi run docs-build` (`mkdocs build --strict`) stays green.
+
+### Story 11.16: API Reference & OpenAPI Reconciliation (Admin Tier, 2nd Pass)
+
+As an API consumer,
+I want the REST API reference and the generated OpenAPI/Swagger to match all the current endpoints,
+So that I can integrate against accurate contracts for the admin and global-admin surfaces.
+
+**Acceptance Criteria:**
+
+**Given** `GET /api/v1/auth/me/` now returns `is_admin` and `is_global_admin` (Stories 2.6, 2.12),
+**When** `docs/api/authentication.md` is reviewed,
+**Then** it documents `auth/me` returning the current user with both flags, alongside register/login/logout
+(FR-DOC5).
+
+**Given** the membership surface grew (create-new-user, promote-admin) and create-org is global-admin-gated,
+**When** `docs/api/organizations.md` is reviewed,
+**Then** it documents `POST /orgs/members/` (add-existing by email), `POST /orgs/members/create-user/`
+(Story 2.10), `POST /orgs/promote-admin/` (Story 2.16), member remove, and `POST /orgs/create/`
+(global-admin-gated — Story 2.12), each with request/response shapes and error codes.
+
+**Given** the global-admin management endpoints exist (Story 13.1) and the backend serves OpenAPI/Swagger
+(Story 11.9),
+**When** the API changed,
+**Then** a global-admin section documents `GET`/`POST`(grant-by-email)/`DELETE` on `admin/global-admins/`
+(revoke = remove-from-ADMIN + demote-everywhere; last-global-admin guard; 403 for non-global-admins), the
+generated schema reflects all new/changed endpoints (regenerate any committed artifact), and the docs match
+what Swagger renders (FR-DOC9). `mkdocs build --strict` stays green.
+
+### Story 11.17: Developer/Architecture Documentation Reconciliation (Admin Tier, 2nd Pass)
+
+As a developer/contributor,
+I want the developer docs to describe the org/admin/auth model, authorization, and the version-currency
+changes as built,
+So that I can reason about permissions and the codebase correctly.
+
+**Acceptance Criteria:**
+
+**Given** the system has per-org admin vs. a global-admin tier, admin-route + API authorization, and
+promote/demote (Stories 2.8, 2.16, 2.17, 2.20),
+**When** `docs/developer/architecture.md` is reviewed,
+**Then** it documents the org-membership model, per-org admin vs. global admin (the ADMIN org + cross-org
+provisioning), the admin-route + API-authorization pattern (enforced at both route and API), promote/demote,
+and zero-org/identity decoupling (`auth/me`) (FR-DOC4).
+
+**Given** the data model changed (`is_admin_org`, zero-membership users, global-admin memberships, roles)
+and superuser seeding is env-driven (Story 2.13),
+**When** `docs/developer/data-model.md` and `docs/developer/setup.md` are reviewed,
+**Then** the model docs reflect the flag/zero-org state/global-admin memberships (refresh any diagram), and
+setup documents env-driven `seed_superuser` bootstrap into the ADMIN org (not a personal org).
+
+**Given** the version-currency work (PyPI-Latest column + Excel red divergence, conda-forge `python-<name>`
+disambiguation — Stories 8.22-8.24),
+**When** the developer docs are reviewed,
+**Then** those changes are documented, the mkdocstrings code reference still renders the new/updated services
+(`grant_global_admin`, `revoke_global_admin`, `promote_member_to_admin`), and `mkdocs build --strict` stays
+green.
+
+### Story 11.18: Cross-Cutting Documentation Sweep (2nd Pass)
+
+As a maintainer,
+I want a final sweep of the README and full docs tree for drift since the last pass,
+So that the published docs and README are trustworthy after the admin-tier, landing-page, and nav changes.
+
+**Acceptance Criteria:**
+
+**Given** the README is the project front page (Story 11.7),
+**When** it is reviewed,
+**Then** it reflects the current app — role model, zero-org registration, create-org gating, the landing page
+(Story 12.8), and current nav (login→index, home nav item, account-menu user, dashboard removed — Epic 10) —
+and any stale personal-org / transfer-admin / registration wording is corrected (FR-DOC7).
+
+**Given** recent work (the landing page 12.8, nav changes in Epic 10, admin screens, version-currency
+8.22-8.24) may have dated screenshots or prose across the docs,
+**When** the full `docs/` tree is audited,
+**Then** stale screenshots, navigation descriptions, and prose are refreshed, and the auto-generated code
+reference (mkdocstrings) still renders.
+
+**Given** the docs site enforces link integrity,
+**When** the audit completes,
+**Then** `pixi run docs-build` (`mkdocs build --strict`) passes with no broken links/nav, and anything found
+but out of scope for 11.15-11.17 is fixed here or explicitly noted.
+
 ---
 
 ## Epic 12: UI/UX Visual Design & Professional Polish
@@ -3798,3 +3918,75 @@ global admin may revoke themselves as long as they are not the last.
 **Then** backend endpoints exist to **list** and **revoke** global admins (grant exists; extend it to
 accept email if needed), all global-admin-gated; the screen (list / grant-by-email / revoke with a
 confirm) is covered by tests, and `pixi run ci` is green.
+
+---
+
+## Epic 14: Planning-Artifact Reconciliation
+
+A lot merged since the planning artifacts were last touched — through Story 13.1 (global-admin management
+screen). The PRD and architecture artifacts now **contradict the shipped system**: the PRD still describes a
+personal org created at registration and an admin "transfer" that no longer exist, and neither the PRD nor
+the architecture covers the global-admin tier, org-creation gating, add-by-email/create-user, promote/demote,
+admin authorization, or the global-admin management screen. This epic reconciles the **planning artifacts**
+(PRD + architecture) to the merged state. (Distinct from Epic 11's reopened stories, which reconcile the
+**published docs** — `docs/**` + README.)
+
+**PREREQUISITE:** reconcile against the then-current merged state (at minimum through Story 13.1);
+recommended after Stories 2.18-2.20 merge so the org-access refinements land in one pass. Planning artifacts
+only — no `docs/**` or code edits.
+
+### Story 14.1: PRD Reconciliation (Org Membership & Global-Admin Tier)
+
+As a product owner,
+I want the PRD to describe the account/org/admin model as actually built,
+So that the planning trail is trustworthy and no longer contradicts the shipped system.
+
+**Acceptance Criteria:**
+
+**Given** the PRD still describes a personal org created at registration and an admin "transfer" (both
+reversed — Stories 2.6, 2.16, 2.20),
+**When** `prd.md` is reviewed,
+**Then** the superseded items are corrected: the "personal org at registration" narrative and **FR-1.1** →
+zero-org registration; **FR-1.5** "transfer admin" → promote/demote (org keeps ≥1 admin); FR-1.2/FR-1.3
+reconciled to global-admin-gated create-org and the add-existing-by-email / create-new-user split.
+
+**Given** the PRD has zero coverage of the org-membership + admin model,
+**When** new FRs are authored,
+**Then** `prd.md` gains FRs covering: zero-org identity decoupling (`auth/me` with `is_admin`/
+`is_global_admin`); add-by-email + create-new-user; org-creation gating to global admins; the global-admin
+ADMIN-org tier + cross-org provisioning; promote/demote; admin authorization (route + API); and global-admin
+management (list / grant-by-email / revoke = remove-from-ADMIN + demote-everywhere, with a last-global-admin
+guard).
+
+**Given** the PRD package must stay internally consistent,
+**When** the FRs change,
+**Then** `addendum.md` (Data Models / app-structure sections) is checked and updated where it references the
+old personal-org / transfer-admin model.
+
+### Story 14.2: Architecture Reconciliation (Org/Admin/Auth Model & Diagrams)
+
+As an architect,
+I want the architecture artifacts and diagrams to document the org/admin/auth model and the global-admin
+tier,
+So that the architecture spine reflects the system as built and downstream work stays consistent.
+
+**Acceptance Criteria:**
+
+**Given** the architecture spine has no coverage of the org/admin/auth model,
+**When** `ARCHITECTURE-SPINE.md` is reviewed,
+**Then** it documents (via an invariant/AD entry and/or the entity-relationship + capability-map sections)
+the org-membership model, per-org admin vs. global admin (the ADMIN org, `Org.is_admin_org`, + cross-org
+provisioning), admin authorization at both route and API, zero-org/identity decoupling (`auth/me`), and
+promote/demote — consistent with AD-2 (OrgScopedModel).
+
+**Given** the solution design and one-pager predate the org/admin model,
+**When** they are reviewed,
+**Then** `solution-design.md` and `one-pager.md` describe the account/org/admin model and the global-admin
+tier (not the old personal-org model), including the new endpoints/flows (`auth/me`, create-org gating,
+add-by-email/create-user, promote/demote, global-admin management).
+
+**Given** the diagrams predate the org/admin model,
+**When** `architecture-diagrams.html` is reviewed,
+**Then** the entity/relationship view includes the ADMIN org / `is_admin_org` / roles / global-admin
+memberships and the zero-org state, and the flow diagrams reflect the new endpoints (auth/me,
+admin/global-admins, promote-admin, members/create-user).

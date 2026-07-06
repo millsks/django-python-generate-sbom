@@ -2501,6 +2501,63 @@ a passthrough, override precedence, and per-package failure, and `pixi run ci` i
 
 ---
 
+### Story 8.25: Include License in the SBOM Document (Bugfix)
+
+As a user reading the SBOM Results page,
+I want each component in the generated SBOM document to carry its license,
+So that the SBOM tab's Components table License column (and the raw SBOM blob) show the license
+instead of "—", matching what the Licenses tab already reports.
+
+**Context:** User-reported gap (screenshot confirmed). The **SBOM tab → Components** table's License
+column shows "—" for every package, while the **Licenses tab** correctly captures and shows each
+package's license. The two read the same-named `license` field from different sources: the Licenses
+tab reads the enriched Phase 5 compliance report; the SBOM tab reads the license parsed back out of
+the **stored SBOM document** (`sbom/document.py::normalize_components`), which the generator
+(`sbom/generation.py`) never populated. Story 8.6 flagged this exactly as a known caveat ("the
+current SBOM generator does not embed per-component licenses … kept for when generation is
+enriched"). This story is that enrichment. **Ordering (AD-6):** Phase 3 (generate) already writes the
+SBOM blob; Phase 5 (license compliance) runs after it and Phase 8 only finalizes the DB — so the
+license is resolved and written **at Phase 3 generation time** using the **same** normalization
+Phase 5 uses (`analysis/services/license.py::_extract_license`, PyPI metadata: PEP 639
+`license_expression` → Trove classifiers→SPDX → free-text, over the shared 1h-cached `pypi_session`).
+No downstream blob rewrite; the persisted blob is not touched after Phase 3.
+
+**Acceptance Criteria:**
+
+**Given** a resolved package whose license is determinable from PyPI metadata,
+**When** Phase 3 generates the SBOM document,
+**Then** the component carries the license — CycloneDX 1.6 `component.licenses` (SPDX id, SPDX
+expression, or a named `License` for free-text) via `cyclonedx-python-lib`'s `LicenseFactory`; SPDX
+2.3 `licenseConcluded`/`licenseDeclared` — for `cdx-json`, `cdx-xml`, and `spdx-2.3` (extends FR-4.4).
+
+**Given** a package whose license cannot be determined (no metadata, non-classifiable free text, or a
+PyPI fetch failure),
+**When** the SBOM is generated,
+**Then** the component is emitted with no license entry (CycloneDX) / `NOASSERTION` (SPDX) and
+generation never raises — the rest of the SBOM still builds.
+
+**Given** the enriched SBOM document,
+**When** the SBOM tab loads,
+**Then** the Components table License column populates from the document (via the existing
+`normalize_components` → `SbomTab` path — no viewer change) and the Raw view shows the same license;
+and the SBOM license equals the Licenses tab value because both derive from the one shared
+normalization (no divergence).
+
+**Given** the storage triad (AD-6),
+**When** the license is added,
+**Then** it is written into the SBOM at Phase 3 (which already writes the blob); the blob is not
+rewritten downstream, Phase 8 still only finalizes the DB, and no blob flows through the Celery result
+backend. (Any need to change this boundary is a flagged deviation for approval, not a silent change.)
+
+**Given** the change,
+**When** it is verified,
+**Then** a backend unit test asserts the generated CycloneDX components include `licenses` for
+known-license packages and omit it cleanly for unknown ones (and the SPDX path sets
+`licenseConcluded`/`NOASSERTION`); a frontend test asserts the Components table renders a license and
+shows "—" for a null-license component; and `pixi run ci` is green.
+
+---
+
 ## Epic 9: Project Management & CI/CD Workflows
 
 Port the enabled GitHub workflows and project-management automation from the

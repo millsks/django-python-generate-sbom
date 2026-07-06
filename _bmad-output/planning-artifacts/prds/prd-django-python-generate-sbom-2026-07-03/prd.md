@@ -24,7 +24,9 @@ A self-hosted, open-source Django web service that accepts Python dependency man
 
 **DevSecOps / security engineer** — runs SBOM generation on multiple projects, consumes results via API for pipeline integration, and monitors vulnerability findings across projects. Values API key access, machine-readable output, and consistent behavior across manifest formats.
 
-**Org admin** — manages team membership and API keys for their organization. Creates the org, invites teammates, and controls which keys are active.
+**Org admin** — manages team membership and API keys for their organization. Adds and removes members, promotes and demotes other admins, and controls which keys are active. (Orgs are created by a global admin — see below.)
+
+**Global admin** — a member of the distinguished ADMIN org: a cross-org superuser who creates orgs, is provisioned as an admin of every org, and grants or revokes global-admin status for others.
 
 ---
 
@@ -32,10 +34,10 @@ A self-hosted, open-source Django web service that accepts Python dependency man
 
 The service uses a GitHub-style org model:
 
-- A **user** is a person with an account (email + password). A user may belong to multiple orgs.
+- A **user** is a person with an account (email + password). A user may belong to zero, one, or many orgs. Identity is decoupled from org membership — a freshly registered user is a valid, authenticated account with **no org** (zero-org; see FR-1.1).
 - An **org** is the tenant boundary. All resources (jobs, artifacts, API keys) belong to an org. Org A cannot see or access Org B's data under any circumstance.
-- Within an org, a user is either **admin** (can invite/remove members, manage API keys) or **member** (can submit jobs and view results).
-- A user can create their own personal org at registration. Additional orgs require an invitation.
+- Within an org, a user is either **admin** (can add/remove members, promote/demote other admins, manage API keys) or **member** (can submit jobs and view results).
+- One distinguished **ADMIN org** marks the **global-admin** tier. Its members are global admins: a cross-org superuser role provisioned as a real admin of every org, existing and future. Only a global admin can create new orgs; a regular user gains org access by being added to an org by an admin. The ADMIN org is a control plane, never a working workspace — it is hidden from the org switcher and never acts as an active org.
 
 ---
 
@@ -43,19 +45,27 @@ The service uses a GitHub-style org model:
 
 ### F1 — Account and Org Management
 
-**FR-1.1** A new user registers with an email address and password. Registration creates a personal org named after the user.
+**FR-1.1** A new user registers with an email address and password. Registration creates the **user account only** — no org (zero-org registration). A zero-org user is fully authenticated but has no active workspace; they gain org access when a global admin creates an org for them (FR-1.2) or an org admin adds them (FR-1.3). The register endpoint returns the user with `org: null`.
 
-**FR-1.2** A registered user can create additional orgs, becoming the admin of each created org.
+**FR-1.2** Only a **global admin** can create a new org. The creator becomes the org's first admin, and every global admin is auto-provisioned as an admin of the newly created org. A non-global-admin attempting to create an org receives `403`. (Org creation is deliberately not self-service — it is gated on the global-admin tier of FR-1.9.)
 
-**FR-1.3** An org admin can add a new member by creating an account on their behalf: entering the new member's email address and a temporary password. The admin shares these credentials with the new member out-of-band. No email infrastructure is required.
+**FR-1.3** An org admin can add members two ways: (a) **add an existing user by email** — the user must already be registered, otherwise the request returns a `no_such_user` error and no account is silently created; or (b) **create a brand-new user account** on the member's behalf by supplying an email and a temporary password shared out-of-band — a duplicate email returns `email_taken`, steering the admin to option (a). No email infrastructure is required.
 
-**FR-1.4** An org admin can remove a member from the org. Removed members lose access to all org resources immediately.
+**FR-1.4** An org admin can remove a member from the org. Removed members lose access to all org resources immediately. Edge rules (enforced server-side): an org always keeps at least one admin, the ADMIN org can never lose its last global admin, and a global admin cannot be removed from a single normal org (they belong to every org).
 
-**FR-1.5** An org admin can transfer admin privileges to another member. The org must always have at least one admin.
+**FR-1.5** An org admin can **promote** a member to admin and **demote** an admin back to member. An org may have any number of admins; promotion adds one and demotes no one. Demotion is blocked when it would leave the org with no admin, or would strip a global admin (who must remain an admin of every org). This replaces the earlier "transfer admin" model — there is no ownership transfer.
 
-**FR-1.6** A user can switch between orgs they belong to within the web UI. The active org determines which jobs and API keys are visible.
+**FR-1.6** A user can switch between orgs they belong to within the web UI. The active org determines which jobs and API keys are visible. The switcher is hidden when the user belongs to a single org, and the ADMIN org never appears as a switchable workspace.
 
-**FR-1.7** A user can leave an org they do not own. The org is not deleted.
+**FR-1.7** A user can leave an org they belong to. The same edge rules as FR-1.4 apply (a sole admin cannot leave; the last member of the ADMIN org cannot leave; a global admin cannot leave a single normal org). The org is not deleted.
+
+**FR-1.8** The authenticated user's identity is available at `GET /api/v1/auth/me/`, returning `{id, email, is_admin, is_global_admin}` — decoupled from any active org, so a zero-org user is still a valid identity. `is_admin` (admin of the active org) and `is_global_admin` are the SPA's single source of truth for gating admin-only navigation, routes, and affordances, so the client never has to probe an admin-only endpoint to learn its role.
+
+**FR-1.9 (Global-admin tier)** Exactly one org is the distinguished **ADMIN org** (`is_admin_org`). Its members are **global admins**: a cross-org superuser tier provisioned as a real `admin` membership in every non-admin org, existing and future — so authorization needs no special-casing (a global admin is an ordinary admin everywhere). The initial superuser is seeded into the ADMIN org from environment configuration at deploy time.
+
+**FR-1.10 (Global-admin management)** A global admin can manage the tier from a dedicated screen: **list** the current global admins; **grant** global admin to a registered user by email (back-filling them as an admin of every org — an unregistered email returns `no_such_user`); and **revoke** a user's global admin (removing them from the ADMIN org and demoting them to member in every org). Revocation is blocked when it would remove the **last** global admin — the tier can never be left empty. These endpoints are global-admin-only (`403` otherwise).
+
+**FR-1.11 (Admin authorization)** Admin-only capabilities are enforced at **both** layers: the React SPA hides admin routes and affordances via the `is_admin` / `is_global_admin` flags, and every admin-only API endpoint independently re-checks authorization server-side, returning `403` (`not_admin` or `not_global_admin`) regardless of the client. UI hiding is never the sole gate.
 
 ---
 
@@ -270,9 +280,29 @@ The full REST API surface (all endpoints require `Authorization: Api-Key <key>`)
 | `POST`   | `/api/v1/keys/`                                         | Create API key (admin only)                              |
 | `GET`    | `/api/v1/keys/`                                         | List API keys for org                                    |
 | `DELETE` | `/api/v1/keys/{key_id}/`                                | Revoke API key (admin only)                              |
-| `GET`    | `/api/v1/orgs/{org_id}/members/`                        | List org members                                         |
-| `POST`   | `/api/v1/orgs/{org_id}/members/`                        | Create member account (admin only)                       |
-| `DELETE` | `/api/v1/orgs/{org_id}/members/{user_id}/`              | Remove member (admin only)                               |
+| `GET`    | `/api/v1/orgs/members/`                                 | List active-org members (admin only)                     |
+| `POST`   | `/api/v1/orgs/members/`                                 | Add an existing user to the active org by email (admin only) |
+| `POST`   | `/api/v1/orgs/members/create-user/`                     | Create a new user account and add them (admin only)      |
+| `DELETE` | `/api/v1/orgs/members/{user_id}/`                       | Remove member (admin only)                               |
+| `POST`   | `/api/v1/orgs/promote-admin/`                           | Promote a member to admin (admin only)                   |
+| `POST`   | `/api/v1/orgs/demote-admin/`                            | Demote an admin to member (admin only)                   |
+
+The account and org-management endpoints below use **web-UI session authentication** (not `Api-Key`); they back the React SPA rather than the machine API. `is_admin` / `is_global_admin` in `auth/me` gate the admin-only routes client-side, and each endpoint re-checks authorization server-side (`403` otherwise).
+
+| Method   | Path                                                    | Description                                              |
+|----------|---------------------------------------------------------|----------------------------------------------------------|
+| `POST`   | `/api/v1/auth/register/`                                | Register a zero-org user account                         |
+| `POST`   | `/api/v1/auth/login/`                                   | Session login; sets the active org                       |
+| `POST`   | `/api/v1/auth/logout/`                                  | Invalidate the session                                   |
+| `GET`    | `/api/v1/auth/me/`                                      | Current user identity (`id`, `email`, `is_admin`, `is_global_admin`) |
+| `GET`    | `/api/v1/orgs/`                                         | List the user's orgs (active flagged; ADMIN org excluded) |
+| `POST`   | `/api/v1/orgs/create/`                                  | Create a new org (global admin only)                     |
+| `POST`   | `/api/v1/orgs/switch/`                                  | Switch the active org                                    |
+| `GET`    | `/api/v1/orgs/me/`                                      | Current active org                                       |
+| `POST`   | `/api/v1/orgs/leave/`                                   | Leave the active org                                     |
+| `GET`    | `/api/v1/admin/global-admins/`                          | List global admins (global admin only)                  |
+| `POST`   | `/api/v1/admin/global-admins/`                          | Grant global admin to a registered user by email (global admin only) |
+| `DELETE` | `/api/v1/admin/global-admins/{user_id}/`               | Revoke global admin — remove from ADMIN org + demote everywhere (global admin only; blocked on last global admin) |
 
 ---
 
@@ -302,7 +332,7 @@ All open questions resolved during Discovery.
 | OQ-1   | OSS license             | Apache 2.0                                                                 |
 | OQ-2   | License flag list       | Four-tier model: Strong Copyleft / Weak Copyleft / Unknown / Permissive    |
 | OQ-3   | Per-org job limit       | Configurable via `SBOM_MAX_CONCURRENT_JOBS_PER_ORG`, default 5             |
-| OQ-4   | Invitation flow         | Admin creates account directly (email + temp password); no SMTP dependency |
+| OQ-4   | Membership flow         | Admin adds an existing user by email, or creates a new account (email + temp password); no SMTP dependency |
 | OQ-5   | UI refresh strategy     | 5-second JavaScript polling; WebSocket deferred to v2                      |
 | OQ-6   | conda best-effort scope | conda/mamba required runtime dep; job fails with descriptive error if absent|
 

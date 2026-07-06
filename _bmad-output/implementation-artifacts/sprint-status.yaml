@@ -219,5 +219,5 @@ development_status:
   # solution design, one-pager, and diagrams. Planning artifacts only (no docs/** or code edits).
   # Implemented against the then-current merged state (>= 13.1); recommended after Stories 2.18-2.20 merge.
   epic-14: in-progress
-  14-1-prd-reconciliation: ready-for-dev
-  14-2-architecture-reconciliation: ready-for-dev
+  14-1-prd-reconciliation: review
+  14-2-architecture-reconciliation: review

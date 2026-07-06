@@ -127,6 +127,19 @@ The SVG is stored in S3 and returned as a separate download via AD-11. No PyVis 
 
 ---
 
+### AD-14 — Org/admin/auth model: zero-org identity, per-org vs. global admin
+
+- **Binds:** `users/` (models, services, selectors, views, `auth.py`); `GET /auth/me/`; every admin-gated API endpoint and SPA route
+- **Prevents:** identity coupled to a single org; ad-hoc or duplicated authorization; a cross-org superuser tier bolted on with special-case branching that bypasses AD-2
+- **Rule:**
+  - **Zero-org identity.** Registration creates a `User` with **no** org. Identity is resolved via `GET /auth/me/` → `{id, email, is_admin, is_global_admin}`, independent of any active org. The active org lives in the session and **never** resolves to the ADMIN org; a zero-org user has no active workspace (restricted to home).
+  - **Two admin scopes.** *Per-org admin* = `OrgMembership(role=ADMIN)`; may add/remove members (add-existing-by-email **or** create-new-user) and **promote/demote** other admins — there is no admin *transfer*. *Global admin* = a member of the single ADMIN org (`Org.is_admin_org=True`), provisioned as a real `OrgMembership(role=ADMIN)` in **every** non-admin org (existing and future). Because a global admin holds a genuine admin membership everywhere, authorization needs no special-casing and AD-2's org isolation is preserved.
+  - **Org creation is global-admin-gated.** Only a global admin may create an org (`POST /orgs/create/`); anyone else gets `403`. `create_org` auto-provisions every global admin as an admin of the new org.
+  - **Global-admin management.** List / grant-by-email / revoke via `admin/global-admins/`. Grant back-fills the target as an admin of every org (unregistered email → `no_such_user`); revoke removes them from the ADMIN org **and** demotes them to member in every non-admin org, and is blocked if it would remove the **last** global admin. The initial superuser is seeded into the ADMIN org from env config at deploy.
+  - **Authorization at both layers.** Every admin-only capability is enforced in the SPA route (`AdminRoute`, driven by the `auth/me` flags) **and** independently re-checked in the API view (`403`: `not_admin` / `not_global_admin`). UI hiding is never the only gate.
+
+---
+
 ## Dependency Direction
 
 Who may import whom. Arrows point from dependent to dependency. Any import that reverses an arrow is forbidden.
@@ -292,6 +305,12 @@ sequenceDiagram
 
 ```mermaid
 erDiagram
+    Org {
+        bool is_admin_org "true for the one ADMIN org (global-admin tier)"
+    }
+    OrgMembership {
+        string role "admin | member"
+    }
     Org ||--o{ OrgMembership : "has members"
     Org ||--o{ OrgApiKey : "has keys"
     Org ||--o{ ManifestUpload : "owns"
@@ -300,6 +319,8 @@ erDiagram
     ManifestUpload ||--|| SBOMJob : "drives"
     SBOMJob ||--o{ AnalysisReport : "produces"
 ```
+
+A `User` may hold **zero** memberships (zero-org identity, AD-14). Exactly one `Org` has `is_admin_org=True` — the **ADMIN org**; its members are **global admins**, each carrying a real `OrgMembership(role=admin)` in every non-admin org, so the ERD needs no separate global-admin entity.
 
 ### Source tree
 
@@ -347,7 +368,7 @@ django-python-generate-sbom/          ← project root (pixi umbrella environmen
 
 | Capability | Lives in | Governed by |
 |---|---|---|
-| F1 — Account & Org Management | `users/` | AD-2 (org isolation), AD-8 (API key) |
+| F1 — Account & Org Management | `users/` | AD-2 (org isolation), AD-8 (API key), AD-14 (org/admin/auth model) |
 | F2 — API Key Management | `users/` | AD-8 (AbstractAPIKey subclass) |
 | F3 — Manifest Upload & Job Submission | `manifests/`, `sbom/` | AD-2, AD-7 (concurrency gate), AD-3 (service purity) |
 | F4 — SBOM Generation Pipeline | `sbom/`, `tasks/sbom_pipeline.py` | AD-4 (queue topology), AD-3, AD-10 (delay_on_commit) |

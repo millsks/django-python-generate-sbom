@@ -1,6 +1,6 @@
 # Story 14.1: PRD Reconciliation (Org Membership & Global-Admin Tier)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -20,15 +20,15 @@ so that the planning trail is trustworthy and no longer contradicts the shipped 
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Fix superseded FRs (AC: #1)**
-  - [ ] `prd.md` line ~38: replace the "create their own personal org at registration" narrative with zero-org registration.
-  - [ ] **FR-1.1**: registration creates the user with **no** org (zero-org); additional org access comes from being added by an admin or (for global admins) creating orgs.
-  - [ ] **FR-1.5**: replace "transfer admin" with promote-a-member-to-admin + demote-admin-to-member; org keeps ≥1 admin.
-  - [ ] Reconcile FR-1.2 (create additional orgs) to global-admin gating; reconcile FR-1.3 (add member) to the shipped add-existing-by-email + create-new-user split.
-- [ ] **Task 2 — Add the new FRs (AC: #2)**
-  - [ ] Add FRs for: zero-org identity decoupling (`auth/me` with `is_admin`/`is_global_admin`); add-by-email + create-new-user; org-creation gating to global admins; the global-admin ADMIN-org tier + cross-org provisioning; promote/demote; admin authorization (route + API); global-admin management (list/grant/revoke + last-global-admin guard).
-- [ ] **Task 3 — Align the addendum (AC: #3)**
-  - [ ] Update `addendum.md` where it restates the old model (Data Models / Django App Structure), keeping the PRD package internally consistent.
+- [x] **Task 1 — Fix superseded FRs (AC: #1)**
+  - [x] `prd.md` line ~38: replace the "create their own personal org at registration" narrative with zero-org registration.
+  - [x] **FR-1.1**: registration creates the user with **no** org (zero-org); additional org access comes from being added by an admin or (for global admins) creating orgs.
+  - [x] **FR-1.5**: replace "transfer admin" with promote-a-member-to-admin + demote-admin-to-member; org keeps ≥1 admin.
+  - [x] Reconcile FR-1.2 (create additional orgs) to global-admin gating; reconcile FR-1.3 (add member) to the shipped add-existing-by-email + create-new-user split.
+- [x] **Task 2 — Add the new FRs (AC: #2)**
+  - [x] Add FRs for: zero-org identity decoupling (`auth/me` with `is_admin`/`is_global_admin`); add-by-email + create-new-user; org-creation gating to global admins; the global-admin ADMIN-org tier + cross-org provisioning; promote/demote; admin authorization (route + API); global-admin management (list/grant/revoke + last-global-admin guard).
+- [x] **Task 3 — Align the addendum (AC: #3)**
+  - [x] Update `addendum.md` where it restates the old model (Data Models / Django App Structure), keeping the PRD package internally consistent.
 
 ## Dev Notes
 
@@ -70,9 +70,22 @@ so that the planning trail is trustworthy and no longer contradicts the shipped 
 
 ### Agent Model Used
 
+Claude Opus 4.8 (1M context)
+
 ### Debug Log References
+
+- Verified the shipped model against code before editing: `backend/generate_sbom/users/urls.py` (route surface), `users/views.py` (403 gates, `auth/me` shape, add-existing vs. create-user, promote/demote, global-admins list/grant/revoke), `users/services.py` (`register_user` zero-org, `create_org` provisioning, `grant_global_admin`/`grant_global_admin_by_email`/`revoke_global_admin` with last-global-admin guard, promote/demote guards), `users/models.py` (`Org.is_admin_org`, superuser→global-admin seeding), `users/auth.py` (session active-org excludes the ADMIN org).
+- `pixi run ci` — planning-artifact-only change; no code/`docs/**` touched.
 
 ### Completion Notes List
 
+- **AC #1 (superseded FRs).** PRD "Org and User Model" narrative rewritten to zero-org registration + global-admin tier. FR-1.1 → zero-org (`org: null`). FR-1.2 → org creation gated to global admins. FR-1.3 → add-existing-by-email (`no_such_user`) + create-new-user (`email_taken`) split. FR-1.5 → promote/demote (org keeps ≥1 admin), replacing "transfer admin". Users personas gained a **Global admin** entry; OQ-4 relabelled to the membership flow.
+- **AC #2 (new FRs).** Added FR-1.8 (`auth/me` identity decoupling with `is_admin`/`is_global_admin`), FR-1.9 (global-admin ADMIN-org tier + cross-org provisioning + env-seeded superuser), FR-1.10 (global-admin management: list/grant-by-email/revoke + last-global-admin guard), FR-1.11 (admin authorization at route + API). Updated the API Design table: shipped member routes, promote/demote, auth/me, orgs/create, global-admins endpoints, with a note that account/org-management endpoints use web-UI session auth.
+- **AC #3 (addendum).** Added `is_admin_org` to the `Org` Data Models row and a note documenting the zero-org + global-admin / promote-demote model so the PRD package is internally consistent.
+- Kept the PRD's existing structure and voice; no code or `docs/**` edits (Epic 11 owns docs; architecture is Story 14.2).
+
 ### File List
+
+- `_bmad-output/planning-artifacts/prds/prd-django-python-generate-sbom-2026-07-03/prd.md`
+- `_bmad-output/planning-artifacts/prds/prd-django-python-generate-sbom-2026-07-03/addendum.md`
 </content>

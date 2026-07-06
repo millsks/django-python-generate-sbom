@@ -14,7 +14,10 @@ filtering.
 | `OrgApiKey` | Per-org API key, an `AbstractAPIKey` subclass (AD-8) |
 
 `Org` is the tenancy boundary: every scoped record belongs to exactly one org, and
-requests act within the caller's active org.
+requests act within the caller's active org. `OrgMembership.role` is per-org
+(`admin` or `member`): an org may have any number of admins, and a member's role
+toggles via `promote_member_to_admin` / `demote_admin_to_member` (Stories
+2.16/2.20) — independent of the global-admin tier below.
 
 ### Zero-org users
 

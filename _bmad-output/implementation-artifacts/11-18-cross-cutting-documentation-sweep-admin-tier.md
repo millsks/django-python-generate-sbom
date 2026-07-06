@@ -1,6 +1,6 @@
 # Story 11.18: Cross-Cutting Documentation Sweep (2nd Pass)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -53,9 +53,23 @@ so that the published docs and README are trustworthy after the admin-tier, land
 
 ### Agent Model Used
 
+claude-opus-4-8[1m] (Opus 4.8, 1M context)
+
 ### Debug Log References
+
+- `pixi run docs-build` (`mkdocs build --strict`) — green, no broken links/nav.
+- `pixi run ci` — green.
 
 ### Completion Notes List
 
+- Run last, after 11.15–11.17. Swept the whole `docs/` tree plus the root `README.md`.
+- `README.md`: corrected the quick-start onboarding — a new user is **restricted to home until an admin adds them**, and **create-org is reserved for global admins** (the seeded superuser, as a global admin, creates the first org); added the three-tier role summary (member / org-admin / global-admin). Nav description (login→index, home nav, account-menu user, dashboard removed) verified accurate; landing-page/features copy already current.
+- Full-tree audit: fixed the stale "history dashboard" screenshot caption in `user-guide/job-history.md`. Confirmed no other "dashboard / transfer-admin / personal-org / hand-over" drift remains (remaining matches are correct in-context, e.g. "does not create a personal org"). The mkdocstrings code reference renders.
+- Screenshots across the tree are placeholder notes only (no images are committed), so there were no dated image assets to refresh; left the placeholders in place per the story's guidance.
+- No large out-of-scope drift area surfaced that warrants its own story.
+
 ### File List
+
+- `README.md`
+- `docs/user-guide/job-history.md`
 </content>

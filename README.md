@@ -116,12 +116,19 @@ Wait until the `web` service is healthy, then open:
 | <http://localhost:9001> | MinIO console (login with `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` from `.env`) |
 
 Then **register** at `/register` — new accounts start **without** an organization,
-so you'll be sent to **sign in** at `/login` and then either **create an
-organization** or ask an admin to add you to one. Once you have an active org,
-**upload** a manifest at `/upload`; all SBOM data is scoped to your active
+so you'll be sent to **sign in** at `/login`. A new user is **restricted to the
+home page** until an admin adds them to an organization (creating an organization
+is reserved for **global admins**). The seeded superuser is a global admin and can
+create the first organization and add members from there. Once you have an active
+org, **upload** a manifest at `/upload`; all SBOM data is scoped to your active
 organization. See the
 [User Guide](https://millsks.github.io/django-python-generate-sbom/user-guide/)
 for the full walkthrough.
+
+The app has three role tiers: **members** (work within their orgs),
+**organization admins** (manage an org's membership and API keys), and **global
+admins** (platform admins who belong to a system **Admin** org, are an admin of
+every organization, and can create orgs and manage the global-admin tier).
 
 To reach the Django admin at `/admin/`, create a superuser in the running `web`
 container:

@@ -15,6 +15,15 @@ are documented narratively in [Architecture](architecture.md), the
 
 ::: generate_sbom.common.logging
 
+## Accounts & organization services (`users`)
+
+Membership, admin, and global-admin mutations (Epic 2 / Story 13.1) — including
+`create_member`, `create_member_user`, `promote_member_to_admin`,
+`demote_admin_to_member`, `grant_global_admin`, `grant_global_admin_by_email`,
+`revoke_global_admin`, and `list_global_admins`.
+
+::: generate_sbom.users.services
+
 ## Analysis services
 
 ::: generate_sbom.analysis.services.versions

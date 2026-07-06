@@ -60,9 +60,19 @@ cd backend
 python manage.py createsuperuser        # create_superuser hook → grant_global_admin
 ```
 
-**Docker auto-seed:** in the compose stack, set `DJANGO_SUPERUSER_EMAIL` and
-`DJANGO_SUPERUSER_PASSWORD` in `.env` and the `web` service seeds this superuser on startup
-(idempotent; Story 2.13) — no manual step. Never commit real credentials.
+**Env-driven auto-seed (Story 2.13):** set `DJANGO_SUPERUSER_EMAIL` and
+`DJANGO_SUPERUSER_PASSWORD` in `.env` and the `web` service runs the `seed_superuser`
+management command on startup, which creates that superuser (making them a global admin
+via the `create_superuser` hook) if it does not already exist — no manual step. The
+command is idempotent: it skips cleanly when the vars are unset or the user already
+exists, and never logs the password. You can also run it directly:
+
+```sh
+python manage.py seed_superuser        # env-driven; idempotent (Story 2.13)
+```
+
+The seeded superuser is provisioned into the **ADMIN** org — there is no auto-created
+personal org. Never commit real credentials.
 
 `UserManager.create_superuser` calls `grant_global_admin`, so the new superuser is
 written into the ADMIN org and back-filled as an admin of every org. If you created

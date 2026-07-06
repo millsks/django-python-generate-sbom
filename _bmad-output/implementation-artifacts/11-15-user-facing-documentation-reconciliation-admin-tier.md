@@ -1,6 +1,6 @@
 # Story 11.15: User-Facing Documentation Reconciliation (Admin Tier, 2nd Pass)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -61,9 +61,22 @@ so that the instructions I follow match what the app actually does now.
 
 ### Agent Model Used
 
+claude-opus-4-8[1m] (Opus 4.8, 1M context)
+
 ### Debug Log References
+
+- `pixi run docs-build` (`mkdocs build --strict`) — green.
+- `pixi run ci` — green.
 
 ### Completion Notes List
 
+- Verified all claims against the live backend (`users/views.py`, `services.py`, `urls.py`) and the shipped SPA components (`OrgSwitcher`, `NoOrgState`, `SideNav`, `HomePage`, `MembersPage`, `GlobalAdminsPage`, `Layout`).
+- `accounts-and-organizations.md`: added the three-tier role table (member / org-admin / global-admin); documented the zero-org experience as **restricted to the home page** until an admin adds you (2.18); create-org **restricted to global admins** with the ADMIN org hidden from the switcher (2.12); single-org switcher hiding (2.19); replaced "hand over the admin role" with promote/demote (2.16/2.20); added a Global Admins management subsection (list / grant-by-email / revoke + last-global-admin guard, 13.1). Fixed the stale "dashboard" login destination.
+- `manage-organization.md`: documented add-existing (with the "No registered user with that email" outcome) and create-new-user (2.10), promote/demote, remove + last-admin rule; removed all "transfer admin / stepped down automatically" wording; added the global-admin management how-to.
+- Screenshots remain placeholders (no images are committed); captured the placeholder notes per the story rather than inventing images.
+
 ### File List
+
+- `docs/user-guide/accounts-and-organizations.md`
+- `docs/how-to/manage-organization.md`
 </content>

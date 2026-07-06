@@ -3575,6 +3575,48 @@ reference (mkdocstrings) still renders.
 **Then** `pixi run docs-build` (`mkdocs build --strict`) passes with no broken links/nav, and anything found
 but out of scope for 11.15-11.17 is fixed here or explicitly noted.
 
+<!-- Story 11.19 reconciles the GENERATED OpenAPI schema (what Swagger UI renders), distinct from
+     11.16 which reconciles the markdown API reference. User-reported gap: several endpoints render in
+     Swagger with no "Try it out" inputs because the hand-rolled APIViews build serializers inside
+     .post()/.delete() (opaque to drf-spectacular) or read request.data directly with no serializer at
+     all — so the schema emits no requestBody/parameters. This story annotates the views so every
+     endpoint exposes its payload fields, path/query params, and response shapes. Keep consistent with
+     11.16. PREREQUISITE: implement against the then-current merged state (at minimum through 13.1;
+     recommended after 2.18-2.20). Covers FR-DOC9. -->
+
+### Story 11.19: OpenAPI/Swagger Schema Completeness (Request Bodies & Parameters)
+
+As an API consumer using the Swagger UI,
+I want every endpoint in the generated OpenAPI schema to declare its request body, path/query parameters, and response shapes,
+So that "Try it out" shows input fields for the payload and parameters instead of an empty form.
+
+**Acceptance Criteria:**
+
+**Given** most mutating endpoints are hand-rolled `APIView`s that build a serializer inside `.post()`
+(opaque to drf-spectacular) or read `request.data` directly with no serializer (`orgs/switch/`,
+`sbom/jobs/artifacts/bulk-delete/`), so their operations emit no `requestBody`,
+**When** the generated schema (`/api/schema/`) is regenerated,
+**Then** every mutating operation declares a `requestBody` exposing its payload fields — via an attached
+`serializer_class` or `@extend_schema(request=…)`, authoring request serializers for the two endpoints that
+have none today, and declaring `multipart/form-data` for the file uploads (`manifests/upload/`,
+`sbom/generate/`) — so Swagger "Try it out" renders input fields (FR-DOC9).
+
+**Given** parameterized endpoints (`<int:user_id>`, `<str:key_id>`, `<uuid:task_id>`) and the custom query
+filters on `GET /sbom/jobs/` (`status`, `format`) are not fully declared,
+**When** the schema is regenerated,
+**Then** each path parameter is present and typed, and each custom query filter is declared via
+`OpenApiParameter`, so Swagger renders the corresponding inputs; and each operation declares accurate
+response schemas for its success status (including `201`/`202`/`204`/`303`) and the meaningful `{error, code}`
+error shapes.
+
+**Given** the schema must stay complete as the API evolves,
+**When** the change lands,
+**Then** a unit test generates the OpenAPI schema in-process (no live server, no network) and asserts the
+previously-missing endpoints now declare a `requestBody` and/or `parameters` (at minimum `orgs/switch/`,
+`sbom/jobs/artifacts/bulk-delete/`, the two multipart uploads, and the `GET /sbom/jobs/` query params),
+generating the schema produces no new drf-spectacular warnings for the touched endpoints, and `pixi run ci`
+is green including `docs-build`.
+
 ### Story 11.20: API Docs (Swagger UI) Link in the App Header — Env-Gated
 
 As a developer using the app,

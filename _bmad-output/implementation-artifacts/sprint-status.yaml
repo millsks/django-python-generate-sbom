@@ -74,10 +74,16 @@ development_status:
   5-6-version-currency-tab: done
   5-7-light-dark-theme-toggle: done
 
-  epic-6: done
+  # Reopened (bugfix): 6.4 fixes the History-page manifest-format filter — selecting a real
+  # format (pixi_toml) failed the jobs-list request and showed the "Could not load your jobs."
+  # banner instead of the matching rows. Root cause: the frontend FORMAT_OPTIONS and the backend
+  # ManifestUpload.Format enum drift independently, and the backend filter doesn't degrade on an
+  # unknown value. Coordinates with 11.19 (format query-param schema) and Epic 8 (8.18/8.19 formats).
+  epic-6: in-progress
   6-1-jobs-list-api-and-dashboard-table: done
   6-2-live-progress-polling: done
   6-3-job-elapsed-time-on-history-page: done
+  6-4-fix-manifest-format-filter-on-history: ready-for-dev
 
   epic-7: done
   7-1-scheduled-artifact-expiry-and-cleanup: done

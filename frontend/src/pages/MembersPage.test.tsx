@@ -3,7 +3,7 @@ import type { Mock } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MembersPage } from './MembersPage'
-import { addMember, createMemberUser, getMembers, promoteAdmin } from '../api/orgs'
+import { addMember, createMemberUser, demoteAdmin, getMembers, promoteAdmin, removeMember } from '../api/orgs'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthProvider'
 import { NO_ORG_MESSAGE } from '../components/NoOrgState'
@@ -17,6 +17,7 @@ vi.mock('../api/orgs', async (importOriginal) => {
     createMemberUser: vi.fn(),
     removeMember: vi.fn(),
     promoteAdmin: vi.fn(),
+    demoteAdmin: vi.fn(),
   }
 })
 vi.mock('../auth/AuthProvider', () => ({ useAuth: vi.fn() }))
@@ -25,11 +26,17 @@ const mockGetMembers = getMembers as Mock
 const mockAddMember = addMember as Mock
 const mockCreateMemberUser = createMemberUser as Mock
 const mockPromoteAdmin = promoteAdmin as Mock
+const mockDemoteAdmin = demoteAdmin as Mock
+const mockRemoveMember = removeMember as Mock
+
+const adminRow = { user_id: 2, email: 'bob@example.com', role: 'admin', joined_at: '2026-01-01' }
 
 beforeEach(() => {
   mockGetMembers.mockResolvedValue({ members: [], is_admin: false })
   mockAddMember.mockReset()
   mockCreateMemberUser.mockReset()
+  mockDemoteAdmin.mockReset()
+  mockRemoveMember.mockReset()
   mockAuth.mockReturnValue({ status: 'authed', activeOrg: { slug: 'acme', name: 'Acme' }, isAdmin: true, refresh: vi.fn(), logout: vi.fn() })
 })
 
@@ -145,5 +152,69 @@ describe('MembersPage', () => {
     await user.click(await screen.findByRole('button', { name: /make admin/i }))
 
     expect(await screen.findByText(/could not make admin/i)).toBeInTheDocument()
+  })
+
+  it('demotes an admin to member via "Make member" (Story 2.20)', async () => {
+    mockGetMembers.mockResolvedValue({ members: [adminRow], is_admin: true })
+    mockDemoteAdmin.mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    render(<MembersPage />)
+
+    await user.click(await screen.findByRole('button', { name: /make member/i }))
+
+    await waitFor(() => expect(mockDemoteAdmin).toHaveBeenCalledWith(2))
+    // An admin row offers demote, not promote.
+    expect(screen.queryByRole('button', { name: /make admin/i })).not.toBeInTheDocument()
+  })
+
+  it('shows the specific global-admin reason when removing a global admin (Story 2.20)', async () => {
+    mockGetMembers.mockResolvedValue({ members: [adminRow], is_admin: true })
+    mockRemoveMember.mockRejectedValue(
+      new ApiError('A global admin belongs to every org.', 400, 'global_admin_protected'),
+    )
+    const user = userEvent.setup()
+    render(<MembersPage />)
+
+    await user.click(await screen.findByRole('button', { name: /remove/i }))
+
+    expect(await screen.findByText(/global admin and can't be removed from a single org/i)).toBeInTheDocument()
+    expect(screen.queryByText(/could not remove member/i)).not.toBeInTheDocument()
+  })
+
+  it('shows the demote-specific global-admin reason on "Make member" (Story 2.20)', async () => {
+    mockGetMembers.mockResolvedValue({ members: [adminRow], is_admin: true })
+    mockDemoteAdmin.mockRejectedValue(
+      new ApiError('A global admin belongs to every org.', 400, 'global_admin_protected'),
+    )
+    const user = userEvent.setup()
+    render(<MembersPage />)
+
+    await user.click(await screen.findByRole('button', { name: /make member/i }))
+
+    expect(await screen.findByText(/global admins can't be demoted/i)).toBeInTheDocument()
+    expect(screen.queryByText(/could not make member/i)).not.toBeInTheDocument()
+  })
+
+  it('shows the last-admin reason when demoting the last admin (Story 2.20)', async () => {
+    mockGetMembers.mockResolvedValue({ members: [adminRow], is_admin: true })
+    mockDemoteAdmin.mockRejectedValue(new ApiError('An org must always have at least one admin.', 400, 'last_admin'))
+    const user = userEvent.setup()
+    render(<MembersPage />)
+
+    await user.click(await screen.findByRole('button', { name: /make member/i }))
+
+    expect(await screen.findByText(/must keep at least one admin/i)).toBeInTheDocument()
+  })
+
+  it('falls back to the backend message for an unmapped error code (Story 2.20)', async () => {
+    mockGetMembers.mockResolvedValue({ members: [adminRow], is_admin: true })
+    mockDemoteAdmin.mockRejectedValue(new ApiError('Some unusual backend reason.', 400, 'weird_code'))
+    const user = userEvent.setup()
+    render(<MembersPage />)
+
+    await user.click(await screen.findByRole('button', { name: /make member/i }))
+
+    expect(await screen.findByText(/some unusual backend reason/i)).toBeInTheDocument()
+    expect(screen.queryByText(/could not make member/i)).not.toBeInTheDocument()
   })
 })

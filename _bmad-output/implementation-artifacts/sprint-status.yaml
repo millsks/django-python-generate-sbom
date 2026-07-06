@@ -46,9 +46,9 @@ development_status:
   2-15-reorder-side-navigation: done
   2-16-fix-make-admin-and-protect-global-admin: done
   2-17-admin-route-and-api-authorization: done
-  2-18-restrict-zero-org-users-to-home: ready-for-dev
-  2-19-hide-org-switcher-for-single-org: ready-for-dev
-  2-20-demote-admin-to-member: ready-for-dev
+  2-18-restrict-zero-org-users-to-home: review
+  2-19-hide-org-switcher-for-single-org: review
+  2-20-demote-admin-to-member: review
 
   epic-3: done
   3-1-manifest-upload-and-format-detection: done

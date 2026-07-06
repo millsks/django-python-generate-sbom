@@ -4,6 +4,7 @@ import FormControl from '@mui/material/FormControl'
 import InputLabel from '@mui/material/InputLabel'
 import MenuItem from '@mui/material/MenuItem'
 import Select, { type SelectChangeEvent } from '@mui/material/Select'
+import Typography from '@mui/material/Typography'
 import { getOrgs, switchOrg, type OrgListItem } from '../api/orgs'
 import { useAuth } from '../auth/AuthProvider'
 import { CreateOrgDialog } from './CreateOrgDialog'
@@ -59,6 +60,17 @@ export function OrgSwitcher() {
         </Button>
         <CreateOrgDialog open={createOpen} onClose={() => setCreateOpen(false)} />
       </>
+    )
+  }
+
+  if (orgs.length === 1) {
+    // With a single org there is nothing to switch to (Story 2.19): show the org name
+    // statically instead of a pointless dropdown. The active org is also visible in the
+    // account menu and the side-nav footer.
+    return (
+      <Typography variant="body1" sx={{ color: 'inherit', fontWeight: 500 }}>
+        {orgs[0].name}
+      </Typography>
     )
   }
 

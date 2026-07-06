@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { apiRequest } from './client'
-import { addMember, grantGlobalAdmin, listGlobalAdmins, promoteAdmin, revokeGlobalAdmin } from './orgs'
+import { addMember, demoteAdmin, grantGlobalAdmin, listGlobalAdmins, promoteAdmin, revokeGlobalAdmin } from './orgs'
 
 vi.mock('./client', () => ({ apiRequest: vi.fn() }))
 const mockApiRequest = apiRequest as Mock
@@ -30,6 +30,19 @@ describe('promoteAdmin', () => {
     await promoteAdmin(2)
 
     expect(mockApiRequest).toHaveBeenCalledWith('/orgs/promote-admin/', {
+      method: 'POST',
+      body: { user_id: 2 },
+    })
+  })
+})
+
+describe('demoteAdmin', () => {
+  it('POSTs the user_id to demote-admin (Story 2.20)', async () => {
+    mockApiRequest.mockResolvedValue(undefined)
+
+    await demoteAdmin(2)
+
+    expect(mockApiRequest).toHaveBeenCalledWith('/orgs/demote-admin/', {
       method: 'POST',
       body: { user_id: 2 },
     })

@@ -64,6 +64,13 @@ export function promoteAdmin(userId: number): Promise<void> {
   return apiRequest<void>('/orgs/promote-admin/', { method: 'POST', body: { user_id: userId } })
 }
 
+// Demote an admin back to member of the active org (Story 2.20). The inverse of
+// promoteAdmin; affects the target's role in this org only. Blocked server-side for
+// the last admin or a global admin.
+export function demoteAdmin(userId: number): Promise<void> {
+  return apiRequest<void>('/orgs/demote-admin/', { method: 'POST', body: { user_id: userId } })
+}
+
 export function leaveOrg(): Promise<void> {
   return apiRequest<void>('/orgs/leave/', { method: 'POST' })
 }

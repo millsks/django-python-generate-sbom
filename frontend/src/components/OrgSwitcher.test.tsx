@@ -51,7 +51,7 @@ describe('OrgSwitcher', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it('renders the org select when the user has orgs', async () => {
+  it('renders the org select when the user has more than one org', async () => {
     mockGetOrgs.mockResolvedValue([
       { slug: 'acme', name: 'Acme', active: true },
       { slug: 'globex', name: 'Globex', active: false },
@@ -62,8 +62,20 @@ describe('OrgSwitcher', () => {
     expect(screen.queryByRole('button', { name: /create organization/i })).not.toBeInTheDocument()
   })
 
-  it('offers "New organization" to a global admin but not a regular member (Story 2.12)', async () => {
+  it('shows the org name statically with no dropdown when there is a single org (Story 2.19)', async () => {
     mockGetOrgs.mockResolvedValue([{ slug: 'acme', name: 'Acme', active: true }])
+    render(<OrgSwitcher />)
+
+    expect(await screen.findByText('Acme')).toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: /org/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /create organization/i })).not.toBeInTheDocument()
+  })
+
+  it('offers "New organization" to a global admin but not a regular member (Story 2.12)', async () => {
+    mockGetOrgs.mockResolvedValue([
+      { slug: 'acme', name: 'Acme', active: true },
+      { slug: 'globex', name: 'Globex', active: false },
+    ])
     const user = userEvent.setup()
 
     // Global admin: the item is present.

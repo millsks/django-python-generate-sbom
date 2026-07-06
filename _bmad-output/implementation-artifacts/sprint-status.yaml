@@ -225,3 +225,15 @@ development_status:
   epic-14: done
   14-1-prd-reconciliation: done
   14-2-architecture-reconciliation: done
+
+  # Epic 15 — Additional Lockfile Parsers (uv, Poetry, Pipenv): ingest the three remaining mainstream Python
+  # lockfiles (uv.lock, poetry.lock, Pipfile.lock), one story per format. Each reuses the pixi.lock direct-read
+  # precedent — a lockfile is already the resolved closure, so its resolver reads the exact pins and skips
+  # resolution (no subprocess/network); the pipeline is unchanged. 15.1 (uv.lock) lands first to establish the
+  # shared lockfile-reader conventions; uv.lock derives direct/transitive from its root package, while
+  # poetry.lock and Pipfile.lock record all packages as `unknown` (consistent with pixi.lock — the direct set
+  # lives in the sibling manifest, not the lock). 15.3 flips the supported-format count 5 → 8.
+  epic-15: in-progress
+  15-1-uv-lock-parser: ready-for-dev
+  15-2-poetry-lock-parser: ready-for-dev
+  15-3-pipfile-lock-parser: ready-for-dev

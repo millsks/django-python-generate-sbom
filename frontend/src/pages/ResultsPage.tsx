@@ -29,8 +29,8 @@ const TABS = [
   { label: 'SBOM', Icon: TabIcon.sbom },
   { label: 'Vulnerabilities', Icon: TabIcon.vulnerabilities },
   { label: 'Licenses', Icon: TabIcon.licenses },
-  { label: 'Dependency Graph', Icon: TabIcon.graph },
   { label: 'Version Currency', Icon: TabIcon.versions },
+  { label: 'Dependency Graph', Icon: TabIcon.graph },
 ] as const
 
 function TabPanel({ index, value, children }: { index: number; value: number; children: ReactNode }) {
@@ -143,10 +143,10 @@ export function ResultsPage() {
         <LicensesTab taskId={taskId!} />
       </TabPanel>
       <TabPanel index={4} value={tab}>
-        <DepGraph taskId={taskId!} />
+        <VersionsTab taskId={taskId!} />
       </TabPanel>
       <TabPanel index={5} value={tab}>
-        <VersionsTab taskId={taskId!} />
+        <DepGraph taskId={taskId!} />
       </TabPanel>
     </Container>
   )

@@ -83,6 +83,13 @@ describe('OverviewTab', () => {
     expect(onNavigate).toHaveBeenCalledWith(2)
   })
 
+  it('deep-links the Version currency card to its reordered tab index', async () => {
+    const onNavigate = vi.fn()
+    render(<OverviewTab status={makeStatus()} onNavigate={onNavigate} />)
+    await userEvent.click(screen.getByRole('button', { name: /Version currency/ }))
+    expect(onNavigate).toHaveBeenCalledWith(4)
+  })
+
   it('exports all reports into one workbook, a sheet per report (Story 8.15)', async () => {
     mockVersions.mockResolvedValue({ packages: [], summary: {} })
     mockVulns.mockResolvedValue({ packages: [], summary: { vulnerable_package_count: 0, severity_breakdown: {} } })

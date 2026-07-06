@@ -1,6 +1,6 @@
 # Story 5.8: Move the Dependency Graph Tab to the Right of Version Currency
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -107,8 +107,26 @@ all done. Independent of every other in-flight epic. [Source: epics.md#Epic 5]
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
+
+None.
 
 ### Completion Notes List
 
+- Swapped the last two `TABS` entries in `ResultsPage.tsx` so Version Currency (idx 4) precedes Dependency Graph (idx 5).
+- Swapped the matching `TabPanel` bodies so idx 4 renders `<VersionsTab>` and idx 5 renders `<DepGraph>` — header↔panel alignment preserved.
+- Updated the `OverviewTab` `TAB` index map: `versions` 5 → 4; `vulnerabilities: 2` and `licenses: 3` unchanged. No quick-nav card exists for Dependency Graph.
+- No deep-link / URL coupling and no Excel export changes (both decoupled from the tab array — confirmed and left untouched).
+- Tests: updated the `ResultsPage` tab-order assertion to the new order; added an OverviewTab assertion that the Version currency card calls `onNavigate(4)`. Export sheet-name and Vulnerabilities→2 tests unchanged.
+- `pixi run ci` green.
+
 ### File List
+
+- `frontend/src/pages/ResultsPage.tsx`
+- `frontend/src/components/OverviewTab.tsx`
+- `frontend/src/pages/ResultsPage.test.tsx`
+- `frontend/src/components/OverviewTab.test.tsx`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `_bmad-output/implementation-artifacts/5-8-reorder-dependency-graph-after-version-currency.md`

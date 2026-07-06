@@ -155,7 +155,12 @@ development_status:
   # Reopened: 11.11-11.14 reconcile the docs with the Epic 2 org-membership rework
   # (zero-org users, create-org UI, add-by-email, global-admin ADMIN org, auth/me) plus a
   # general drift sweep. Implemented AFTER Epic 2 is done; contexted just-in-time then.
-  epic-11: done
+  # Reopened AGAIN (2nd pass): 11.15-11.18 reconcile the published docs with everything merged
+  # since — through Story 13.1: the admin tier (per-org vs. global admin), create-org gating,
+  # add-by-email/create-user, promote (not transfer) + demote, admin-route + API authorization,
+  # the global-admin management screen, and the version-currency 8.22-8.24 changes. Implemented
+  # against the then-current merged state (>= 13.1); recommended after Stories 2.18-2.20 merge.
+  epic-11: in-progress
   11-1-documentation-site-scaffold-and-github-pages: done
   11-2-user-guide: done
   11-3-how-to-guides: done
@@ -170,6 +175,10 @@ development_status:
   11-12-api-reference-and-openapi-reconciliation: done
   11-13-developer-documentation-reconciliation: done
   11-14-cross-cutting-documentation-audit-and-refresh: done
+  11-15-user-facing-documentation-reconciliation-admin-tier: ready-for-dev
+  11-16-api-reference-and-openapi-reconciliation-admin-tier: ready-for-dev
+  11-17-developer-architecture-documentation-reconciliation-admin-tier: ready-for-dev
+  11-18-cross-cutting-documentation-sweep-admin-tier: ready-for-dev
 
   # Epic 12 — UI/UX Visual Design & Professional Polish (frontend; refines Epic 10
   # shell + Story 5.7 theme). 12-1 (theme/design system) is the foundation; 12-2 icons
@@ -188,5 +197,14 @@ development_status:
 
   # Epic 13 — Platform Administration: a global-admin-only screen to list/grant/revoke global admins.
   # Depends on Stories 2.12, 2.8, and 2.17; implemented after the admin-workflow bugfixes land.
-  epic-13: in-progress
-  13-1-global-admin-management-screen: review
+  epic-13: done
+  13-1-global-admin-management-screen: done
+
+  # Epic 14 — Planning-Artifact Reconciliation: bring the PRD + architecture artifacts in line with
+  # the merged state (through Story 13.1). 14.1 fixes the superseded FRs (personal-org-on-registration,
+  # transfer-admin) and adds the org-membership / global-admin FRs; 14.2 updates the architecture spine,
+  # solution design, one-pager, and diagrams. Planning artifacts only (no docs/** or code edits).
+  # Implemented against the then-current merged state (>= 13.1); recommended after Stories 2.18-2.20 merge.
+  epic-14: in-progress
+  14-1-prd-reconciliation: ready-for-dev
+  14-2-architecture-reconciliation: ready-for-dev

@@ -16,6 +16,8 @@ from django.conf import settings
 from django.core.files.storage import default_storage
 from django.db import transaction
 from django.db.models import QuerySet
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import status
 from rest_framework.generics import ListAPIView
 from rest_framework.negotiation import DefaultContentNegotiation
@@ -30,11 +32,21 @@ from generate_sbom.manifests.detection import ManifestParseError, UnsupportedFor
 from generate_sbom.manifests.services import upload_manifest
 from generate_sbom.tasks.sbom_pipeline import run_sbom_pipeline
 from generate_sbom.users.auth import get_admin_org, get_request_org
+from generate_sbom.users.serializers import ErrorResponseSerializer
 
 from .document import normalize_components, parse_metadata
 from .models import SBOMJob
 from .selectors import get_job, get_jobs
-from .serializers import GenerateJobSerializer, JobListSerializer
+from .serializers import (
+    BulkDeleteArtifactsSerializer,
+    BulkDeleteResponseSerializer,
+    GenerateJobResponseSerializer,
+    GenerateJobSerializer,
+    JobArtifactsDeleteResponseSerializer,
+    JobListSerializer,
+    JobStatusResponseSerializer,
+    SbomDocumentResponseSerializer,
+)
 from .services import (
     OUTPUT_FORMAT_MAP,
     create_job,
@@ -54,6 +66,15 @@ class GenerateJobView(APIView):
 
     parser_classes = [MultiPartParser, FormParser]  # noqa: RUF012
 
+    @extend_schema(
+        request=GenerateJobSerializer,
+        responses={
+            202: GenerateJobResponseSerializer,
+            400: ErrorResponseSerializer,
+            404: ErrorResponseSerializer,
+            429: ErrorResponseSerializer,
+        },
+    )
     def post(self, request: Request) -> Response:
         """Gate on concurrency, create the job, and dispatch the pipeline (AD-7/10)."""
         org = get_request_org(request)
@@ -144,6 +165,26 @@ class ManifestFormatFilterNegotiation(DefaultContentNegotiation):
         return renderer, renderer.media_type
 
 
+@extend_schema_view(
+    get=extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="status",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Filter by job status (e.g. pending, progress, success, failure).",
+            ),
+            OpenApiParameter(
+                name="format",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Filter by detected manifest format (e.g. pixi_toml, requirements_txt).",
+            ),
+        ],
+    )
+)
 class JobsListView(ListAPIView[SBOMJob]):
     """List the active org's jobs, most-recent-first (GET /api/v1/sbom/jobs/)."""
 
@@ -166,6 +207,7 @@ class JobsListView(ListAPIView[SBOMJob]):
 class StatusJobView(APIView):
     """Poll a job's status (GET /api/v1/sbom/status/{task_id}/)."""
 
+    @extend_schema(responses={200: JobStatusResponseSerializer, 404: ErrorResponseSerializer})
     def get(self, request: Request, task_id: str) -> Response:
         """Return the job status shape, or 404 for cross-org / unknown (AD-2)."""
         org = get_request_org(request)
@@ -215,6 +257,12 @@ class ResultJobView(APIView):
     S3/MinIO URL (AD-11). The code path is identical for MinIO (dev) and S3 (prod).
     """
 
+    @extend_schema(
+        responses={
+            303: OpenApiResponse(description="Redirect (Location header) to a presigned artifact download URL."),
+            404: ErrorResponseSerializer,
+        }
+    )
     def get(self, request: Request, task_id: str) -> Response:
         """Return 303 to a presigned artifact URL, or 404 for unknown/cross-org/not-ready."""
         org = get_request_org(request)
@@ -245,6 +293,7 @@ class SbomDocumentView(APIView):
     Cross-org / unknown / not-yet-ready jobs all 404 (no existence leak, AD-2).
     """
 
+    @extend_schema(responses={200: SbomDocumentResponseSerializer, 404: ErrorResponseSerializer})
     def get(self, request: Request, task_id: str) -> Response:
         """Return {format, metadata, components, raw}, or 404 for unknown/cross-org/not-ready/expired."""
         org = get_request_org(request)
@@ -281,6 +330,7 @@ class JobArtifactsView(APIView):
     jobs succeed idempotently.
     """
 
+    @extend_schema(responses={200: JobArtifactsDeleteResponseSerializer, 404: ErrorResponseSerializer})
     def delete(self, request: Request, task_id: str) -> Response:
         """Purge the job's artifacts, or 404 for unknown/cross-org."""
         org = get_request_org(request)
@@ -303,6 +353,15 @@ class BulkDeleteArtifactsView(APIView):
     (AD-3); job records + metadata are retained; the operation is idempotent.
     """
 
+    @extend_schema(
+        request=BulkDeleteArtifactsSerializer,
+        responses={
+            200: BulkDeleteResponseSerializer,
+            400: ErrorResponseSerializer,
+            403: ErrorResponseSerializer,
+            404: ErrorResponseSerializer,
+        },
+    )
     def post(self, request: Request) -> Response:
         """Purge artifacts for the whole org (admin) or a list of the org's jobs."""
         payload = request.data if isinstance(request.data, dict) else {}

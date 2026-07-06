@@ -190,7 +190,7 @@ development_status:
   11-16-api-reference-and-openapi-reconciliation-admin-tier: review
   11-17-developer-architecture-documentation-reconciliation-admin-tier: review
   11-18-cross-cutting-documentation-sweep-admin-tier: review
-  11-19-openapi-schema-completeness: ready-for-dev
+  11-19-openapi-schema-completeness: review
   11-20-api-docs-header-link: review
 
   # Epic 12 — UI/UX Visual Design & Professional Polish (frontend; refines Epic 10

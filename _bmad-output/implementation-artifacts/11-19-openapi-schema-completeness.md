@@ -1,6 +1,6 @@
 # Story 11.19: OpenAPI/Swagger Schema Completeness (Request Bodies + Parameters)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -28,20 +28,20 @@ This story audits the generated schema and attaches `@extend_schema(request=…,
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Audit the generated schema (AC: #1, #2, #3)**
-  - [ ] Generate the schema in-process (e.g. `drf_spectacular.generators.SchemaGenerator().get_schema(request=None, public=True)` or `GET /api/schema/?format=json`) and enumerate every operation.
-  - [ ] For each operation, record: has requestBody? path params present/typed? query params declared? response schema present? Confirm against the inventory table in Dev Notes and reconcile any drift from the then-current merged code.
-- [ ] **Task 2 — Attach request bodies (AC: #1)**
-  - [ ] Add `@extend_schema(request=<Serializer>, responses=…)` to each bare-`APIView` POST that manually builds a serializer (register, login, orgs/create, promote-admin, members add, members create-user, keys create, global-admins grant, manifests/upload, sbom/generate).
-  - [ ] Author request serializers for the two endpoints with none today: `OrgSwitchView` (`{slug}`) and `BulkDeleteArtifactsView` (`{all?, task_ids?}`); wire them into the views (or declare inline via `@extend_schema`). Multipart uploads declare `multipart/form-data`.
-- [ ] **Task 3 — Declare parameters (AC: #2)**
-  - [ ] Add `OpenApiParameter` entries for the `status` and `format` query filters on `GET /sbom/jobs/`; confirm pagination params surface. Verify path params (`user_id`, `key_id`, `task_id`) appear typed on every parameterized operation; add `OpenApiParameter(location=PATH)` where description/type polish is needed.
-- [ ] **Task 4 — Response schemas (AC: #3)**
-  - [ ] Declare `responses={…}` for each operation's success + meaningful error shapes, using inline serializers / `OpenApiResponse` for the inline-dict responses (`auth/me`, `orgs/`, `orgs/me`, `sbom/status`, `sbom/document`, report views, key/member list shapes).
-- [ ] **Task 5 — Schema-level test (AC: #4)**
-  - [ ] Add a unit test in `backend/tests/unit/` that builds the schema in-process and asserts requestBody/parameters on the previously-missing endpoints. No network, no live server.
-- [ ] **Task 6 — Verify (AC: #5)**
-  - [ ] Confirm no new spectacular warnings for touched endpoints; `pixi run ci` green including `docs-build`.
+- [x] **Task 1 — Audit the generated schema (AC: #1, #2, #3)**
+  - [x] Generate the schema in-process (e.g. `drf_spectacular.generators.SchemaGenerator().get_schema(request=None, public=True)` or `GET /api/schema/?format=json`) and enumerate every operation.
+  - [x] For each operation, record: has requestBody? path params present/typed? query params declared? response schema present? Confirm against the inventory table in Dev Notes and reconcile any drift from the then-current merged code.
+- [x] **Task 2 — Attach request bodies (AC: #1)**
+  - [x] Add `@extend_schema(request=<Serializer>, responses=…)` to each bare-`APIView` POST that manually builds a serializer (register, login, orgs/create, promote-admin, members add, members create-user, keys create, global-admins grant, manifests/upload, sbom/generate).
+  - [x] Author request serializers for the two endpoints with none today: `OrgSwitchView` (`{slug}`) and `BulkDeleteArtifactsView` (`{all?, task_ids?}`); wire them into the views (or declare inline via `@extend_schema`). Multipart uploads declare `multipart/form-data`.
+- [x] **Task 3 — Declare parameters (AC: #2)**
+  - [x] Add `OpenApiParameter` entries for the `status` and `format` query filters on `GET /sbom/jobs/`; confirm pagination params surface. Verify path params (`user_id`, `key_id`, `task_id`) appear typed on every parameterized operation; add `OpenApiParameter(location=PATH)` where description/type polish is needed.
+- [x] **Task 4 — Response schemas (AC: #3)**
+  - [x] Declare `responses={…}` for each operation's success + meaningful error shapes, using inline serializers / `OpenApiResponse` for the inline-dict responses (`auth/me`, `orgs/`, `orgs/me`, `sbom/status`, `sbom/document`, report views, key/member list shapes).
+- [x] **Task 5 — Schema-level test (AC: #4)**
+  - [x] Add a unit test in `backend/tests/unit/` that builds the schema in-process and asserts requestBody/parameters on the previously-missing endpoints. No network, no live server.
+- [x] **Task 6 — Verify (AC: #5)**
+  - [x] Confirm no new spectacular warnings for touched endpoints; `pixi run ci` green including `docs-build`.
 
 ## Dev Notes
 
@@ -138,8 +138,31 @@ drf-spectacular's `AutoSchema.get_request_serializer()` looks for `view.get_seri
 
 ### Agent Model Used
 
+Opus 4.8 (1M context) — claude-opus-4-8[1m]
+
 ### Debug Log References
+
+- In-process schema audit (`SchemaGenerator().get_schema(request=None, public=True)`) before/after: pre-change every hand-rolled `APIView` emitted an "unable to guess serializer" warning and no `requestBody`; post-change all warnings are gone, every mutating endpoint carries a `requestBody`, and `GET /sbom/jobs/` lists `status` + `format` query params.
+- Test-ordering fix: `test_docs_endpoints_are_disabled_when_api_docs_disabled` reloads `config.urls` and left `/api/schema/?format=json` returning HTML for tests that ran after it, so it was moved to the end of the file (below the new schema-generation tests).
 
 ### Completion Notes List
 
+- Attached `@extend_schema(request=…, responses=…)` to every hand-rolled `APIView` mutating method across the users, manifests, sbom, and analysis apps; annotations are additive — no view logic or validation behavior changed (commit type `docs(api)`).
+- Authored the two missing request serializers called out by the story: `OrgSwitchSerializer{slug}` (users) and `BulkDeleteArtifactsSerializer{all?, task_ids?}` (sbom). They are referenced via `@extend_schema(request=…)` for documentation only; the views keep their existing hand-rolled dispatch so the request/response contract is preserved.
+- Added schema-only response serializers for the inline-dict GET/POST responses (users/sbom/manifests/analysis) so responses carry accurate schemas and the "unable to guess serializer" warnings clear.
+- File uploads (`sbom/generate/`, `manifests/upload/`) now declare `multipart/form-data` with the `file` field (auto-detected from the FileField serializers).
+- `GET /sbom/jobs/` declares `status` and `format` query filters via `OpenApiParameter` (using `extend_schema_view`); path params (`user_id`, `key_id`, `task_id`) already surfaced from the URLconf.
+- Extended `backend/tests/unit/test_api_schema.py` with an in-process (no-network) schema test asserting the previously-missing request bodies, the multipart file bodies, the `status`/`format` query params, and a representative path param. Full backend suite: 376 passed. No new drf-spectacular warnings; `mkdocs build --strict` green.
+
 ### File List
+
+- backend/generate_sbom/users/serializers.py (added `OrgSwitchSerializer` + response serializers)
+- backend/generate_sbom/users/views.py (annotations)
+- backend/generate_sbom/manifests/serializers.py (added `ManifestUploadResponseSerializer`)
+- backend/generate_sbom/manifests/views.py (annotations)
+- backend/generate_sbom/sbom/serializers.py (added `BulkDeleteArtifactsSerializer` + response serializers)
+- backend/generate_sbom/sbom/views.py (annotations, query params)
+- backend/generate_sbom/analysis/serializers.py (new — `GraphReportResponseSerializer`)
+- backend/generate_sbom/analysis/views.py (annotations)
+- backend/tests/unit/test_api_schema.py (new schema-completeness tests)
+- _bmad-output/implementation-artifacts/sprint-status.yaml (status → review)

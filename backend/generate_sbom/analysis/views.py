@@ -14,6 +14,8 @@ from typing import Any, cast
 
 from django.core.files.storage import default_storage
 from django.db.models import QuerySet
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -21,8 +23,10 @@ from rest_framework.views import APIView
 
 from generate_sbom.sbom.models import SBOMJob
 from generate_sbom.users.auth import get_request_org
+from generate_sbom.users.serializers import ErrorResponseSerializer
 
 from .models import AnalysisReport
+from .serializers import GraphReportResponseSerializer
 
 _PRESIGN_TTL_SECONDS = 24 * 60 * 60  # 24-hour presigned URL TTL (AD-11)
 _NO_ACTIVE_ORG = {"error": "No active org.", "code": "no_active_org"}
@@ -69,6 +73,7 @@ class _JsonReportView(APIView):
 
     report_type: str
 
+    @extend_schema(responses={200: OpenApiTypes.OBJECT, 404: ErrorResponseSerializer})
     def get(self, request: Request, task_id: str) -> Response:
         """Return the report JSON, or 404 for unknown/cross-org/not-ready/failed."""
         job, error = _resolve_job(request, task_id)
@@ -91,6 +96,12 @@ class _PresignedDownloadView(APIView):
 
     report_type: str
 
+    @extend_schema(
+        responses={
+            303: OpenApiResponse(description="Redirect (Location header) to a presigned artifact download URL."),
+            404: ErrorResponseSerializer,
+        }
+    )
     def get(self, request: Request, task_id: str) -> Response:
         """Return 303 to the presigned artifact, or 404 for unknown/cross-org/not-ready/failed."""
         job, error = _resolve_job(request, task_id)
@@ -133,6 +144,7 @@ class GraphSvgDownloadView(_PresignedDownloadView):
 class GraphReportView(APIView):
     """GET /api/v1/sbom/result/{task_id}/reports/graph/ → Cytoscape {nodes, edges} JSON (AD-9)."""
 
+    @extend_schema(responses={200: GraphReportResponseSerializer, 404: ErrorResponseSerializer})
     def get(self, request: Request, task_id: str) -> Response:
         """Return the graph JSON inline from the report summary (never PyVis HTML)."""
         job, error = _resolve_job(request, task_id)

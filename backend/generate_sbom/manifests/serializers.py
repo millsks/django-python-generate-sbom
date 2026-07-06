@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from rest_framework import serializers
 
 from .models import ManifestUpload
@@ -25,3 +27,10 @@ class ManifestUploadSerializer(serializers.Serializer[ManifestUpload]):
         if size > MAX_MANIFEST_BYTES:
             raise serializers.ValidationError("File exceeds the 50 MB limit.")
         return value
+
+
+class ManifestUploadResponseSerializer(serializers.Serializer[dict[str, Any]]):
+    """The upload success payload: ``{upload_id, detected_format}`` (Story 11.19)."""
+
+    upload_id = serializers.CharField()
+    detected_format = serializers.CharField()

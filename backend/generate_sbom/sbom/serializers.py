@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from rest_framework import serializers
 
 from generate_sbom.manifests.serializers import MAX_MANIFEST_BYTES
@@ -65,3 +67,68 @@ class JobListSerializer(serializers.ModelSerializer[SBOMJob]):
     def get_artifacts_available(self, obj: SBOMJob) -> bool:
         """True while the stored artifacts still exist (result_key set)."""
         return bool(obj.result_key)
+
+
+class BulkDeleteArtifactsSerializer(serializers.Serializer[dict[str, Any]]):
+    """Validates the bulk-delete request payload (Story 11.19).
+
+    ``{"all": true}`` purges every artifact for the active org (admin only);
+    ``{"task_ids": [...]}`` purges the named jobs. The two are mutually exclusive;
+    this serializer documents the shape — the view retains its hand-rolled dispatch.
+    """
+
+    all = serializers.BooleanField(required=False, default=False)
+    task_ids = serializers.ListField(child=serializers.UUIDField(), required=False)
+
+
+# --- Response serializers (schema documentation only; Story 11.19) ---
+
+
+class GenerateJobResponseSerializer(serializers.Serializer[dict[str, Any]]):
+    """The generate-accepted (202) payload."""
+
+    task_id = serializers.UUIDField()
+    status = serializers.CharField()
+    status_url = serializers.CharField()
+    estimated_seconds = serializers.IntegerField()
+
+
+class JobStatusResponseSerializer(serializers.Serializer[dict[str, Any]]):
+    """The job-status poll payload."""
+
+    task_id = serializers.UUIDField()
+    status = serializers.CharField()
+    progress = serializers.IntegerField()
+    current_phase = serializers.CharField(allow_null=True)
+    failure_reason = serializers.CharField(allow_null=True)
+    result_url = serializers.CharField(allow_null=True)
+    output_format = serializers.CharField()
+    summary_stats = serializers.JSONField()
+    created_at = serializers.DateTimeField()
+    completed_at = serializers.DateTimeField(allow_null=True)
+    artifacts_available = serializers.BooleanField()
+    artifacts_expire_at = serializers.DateTimeField(allow_null=True)
+
+
+class SbomDocumentResponseSerializer(serializers.Serializer[dict[str, Any]]):
+    """The inline SBOM document envelope for the viewer tab."""
+
+    format = serializers.CharField()
+    metadata = serializers.JSONField()
+    components = serializers.JSONField()
+    raw = serializers.CharField()
+
+
+class JobArtifactsDeleteResponseSerializer(serializers.Serializer[dict[str, Any]]):
+    """The single-job artifact-delete payload: ``{task_id, deleted}``."""
+
+    task_id = serializers.UUIDField()
+    deleted = serializers.BooleanField()
+
+
+class BulkDeleteResponseSerializer(serializers.Serializer[dict[str, Any]]):
+    """The bulk-delete payload: ``deleted`` count plus scope/requested context."""
+
+    deleted = serializers.IntegerField()
+    scope = serializers.CharField(required=False)
+    requested = serializers.IntegerField(required=False)

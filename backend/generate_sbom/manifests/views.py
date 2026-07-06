@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.request import Request
@@ -9,9 +10,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from generate_sbom.users.auth import get_request_org
+from generate_sbom.users.serializers import ErrorResponseSerializer
 
 from .detection import ManifestParseError, UnsupportedFormatError
-from .serializers import ManifestUploadSerializer
+from .serializers import ManifestUploadResponseSerializer, ManifestUploadSerializer
 from .services import upload_manifest
 
 
@@ -20,6 +22,10 @@ class ManifestUploadView(APIView):
 
     parser_classes = [MultiPartParser, FormParser]  # noqa: RUF012
 
+    @extend_schema(
+        request=ManifestUploadSerializer,
+        responses={201: ManifestUploadResponseSerializer, 400: ErrorResponseSerializer, 404: ErrorResponseSerializer},
+    )
     def post(self, request: Request) -> Response:
         """Validate, detect, and store the manifest; return its id and format."""
         org = get_request_org(request)

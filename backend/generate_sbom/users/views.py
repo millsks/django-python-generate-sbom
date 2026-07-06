@@ -8,6 +8,7 @@ import structlog
 from django.contrib.auth import authenticate, login, logout
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
@@ -19,10 +20,23 @@ from .models import OrgApiKey, OrgMembership, User
 from .selectors import get_api_keys, get_org_members, get_user_orgs
 from .serializers import (
     AddMemberSerializer,
+    AuthMeResponseSerializer,
+    CreateKeyResponseSerializer,
     CreateKeySerializer,
     CreateMemberUserSerializer,
     CreateOrgSerializer,
+    ErrorResponseSerializer,
+    GlobalAdminItemSerializer,
+    GlobalAdminsResponseSerializer,
+    KeyItemSerializer,
+    LoginResponseSerializer,
     LoginSerializer,
+    MemberCreatedResponseSerializer,
+    MembersResponseSerializer,
+    OrgListItemSerializer,
+    OrgSummarySerializer,
+    OrgSwitchSerializer,
+    RegisterResponseSerializer,
     RegistrationSerializer,
     UserIdSerializer,
 )
@@ -92,6 +106,10 @@ class RegisterView(APIView):
     authentication_classes = []  # noqa: RUF012
     permission_classes = [AllowAny]  # noqa: RUF012
 
+    @extend_schema(
+        request=RegistrationSerializer,
+        responses={201: RegisterResponseSerializer, 400: ErrorResponseSerializer},
+    )
     def post(self, request: Request) -> Response:
         """Create a zero-org user, or return a 400 error envelope (Story 2.6)."""
         serializer = RegistrationSerializer(data=request.data)
@@ -120,6 +138,7 @@ class AuthMeView(APIView):
     the SPA can gate global-admin-only affordances such as creating an org.
     """
 
+    @extend_schema(responses={200: AuthMeResponseSerializer})
     def get(self, request: Request) -> Response:
         """Return the current user's ``id``, ``email``, and admin flags.
 
@@ -146,6 +165,7 @@ class GlobalAdminsView(APIView):
     user looked up by email (back-filled as an admin of every org).
     """
 
+    @extend_schema(responses={200: GlobalAdminsResponseSerializer, 403: ErrorResponseSerializer})
     def get(self, request: Request) -> Response:
         """List current global admins (id + email); 403 unless the caller is one."""
         if not is_global_admin(cast(User, request.user)):
@@ -153,6 +173,10 @@ class GlobalAdminsView(APIView):
         data = [{"user_id": u.pk, "email": u.email} for u in list_global_admins()]
         return Response({"global_admins": data})
 
+    @extend_schema(
+        request=AddMemberSerializer,
+        responses={201: GlobalAdminItemSerializer, 400: ErrorResponseSerializer, 403: ErrorResponseSerializer},
+    )
     def post(self, request: Request) -> Response:
         """Grant global admin to a registered user by email; 403 unless the caller is one."""
         if not is_global_admin(cast(User, request.user)):
@@ -176,6 +200,14 @@ class GlobalAdminDetailView(APIView):
     if they are the last global admin.
     """
 
+    @extend_schema(
+        responses={
+            204: OpenApiResponse(description="Global-admin status revoked."),
+            400: ErrorResponseSerializer,
+            403: ErrorResponseSerializer,
+            404: ErrorResponseSerializer,
+        }
+    )
     def delete(self, request: Request, user_id: int) -> Response:
         """Revoke the target's global-admin status; 403 unless the caller is one."""
         if not is_global_admin(cast(User, request.user)):
@@ -204,6 +236,10 @@ class LoginView(APIView):
     authentication_classes = []  # noqa: RUF012
     permission_classes = [AllowAny]  # noqa: RUF012
 
+    @extend_schema(
+        request=LoginSerializer,
+        responses={200: LoginResponseSerializer, 400: ErrorResponseSerializer, 401: ErrorResponseSerializer},
+    )
     def post(self, request: Request) -> Response:
         """Exchange email+password for a session and set the active org."""
         serializer = LoginSerializer(data=request.data)
@@ -233,6 +269,7 @@ class LoginView(APIView):
 class LogoutView(APIView):
     """Invalidate the session (POST /api/v1/auth/logout/)."""
 
+    @extend_schema(request=None, responses={204: OpenApiResponse(description="Session cleared.")})
     def post(self, request: Request) -> Response:
         """Log the user out and clear the session."""
         logout(request._request)
@@ -242,6 +279,7 @@ class LogoutView(APIView):
 class OrgListView(APIView):
     """List the orgs the user belongs to, flagging the active one (GET /orgs/)."""
 
+    @extend_schema(responses={200: OrgListItemSerializer(many=True)})
     def get(self, request: Request) -> Response:
         """Return the user's org memberships with the active org flagged."""
         active = get_request_org(request)
@@ -256,6 +294,10 @@ class OrgListView(APIView):
 class OrgSwitchView(APIView):
     """Switch the active org (POST /orgs/switch/ with {"slug": ...})."""
 
+    @extend_schema(
+        request=OrgSwitchSerializer,
+        responses={200: OrgSummarySerializer, 403: ErrorResponseSerializer},
+    )
     def post(self, request: Request) -> Response:
         """Set the active org if the user is a member; else 403."""
         slug = request.data.get("slug", "")
@@ -272,6 +314,7 @@ class OrgSwitchView(APIView):
 class OrgMeView(APIView):
     """Return the current active org (GET /orgs/me/)."""
 
+    @extend_schema(responses={200: OrgSummarySerializer, 404: ErrorResponseSerializer})
     def get(self, request: Request) -> Response:
         """Return the active org, or 404 if the user has no orgs."""
         org = get_request_org(request)
@@ -283,6 +326,10 @@ class OrgMeView(APIView):
 class CreateOrgView(APIView):
     """Create a new org — global admins only (POST /orgs/create/, Story 2.12)."""
 
+    @extend_schema(
+        request=CreateOrgSerializer,
+        responses={201: OrgSummarySerializer, 400: ErrorResponseSerializer, 403: ErrorResponseSerializer},
+    )
     def post(self, request: Request) -> Response:
         """Create the org (global-admin only); 403 for anyone else (Story 2.12)."""
         user = cast(User, request.user)
@@ -303,6 +350,7 @@ class MembersView(APIView):
     ``is_admin`` for the client, so nothing needs to probe this endpoint for a role.
     """
 
+    @extend_schema(responses={200: MembersResponseSerializer, 403: ErrorResponseSerializer})
     def get(self, request: Request) -> Response:
         """Return the active org's roster (admin only)."""
         org = get_admin_org(request)
@@ -311,6 +359,10 @@ class MembersView(APIView):
         members = [_member_data(m) for m in get_org_members(org)]
         return Response({"members": members, "is_admin": True})
 
+    @extend_schema(
+        request=AddMemberSerializer,
+        responses={201: MemberCreatedResponseSerializer, 400: ErrorResponseSerializer, 403: ErrorResponseSerializer},
+    )
     def post(self, request: Request) -> Response:
         """Add a member to the active org (admin only, FR-1.3)."""
         org = get_admin_org(request)
@@ -333,6 +385,10 @@ class CreateMemberUserView(APIView):
     account with an admin-set temporary password. Duplicate email → ``email_taken``.
     """
 
+    @extend_schema(
+        request=CreateMemberUserSerializer,
+        responses={201: MemberCreatedResponseSerializer, 400: ErrorResponseSerializer, 403: ErrorResponseSerializer},
+    )
     def post(self, request: Request) -> Response:
         """Create the user + membership, or return a 403/400 envelope."""
         org = get_admin_org(request)
@@ -355,6 +411,13 @@ class CreateMemberUserView(APIView):
 class MemberDetailView(APIView):
     """Remove a member from the active org (DELETE /orgs/members/{user_id}/)."""
 
+    @extend_schema(
+        responses={
+            204: OpenApiResponse(description="Member removed."),
+            403: ErrorResponseSerializer,
+            404: ErrorResponseSerializer,
+        }
+    )
     def delete(self, request: Request, user_id: int) -> Response:
         """Remove the member (admin only, FR-1.4)."""
         org = get_admin_org(request)
@@ -381,6 +444,15 @@ class PromoteAdminView(APIView):
     global admin). Returns 204 so the client's empty-body handling is clean.
     """
 
+    @extend_schema(
+        request=UserIdSerializer,
+        responses={
+            204: OpenApiResponse(description="Member promoted to admin."),
+            400: ErrorResponseSerializer,
+            403: ErrorResponseSerializer,
+            404: ErrorResponseSerializer,
+        },
+    )
     def post(self, request: Request) -> Response:
         """Promote the target member to admin."""
         org = get_admin_org(request)
@@ -410,6 +482,15 @@ class DemoteAdminView(APIView):
     global admin, surfacing the standard membership-error envelope.
     """
 
+    @extend_schema(
+        request=UserIdSerializer,
+        responses={
+            204: OpenApiResponse(description="Admin demoted to member."),
+            400: ErrorResponseSerializer,
+            403: ErrorResponseSerializer,
+            404: ErrorResponseSerializer,
+        },
+    )
     def post(self, request: Request) -> Response:
         """Demote the target admin to member."""
         org = get_admin_org(request)
@@ -434,6 +515,14 @@ class DemoteAdminView(APIView):
 class LeaveOrgView(APIView):
     """Leave the active org (POST /orgs/leave/)."""
 
+    @extend_schema(
+        request=None,
+        responses={
+            204: OpenApiResponse(description="Left the active org."),
+            400: ErrorResponseSerializer,
+            404: ErrorResponseSerializer,
+        },
+    )
     def post(self, request: Request) -> Response:
         """Remove the caller's membership; a sole admin cannot leave (FR-1.7)."""
         org = get_request_org(request)
@@ -450,6 +539,7 @@ class LeaveOrgView(APIView):
 class KeysView(APIView):
     """List (any member/key) or create (admin only) API keys for the active org."""
 
+    @extend_schema(responses={200: KeyItemSerializer(many=True), 404: ErrorResponseSerializer})
     def get(self, request: Request) -> Response:
         """List the active org's non-revoked keys (name/prefix/created/last-used)."""
         org = get_request_org(request)
@@ -457,6 +547,10 @@ class KeysView(APIView):
             return Response(_NO_ACTIVE_ORG, status=status.HTTP_404_NOT_FOUND)
         return Response([_key_data(key) for key in get_api_keys(org)])
 
+    @extend_schema(
+        request=CreateKeySerializer,
+        responses={201: CreateKeyResponseSerializer, 400: ErrorResponseSerializer, 403: ErrorResponseSerializer},
+    )
     def post(self, request: Request) -> Response:
         """Create a key and return the plaintext exactly once (admin only)."""
         org = get_admin_org(request)
@@ -478,6 +572,13 @@ class KeysView(APIView):
 class KeyDetailView(APIView):
     """Revoke an API key (DELETE /keys/{key_id}/, admin only)."""
 
+    @extend_schema(
+        responses={
+            204: OpenApiResponse(description="API key revoked."),
+            403: ErrorResponseSerializer,
+            404: ErrorResponseSerializer,
+        }
+    )
     def delete(self, request: Request, key_id: str) -> Response:
         """Soft-revoke the key; 404 if it is not an active key of the caller's org."""
         org = get_admin_org(request)

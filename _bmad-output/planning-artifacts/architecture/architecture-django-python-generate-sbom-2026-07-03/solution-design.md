@@ -123,6 +123,7 @@ django-python-generate-sbom/               ← project root (pixi umbrella)
 class Org(models.Model):
     name: str          # display name
     slug: str          # URL-safe identifier, unique
+    is_admin_org: bool # True for the ONE distinguished ADMIN org (global-admin tier)
     created_at: datetime
 
 class OrgMembership(models.Model):
@@ -138,29 +139,71 @@ class OrgApiKey(AbstractAPIKey):
     revoked_at: datetime | None
 ```
 
+**Org / admin / auth model (AD-14).** A `User` registers with **no** org (zero-org
+identity) and gains access when a global admin creates an org (`create_org`) or an
+admin adds them. Exactly one `Org` carries `is_admin_org=True` — the **ADMIN org** —
+and its members are **global admins**: a cross-org superuser tier written as a real
+`OrgMembership(role=admin)` into every non-admin org (existing and future), so no
+authorization special-casing is needed (AD-2 org isolation is preserved). Identity is
+served by `GET /api/v1/auth/me/` → `{id, email, is_admin, is_global_admin}`, decoupled
+from the active org (which lives in the session and never resolves to the ADMIN org).
+Per-org admins manage membership and **promote/demote** other admins (no *transfer*);
+org creation and global-admin management are global-admin-gated. Admin authorization is
+enforced at both the SPA route and the API (`403`).
+
 `OrgApiKey.objects.get_from_key(raw_key)` is provided by `djangorestframework-api-key`. A custom DRF authentication class subclasses `APIKeyAuthentication`, updates `last_used_at` on each successful auth, and sets `request.auth = org_api_key`.
 
 **Auth convention**
 
-```python
-# In every DRF view that touches org data:
-org = request.auth.org
-```
+Two auth paths resolve to one active-org helper. The **machine API** carries the org
+on `request.auth.org` (an `OrgApiKey`); the **web UI** (React SPA) authenticates by
+session and carries the active org in the session. Views never read either directly —
+they call `users/auth.py::get_request_org(request)`, which returns the acting org for
+both paths (and **excludes the ADMIN org** from the session-resolved active org, AD-14),
+so the "org is the first positional arg to every service" rule holds regardless of auth
+mechanism. Admin-gated views use `get_admin_org(request)` (returns the org only if the
+caller is an admin of it, else `None` → `403`).
 
-No session, no query-param org. `request.auth` is always `OrgApiKey`.
+```python
+# API-key view (machine API):
+org = request.auth.org
+# Web-UI view (session): resolve uniformly, never from session/query-param directly:
+org = get_request_org(request)          # any member
+org = get_admin_org(request)            # admin-only actions; None → 403
+```
 
 **Services**
 
 ```python
 # users/services.py
-def create_org(name: str, admin_user: User) -> Org: ...
-def create_member(org: Org, email: str, temp_password: str, role: str) -> User: ...
-def revoke_api_key(org: Org, key_id: UUID) -> None: ...
+def register_user(email: str, password: str) -> User: ...          # zero-org (no org created)
+def create_org(name: str, admin_user: User) -> Org: ...            # global-admin-gated at the view
+def create_member(org: Org, email: str, role: str) -> User: ...    # add EXISTING user by email
+def create_member_user(org: Org, email: str, temp_password: str, role: str) -> User: ...  # create NEW user
+def remove_member(org: Org, user: User) -> None: ...
+def promote_member_to_admin(org: Org, target: User) -> None: ...
+def demote_admin_to_member(org: Org, target: User) -> None: ...    # inverse of promote (no transfer)
+def leave_org(org: Org, user: User) -> None: ...
+def create_api_key(org: Org, name: str) -> tuple[OrgApiKey, str]: ...
+def revoke_api_key(org: Org, key_id: str) -> bool: ...
+# global-admin tier
+def is_global_admin(user: User) -> bool: ...
+def get_the_admin_org() -> Org | None: ...
+def grant_global_admin(user: User) -> None: ...                    # add to ADMIN org + admin of every org
+def grant_global_admin_by_email(email: str) -> User: ...           # unregistered email -> NoSuchUserError
+def revoke_global_admin(user: User) -> None: ...                   # remove from ADMIN org + demote everywhere; guards last global admin
+def list_global_admins() -> list[User]: ...
 
 # users/selectors.py
-def get_org_members(org: Org) -> QuerySet[User]: ...
+def get_user_orgs(user: User) -> QuerySet[Org]: ...
+def get_org_members(org: Org) -> QuerySet[OrgMembership]: ...
 def get_api_keys(org: Org) -> QuerySet[OrgApiKey]: ...
 ```
+
+Membership operations raise domain errors (`NoSuchUserError`, `AlreadyMemberError`,
+`EmailTakenError`, `LastAdminError`, `LastGlobalAdminError`, `GlobalAdminError`,
+`AdminOrgProtectedError`, …) that views map to the standard `{"error", "code"}`
+envelope.
 
 ---
 
@@ -442,17 +485,34 @@ All API requests carry `Authorization: Api-Key <raw_key>`. Unauthenticated reque
 
 ### 5.2 Endpoint inventory
 
+Auth column: **Api-Key** = machine API (`Authorization: Api-Key`); **Session** = web-UI
+(React SPA) session auth; **No** = unauthenticated. Account and org-management endpoints
+are session-authenticated and admin-gated server-side (`403`) per AD-14.
+
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | `GET` | `/health/` | No | Docker health check; returns `{"status": "ok"}` |
-| `POST` | `/api/v1/auth/register/` | No | Create org + admin user |
-| `POST` | `/api/v1/auth/login/` | No | Exchange email+password for session (web UI) |
-| `GET` | `/api/v1/orgs/me/` | Yes | Current org details |
-| `GET` | `/api/v1/orgs/members/` | Yes | List org members |
-| `POST` | `/api/v1/orgs/members/` | Yes | Create member account (admin only) |
-| `GET` | `/api/v1/api-keys/` | Yes | List API keys for org |
-| `POST` | `/api/v1/api-keys/` | Yes | Create API key |
-| `DELETE` | `/api/v1/api-keys/{id}/` | Yes | Revoke API key |
+| `POST` | `/api/v1/auth/register/` | No | Register a **zero-org** user (returns `org: null`) |
+| `POST` | `/api/v1/auth/login/` | No | Exchange email+password for a session; set the active org (web UI) |
+| `POST` | `/api/v1/auth/logout/` | Session | Invalidate the session |
+| `GET` | `/api/v1/auth/me/` | Session | Current user identity `{id, email, is_admin, is_global_admin}` (AD-14) |
+| `GET` | `/api/v1/orgs/` | Session | List the user's orgs (active flagged; ADMIN org excluded) |
+| `POST` | `/api/v1/orgs/create/` | Session | Create an org (**global admin only** → `403`) |
+| `POST` | `/api/v1/orgs/switch/` | Session | Switch the active org |
+| `GET` | `/api/v1/orgs/me/` | Session | Current active org |
+| `POST` | `/api/v1/orgs/leave/` | Session | Leave the active org (guards sole/global admin) |
+| `GET` | `/api/v1/orgs/members/` | Session | List active-org members (**admin only**) |
+| `POST` | `/api/v1/orgs/members/` | Session | Add an **existing** user by email (admin only; `no_such_user` if unregistered) |
+| `POST` | `/api/v1/orgs/members/create-user/` | Session | Create a **new** user account + add them (admin only; `email_taken` if exists) |
+| `DELETE` | `/api/v1/orgs/members/{user_id}/` | Session | Remove a member (admin only) |
+| `POST` | `/api/v1/orgs/promote-admin/` | Session | Promote a member to admin (admin only) |
+| `POST` | `/api/v1/orgs/demote-admin/` | Session | Demote an admin to member (admin only; guards last/global admin) |
+| `GET` | `/api/v1/admin/global-admins/` | Session | List global admins (**global admin only**) |
+| `POST` | `/api/v1/admin/global-admins/` | Session | Grant global admin by email (global admin only; `no_such_user` if unregistered) |
+| `DELETE` | `/api/v1/admin/global-admins/{user_id}/` | Session | Revoke global admin — remove from ADMIN org + demote everywhere (global admin only; blocked on last global admin) |
+| `GET` | `/api/v1/api-keys/` | Api-Key | List API keys for org |
+| `POST` | `/api/v1/api-keys/` | Api-Key | Create API key |
+| `DELETE` | `/api/v1/api-keys/{id}/` | Api-Key | Revoke API key |
 | `POST` | `/api/v1/manifests/upload/` | Yes | Upload manifest file |
 | `POST` | `/api/v1/sbom/generate/` | Yes | Submit SBOM job (concurrency gate → 202) |
 | `GET` | `/api/v1/sbom/status/{task_id}/` | Yes | Poll job status + progress |
@@ -707,6 +767,22 @@ volumes:
 `OrgScopedModel` adds an `org` FK to every model. `OrgScopedQuerySet.for_org(org)` adds `.filter(org=org)` to all queries. Every service function that touches org-owned data takes `org` as its first positional argument. Views extract org as `request.auth.org` and pass it through — there is no path to cross-org data access through normal code flow.
 
 API endpoints return `404` for cross-org access (the queryset simply returns no row — `DoesNotExist` is indistinguishable from "does not exist"). Web UI routes return `403` for authenticated users (UUID URLs don't leak existence; `403` gives clearer UX for shared-link scenarios).
+
+### Admin authorization and the global-admin tier (AD-14)
+
+Two admin scopes exist. A **per-org admin** (`OrgMembership(role=admin)`) manages that
+org's membership, promotions/demotions, and API keys. A **global admin** (a member of
+the one `is_admin_org` org) is provisioned as a real admin membership in every non-admin
+org and additionally may create orgs and grant/revoke global admin. Every admin-only
+capability is enforced at **two independent layers**: the React SPA hides admin routes
+and affordances using the `is_admin` / `is_global_admin` flags from `auth/me`, and each
+admin-only API view re-checks authorization server-side (`get_admin_org` /
+`is_global_admin`), returning `403` (`not_admin` / `not_global_admin`) regardless of the
+client — UI hiding is never the only gate. Because a global admin holds an ordinary
+`role=admin` membership everywhere, no authorization path special-cases them, and AD-2's
+org isolation is never bypassed. Membership invariants (org keeps ≥1 admin; the ADMIN org
+keeps ≥1 global admin; a global admin cannot be stranded/removed from a single org) are
+enforced in the service layer and surfaced as `{"error", "code"}` domain errors.
 
 ### API key security
 

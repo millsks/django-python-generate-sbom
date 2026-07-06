@@ -1691,6 +1691,8 @@ Added 2026-07-03 (Kevin): the SPA has no MUI ThemeProvider, so the UI is stuck o
 
 Users can see all SBOM generation jobs for their active org in a paginated dashboard with live progress updates, status filtering, and direct links to results.
 
+> **Reopened (bugfix):** Story 6.4 fixes a user-reported defect on the History page — selecting a real manifest format (`pixi_toml`) in the **Manifest format** filter replaces the jobs table with the "Could not load your jobs." error banner. The jobs-list request fails on a value the UI legitimately offers, because the frontend format options (`HistoryPage.tsx`) and the backend accepted formats (`ManifestUpload.Format`) are maintained independently and can drift — and because the backend filter does not degrade gracefully on an unrecognized value. Coordinates with Story 11.19 (documents the `format` query param + allowed values in the OpenAPI schema) and Epic 8's pixi/conda formats (8.18/8.19); implement against the then-current merged state.
+
 ### Story 6.1: Jobs List API & Dashboard Table
 
 As a user,
@@ -1787,6 +1789,36 @@ columns), without disrupting the current columns or live-progress behavior (Stor
 **Then** it is covered by tests: the serializer's `elapsed_seconds` computation
 (including the null-while-running case) and the table's formatted rendering, and
 `pixi run ci` is green (backend coverage ≥90%).
+
+---
+
+### Story 6.4: Fix the Manifest-Format Filter on the History Page (Bugfix)
+
+As a user,
+I want to filter my SBOM jobs by any manifest format the History page offers,
+So that selecting a real format (e.g. `pixi_toml`) shows the matching jobs instead of an error.
+
+**Acceptance Criteria:**
+
+**Given** the History page ("Your SBOM jobs") with the **Manifest format** filter,
+**When** I select any format the dropdown offers — explicitly `pixi_toml`, and each of the other current formats (`requirements`, `pyproject`, `pixi_lock`, `conda`) —
+**Then** `GET /api/v1/sbom/jobs/?format=<value>` returns `200` with only the jobs whose manifest matches that format, and the table renders those rows — the "Could not load your jobs." error banner never appears.
+
+**Given** the **Manifest format** filter set to **All**,
+**When** the jobs list is served,
+**Then** the behavior is unchanged — all of the org's jobs are returned regardless of manifest format (no regression).
+
+**Given** the backend jobs-list filter,
+**When** it receives an unknown or invalid `format` value,
+**Then** it degrades gracefully — an empty result set (or the value is ignored) — and never returns a `400`/`500`, so a stale UI can never turn a filter selection into the error banner.
+
+**Given** the frontend format options and the backend accepted formats,
+**When** the manifest-format list changes (e.g. Epic 8's pixi/conda work adds or renames a format),
+**Then** both derive from one canonical source (the backend's `ManifestUpload.Format` codes), so the UI can never offer a value the backend rejects; a test asserts the two stay consistent so drift fails CI.
+
+**Given** the change,
+**When** complete,
+**Then** it is covered by tests: a backend test asserting `GET /api/v1/sbom/jobs/?format=pixi_toml` returns the matching job(s) with `200` (and an invalid value degrades cleanly, not a `500`), and a frontend test asserting that selecting a format issues the request with the right `format` param and renders results rather than the error state; `pixi run ci` is green (backend coverage ≥90%).
 
 ---
 

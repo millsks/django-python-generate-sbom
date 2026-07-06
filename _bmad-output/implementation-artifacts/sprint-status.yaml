@@ -5,7 +5,7 @@
 #   in-progress    — dev-story implementation underway
 #   review         — implementation complete, awaiting code-review
 #   done           — merged and verified
-last_updated: 2026-07-05
+last_updated: 2026-07-06
 
 development_status:
   epic-1: done
@@ -79,11 +79,11 @@ development_status:
   # banner instead of the matching rows. Root cause: the frontend FORMAT_OPTIONS and the backend
   # ManifestUpload.Format enum drift independently, and the backend filter doesn't degrade on an
   # unknown value. Coordinates with 11.19 (format query-param schema) and Epic 8 (8.18/8.19 formats).
-  epic-6: in-progress
+  epic-6: done
   6-1-jobs-list-api-and-dashboard-table: done
   6-2-live-progress-polling: done
   6-3-job-elapsed-time-on-history-page: done
-  6-4-fix-manifest-format-filter-on-history: review
+  6-4-fix-manifest-format-filter-on-history: done
 
   epic-7: done
   7-1-scheduled-artifact-expiry-and-cleanup: done
@@ -104,7 +104,7 @@ development_status:
   # (CycloneDX component.licenses / SPDX licenseConcluded) so the SBOM tab Components License
   # column and the raw blob stop showing "—". Resolved at Phase 3 generation using the SAME
   # normalization the Phase 5 licenses report uses (AD-6 preserved; no downstream blob rewrite).
-  epic-8: in-progress
+  epic-8: done
   8-1-broaden-lts-coverage-via-endoflife-date: done
   8-2-spike-direct-vs-transitive-dependency-design: done
   8-3-capture-direct-transitive-relationships-during-resolution: done
@@ -130,7 +130,7 @@ development_status:
   8-22-version-currency-excel-conda-forge-color: done
   8-23-version-currency-pypi-latest-column: done
   8-24-fix-pypi-conda-forge-python-name-disambiguation: done
-  8-25-include-license-in-sbom-document: review
+  8-25-include-license-in-sbom-document: done
 
   # Epic 9 — Project Management & CI/CD Workflows (ported from millsks/idp-app,
   # excluding renovate + disabled workflows). External secrets are operator-supplied.
@@ -171,7 +171,7 @@ development_status:
   # add-by-email/create-user, promote (not transfer) + demote, admin-route + API authorization,
   # the global-admin management screen, and the version-currency 8.22-8.24 changes. Implemented
   # against the then-current merged state (>= 13.1); recommended after Stories 2.18-2.20 merge.
-  epic-11: in-progress
+  epic-11: done
   11-1-documentation-site-scaffold-and-github-pages: done
   11-2-user-guide: done
   11-3-how-to-guides: done
@@ -186,12 +186,12 @@ development_status:
   11-12-api-reference-and-openapi-reconciliation: done
   11-13-developer-documentation-reconciliation: done
   11-14-cross-cutting-documentation-audit-and-refresh: done
-  11-15-user-facing-documentation-reconciliation-admin-tier: review
-  11-16-api-reference-and-openapi-reconciliation-admin-tier: review
-  11-17-developer-architecture-documentation-reconciliation-admin-tier: review
-  11-18-cross-cutting-documentation-sweep-admin-tier: review
-  11-19-openapi-schema-completeness: review
-  11-20-api-docs-header-link: review
+  11-15-user-facing-documentation-reconciliation-admin-tier: done
+  11-16-api-reference-and-openapi-reconciliation-admin-tier: done
+  11-17-developer-architecture-documentation-reconciliation-admin-tier: done
+  11-18-cross-cutting-documentation-sweep-admin-tier: done
+  11-19-openapi-schema-completeness: done
+  11-20-api-docs-header-link: done
 
   # Epic 12 — UI/UX Visual Design & Professional Polish (frontend; refines Epic 10
   # shell + Story 5.7 theme). 12-1 (theme/design system) is the foundation; 12-2 icons
@@ -218,6 +218,6 @@ development_status:
   # transfer-admin) and adds the org-membership / global-admin FRs; 14.2 updates the architecture spine,
   # solution design, one-pager, and diagrams. Planning artifacts only (no docs/** or code edits).
   # Implemented against the then-current merged state (>= 13.1); recommended after Stories 2.18-2.20 merge.
-  epic-14: in-progress
-  14-1-prd-reconciliation: review
-  14-2-architecture-reconciliation: review
+  epic-14: done
+  14-1-prd-reconciliation: done
+  14-2-architecture-reconciliation: done

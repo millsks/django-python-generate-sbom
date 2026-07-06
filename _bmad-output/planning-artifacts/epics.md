@@ -3575,6 +3575,41 @@ reference (mkdocstrings) still renders.
 **Then** `pixi run docs-build` (`mkdocs build --strict`) passes with no broken links/nav, and anything found
 but out of scope for 11.15-11.17 is fixed here or explicitly noted.
 
+### Story 11.20: API Docs (Swagger UI) Link in the App Header — Env-Gated
+
+As a developer using the app,
+I want a link to the interactive API docs (Swagger UI) in the header alongside the Documentation and GitHub links,
+So that I can jump straight to the live API explorer — but only on deployments where those docs are enabled.
+
+**Acceptance Criteria:**
+
+**Given** the app header (the Epic 10 shell) already shows the Documentation and GitHub icon-links (Story 11.8),
+**When** it renders on a deployment where the API docs are enabled,
+**Then** it shows a third **API-docs icon-link** — an API/schema icon from `@mui/icons-material`, reusing the
+Story 11.8 `ExternalIconLink` pattern — immediately adjacent to those links, opening the Swagger UI at `/api/docs/`
+(Story 11.9) in a new tab (`target="_blank"` + `rel="noopener noreferrer"`) with an accessible label/tooltip
+("API docs").
+
+**Given** the docs are not always exposed,
+**When** the API-docs flag resolves to false or is unset,
+**Then** the API-docs link is **completely absent** from the header (not merely hidden/disabled) — no icon,
+tooltip, or anchor exists — while the Documentation and GitHub links are unaffected.
+
+**Given** the `/api/docs/` endpoint is already gated behind `settings.API_DOCS_ENABLED` (Story 11.9), returning
+404 when off,
+**When** the frontend decides whether to show the link,
+**Then** it derives that decision from the **same** flag so the link and the endpoint enable together and the
+link never points at a 404 — the recommended mechanism is a small **public runtime config endpoint** (surfacing
+`API_DOCS_ENABLED` to the SPA) so a Docker deploy can toggle both with one env var without rebuilding the
+frontend image (a build-time `VITE_ENABLE_API_DOCS` mirroring the Story 11.8 config pattern is the documented
+alternative, with its rebuild/drift trade-off).
+
+**Given** the change touches the shell (and possibly a new endpoint),
+**When** implemented,
+**Then** a frontend test asserts the link renders with the correct `href`/`target`/`rel`/label when the flag is
+true and is absent when false/unset (mocking the flag source), plus a backend test for the config endpoint if one
+is added, and `pixi run ci` is green.
+
 ---
 
 ## Epic 12: UI/UX Visual Design & Professional Polish

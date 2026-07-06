@@ -179,6 +179,7 @@ development_status:
   11-16-api-reference-and-openapi-reconciliation-admin-tier: ready-for-dev
   11-17-developer-architecture-documentation-reconciliation-admin-tier: ready-for-dev
   11-18-cross-cutting-documentation-sweep-admin-tier: ready-for-dev
+  11-20-api-docs-header-link: ready-for-dev
 
   # Epic 12 — UI/UX Visual Design & Professional Polish (frontend; refines Epic 10
   # shell + Story 5.7 theme). 12-1 (theme/design system) is the foundation; 12-2 icons

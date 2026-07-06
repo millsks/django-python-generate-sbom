@@ -4192,3 +4192,151 @@ add-by-email/create-user, promote/demote, global-admin management).
 **Then** the entity/relationship view includes the ADMIN org / `is_admin_org` / roles / global-admin
 memberships and the zero-org state, and the flow diagrams reflect the new endpoints (auth/me,
 admin/global-admins, promote-admin, members/create-user).
+
+## Epic 15: Additional Lockfile Parsers (uv, Poetry, Pipenv)
+
+The app resolves five Python package formats today (`requirements.txt`, `pyproject.toml`, `pixi.lock`,
+`pixi.toml`, `conda environment.yml`). Three of those need transitive resolution (`uv pip compile` or a pixi
+solve); two are lockfiles read directly. This epic adds ingest support for the three remaining mainstream
+Python **lockfiles** — **`uv.lock`**, **`poetry.lock`**, and **`Pipfile.lock`** — one story per format.
+
+The design precedent is `sbom/parsers/pixi_lock.py`: **a lockfile already IS the fully-resolved transitive
+closure**, so its resolver reads the exact pins directly and performs **no re-resolution** (no subprocess, no
+network). The pipeline needs no change — Phase 2 (`resolve_transitive_deps` → `services.resolve_job_packages`
+→ `parsers.resolve_packages`) already dispatches by format, and a lockfile's `resolve()` short-circuits by
+returning the pins as it reads them. Each new format is wired the same way: a filename-detection pattern
+(`manifests/detection.py`), a `ManifestUpload.Format` choice + migration (`manifests/models.py`), a parser
+module registered in `sbom/parsers/__init__.py`, a per-format `estimate_seconds` entry (`sbom/services.py`),
+and the frontend format list (`frontend/src/api/manifestFormats.ts`) + upload copy, keeping the Story 6.4
+frontend/backend consistency test green.
+
+Note: `sbom/parsers/_uv.py` is the `uv pip compile` **resolution** helper (it re-resolves loose requirements);
+it is orthogonal to `uv.lock`, which is already resolved and must be read directly — so `uv.lock` gets a new
+pure-TOML reader, not a reuse of `_uv.py`. Direct/transitive handling differs per format and is decided
+explicitly in each story, consistent with how `pixi.lock` records `unknown` when a format cannot declare its
+direct set (Story 8.3, `test_pixi_lock_packages_are_unknown`).
+
+**ORDER:** implement **Story 15.1 (`uv.lock`) first** — it establishes the shared lockfile-reader conventions
+(and any small `sbom/parsers/_lockfile.py` helper) that 15.2 and 15.3 reuse.
+
+### Story 15.1: uv.lock Parser
+
+As a user,
+I want to upload a `uv.lock` file,
+So that I get an SBOM built from its exact pinned closure without the app re-resolving anything.
+
+**Acceptance Criteria:**
+
+**Given** a file named `uv.lock`,
+**When** it is uploaded,
+**Then** `manifests/detection.py` detects it as a new `ManifestUpload.Format.UV_LOCK` via an exact-match
+filename pattern, `validate_parseable` safe-parses it as TOML (`tomllib`), and the `SUPPORTED` string lists
+`uv.lock`.
+
+**Given** a valid `uv.lock` (TOML with `[[package]]` tables carrying `name`/`version`/`source`, per-package
+`dependencies` edges, and `[[package.wheels]]`/`[package.sdist]` hashes),
+**When** the new `sbom/parsers/uv_lock.py` resolver runs,
+**Then** it reads every `[[package]]` into a pinned `PackageSpec` (name + exact version, PyPI ecosystem)
+**without any re-resolution** — no `uv pip compile`, no subprocess, no network — mirroring `pixi_lock.resolve`,
+and is registered in `sbom/parsers/__init__.py` `_RESOLVERS`.
+
+**Given** `uv.lock` records the root project as a `[[package]]` whose `source` is `editable`/`virtual` (`.`),
+**When** direct/transitive is assigned,
+**Then** the root package's `dependencies` (plus its optional/dev dependency groups) are the declared set and
+`tag_relationships` marks those packages `direct` and the rest `transitive`; if no root package is
+identifiable, all packages fall back to `unknown` (the `pixi.lock` precedent). The root/virtual project entry
+itself is excluded from the component list.
+
+**Given** the enum gains a value,
+**When** the change lands,
+**Then** a Django migration for `manifests` is generated (choice-only `AlterField`; `detected_format`
+`max_length=20` already fits `uv_lock`), `estimate_seconds` gains a `UV_LOCK` entry reflecting the skipped
+resolution step, and the frontend `MANIFEST_FORMATS` list + upload copy (`frontend/src/pages/HomePage.tsx`)
+plus the supported-format prose/count (one-pager, docs how-to) are updated to include `uv.lock`.
+
+**Given** the test suite,
+**When** complete,
+**Then** `pixi run ci` is green (backend coverage ≥90%) with: a parser unit test against a committed real
+`uv.lock` fixture (self-contained, no network) asserting the pinned set + direct/transitive tags, a detection
+test for `uv.lock`, and the Story 6.4 manifest-format consistency test (`test_manifest_format_consistency.py`)
+kept passing.
+
+### Story 15.2: poetry.lock Parser
+
+As a user,
+I want to upload a `poetry.lock` file,
+So that I get an SBOM built from its exact pinned closure without the app re-resolving anything.
+
+**Acceptance Criteria:**
+
+**Given** a file named `poetry.lock`,
+**When** it is uploaded,
+**Then** it is detected as `ManifestUpload.Format.POETRY_LOCK` via an exact-match filename pattern,
+`validate_parseable` safe-parses it as TOML, and `SUPPORTED` lists `poetry.lock`.
+
+**Given** a valid `poetry.lock` (TOML `[[package]]` tables with `name`/`version`/`optional`, `groups`
+(new) or `category` (older), `[package.dependencies]` edges, and hashes under `[[package.files]]` or the
+top-level `[metadata.files]` map),
+**When** the new `sbom/parsers/poetry_lock.py` resolver runs,
+**Then** it reads every `[[package]]` into a pinned `PackageSpec` (name + exact version, PyPI ecosystem)
+**without re-resolution**, reusing the 15.1 lockfile-reader conventions, and is registered in `_RESOLVERS`.
+
+**Given** `poetry.lock` alone does not declare the direct set — the direct dependencies live in the sibling
+`pyproject.toml` `[tool.poetry.dependencies]`, which is not part of the lock,
+**When** direct/transitive is assigned,
+**Then** all packages are recorded as resolved with relationship `unknown` (the `pixi.lock` precedent — never
+guess a declared set), and this decision is documented in the parser; the package's group (`main`/`dev` from
+`groups`/`category`) is read tolerantly but is **not** treated as a direct/transitive signal.
+
+**Given** the enum gains a value,
+**When** the change lands,
+**Then** a `manifests` migration is generated (`poetry_lock` fits `max_length=20`), `estimate_seconds` gains a
+`POETRY_LOCK` entry (skipped resolution), and the frontend `MANIFEST_FORMATS` list + upload copy and the
+supported-format prose/count are updated to include `poetry.lock`.
+
+**Given** the test suite,
+**When** complete,
+**Then** `pixi run ci` is green (coverage ≥90%) with a parser unit test against a committed real `poetry.lock`
+fixture (covering both an older `category`/`[metadata.files]` shape and a newer `groups`/`[[package.files]]`
+shape, self-contained, no network), a detection test, and the Story 6.4 consistency test kept green.
+
+### Story 15.3: Pipfile.lock Parser
+
+As a user,
+I want to upload a `Pipfile.lock` file,
+So that I get an SBOM built from its exact pinned closure without the app re-resolving anything.
+
+**Acceptance Criteria:**
+
+**Given** a file named `Pipfile.lock`,
+**When** it is uploaded,
+**Then** it is detected as `ManifestUpload.Format.PIPFILE_LOCK` via an exact-match filename pattern (matched
+case-insensitively — detection lowercases the name), `validate_parseable` safe-parses it as **JSON**
+(`json.loads`, a new branch alongside the TOML/YAML branches), and `SUPPORTED` lists `Pipfile.lock`.
+
+**Given** a valid `Pipfile.lock` (JSON with `_meta`, a `default` object of runtime deps and a `develop` object
+of dev deps, each package `{name: {version: "==x.y.z", hashes: [...]}}`),
+**When** the new `sbom/parsers/pipfile_lock.py` resolver runs,
+**Then** it reads every entry under `default` and `develop` into a pinned `PackageSpec` (name + the exact
+version parsed from the `==` pin, PyPI ecosystem) **without re-resolution**, tolerating entries that lack a
+`version` (VCS/editable installs — skipped or version-blank, not a crash), reusing the 15.1 conventions, and
+is registered in `_RESOLVERS`.
+
+**Given** `Pipfile.lock`'s `default`/`develop` sections each hold the **full** closure (direct + transitive)
+with no per-package direct marker,
+**When** relationship and group are assigned,
+**Then** all packages are recorded as resolved with relationship `unknown` (the `pixi.lock` precedent); the
+`default` vs `develop` split (runtime vs dev group) is read but, like `poetry.lock`'s groups, is not treated
+as a direct/transitive signal.
+
+**Given** the enum gains a value,
+**When** the change lands,
+**Then** a `manifests` migration is generated (`pipfile_lock` fits `max_length=20`), `estimate_seconds` gains a
+`PIPFILE_LOCK` entry (skipped resolution), and the frontend `MANIFEST_FORMATS` list + upload copy and the
+supported-format prose/count (now **8 Python package formats**) are updated to include `Pipfile.lock`.
+
+**Given** the test suite,
+**When** complete,
+**Then** `pixi run ci` is green (coverage ≥90%) with a parser unit test against a committed real `Pipfile.lock`
+fixture (self-contained, no network) asserting the pinned set across `default` + `develop`, a detection test
+(including the `Pipfile.lock` mixed-case name), and the Story 6.4 consistency test kept green.

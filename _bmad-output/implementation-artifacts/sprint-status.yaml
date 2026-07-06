@@ -186,10 +186,10 @@ development_status:
   11-12-api-reference-and-openapi-reconciliation: done
   11-13-developer-documentation-reconciliation: done
   11-14-cross-cutting-documentation-audit-and-refresh: done
-  11-15-user-facing-documentation-reconciliation-admin-tier: ready-for-dev
-  11-16-api-reference-and-openapi-reconciliation-admin-tier: ready-for-dev
-  11-17-developer-architecture-documentation-reconciliation-admin-tier: ready-for-dev
-  11-18-cross-cutting-documentation-sweep-admin-tier: ready-for-dev
+  11-15-user-facing-documentation-reconciliation-admin-tier: review
+  11-16-api-reference-and-openapi-reconciliation-admin-tier: review
+  11-17-developer-architecture-documentation-reconciliation-admin-tier: review
+  11-18-cross-cutting-documentation-sweep-admin-tier: review
   11-19-openapi-schema-completeness: ready-for-dev
   11-20-api-docs-header-link: ready-for-dev
 

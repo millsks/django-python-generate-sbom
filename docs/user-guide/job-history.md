@@ -19,4 +19,4 @@ tabs and downloads are available exactly as when it first completed.
     the organization switcher in the top bar.
 
 !!! info "Screenshots"
-    _Screenshots of the history dashboard are added with the UI polish work._
+    _Screenshots of the History page are added with the UI polish work._

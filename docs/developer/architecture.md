@@ -69,9 +69,29 @@ role (`admin` or `member`). See the [Data Model](data-model.md) for the fields.
 - **Zero-org identity.** A freshly registered user has **no** memberships —
   registration creates the account only, never a "personal" org. Authentication
   is therefore independent of org membership: the SPA establishes identity through
-  `GET /auth/me/`, which succeeds for a user with no orgs. Anything org-scoped
-  resolves the active org separately (`get_request_org`), and returns `None` when
-  the user belongs to no org.
+  `GET /auth/me/`, which succeeds for a user with no orgs and returns
+  `{id, email, is_admin, is_global_admin}`. Anything org-scoped resolves the active
+  org separately (`get_request_org`), and returns `None` when the user belongs to
+  no org. A signed-in user with no active org is **restricted to the home page**
+  (Story 2.18): the SPA hides the org-scoped destinations and renders the shared
+  no-org empty state instead of an error.
+
+- **Admin authorization, gated twice.** Admin-only surfaces (Members, Organization,
+  and the global-admin screen) are enforced at **both** layers (Story 2.17): the
+  React routes wrap the page in `AdminRoute` / `GlobalAdminRoute`, and the matching
+  API endpoints independently return `403` for a non-admin — the route guard is
+  UX, not security. `auth/me`'s `is_admin` (admin of the active org) and
+  `is_global_admin` flags are the SPA's single source of truth for gating nav,
+  routes, and affordances, so the client never probes an admin-only endpoint to
+  learn its role.
+
+- **Per-org promote / demote.** Admins add or remove *per-org* admins with
+  `promote_member_to_admin` (Story 2.16) and `demote_admin_to_member` (Story 2.20);
+  an org may have any number of admins. Promotion adds an admin and demotes no one
+  (replacing the old `transfer_admin`, which surprisingly demoted the caller and
+  could strip a global admin). Demotion guards mirror the removal invariants — it
+  cannot demote a global admin (they must stay admin of every org) or the org's
+  last admin. These per-org roles are distinct from the global-admin tier below.
 
 - **The system ADMIN org.** Exactly one org is distinguished by
   `Org.is_admin_org=True` (seeded by a data migration). Its members are **global
@@ -89,15 +109,42 @@ role (`admin` or `member`). See the [Data Model](data-model.md) for the fields.
 
 - **Superuser seeding.** `UserManager.create_superuser` calls
   `grant_global_admin`, so any Django superuser becomes a global admin as soon as
-  the ADMIN org exists. The `bootstrap_admin_org` management command is the
+  the ADMIN org exists. The env-driven `seed_superuser` management command creates
+  the initial superuser from `DJANGO_SUPERUSER_EMAIL` / `DJANGO_SUPERUSER_PASSWORD`
+  on boot (idempotent, Story 2.13). The `bootstrap_admin_org` command is the
   idempotent catch-up path: it ensures the ADMIN org row is present and back-fills
   every existing superuser (covering superusers created before the hook, or before
   migrations ran). See [Setup](setup.md).
+
+- **Global-admin management API.** `list_global_admins`,
+  `grant_global_admin_by_email`, and `revoke_global_admin` back the global-admin
+  screen (Story 13.1). Grant looks a user up by email (no auto-create); revoke
+  removes them from the ADMIN org and demotes them to `member` everywhere, guarded
+  so the last global admin can never be removed.
 
 - **Non-stranding guards.** Because global admins are real memberships,
   membership-removal services (`remove_member` / `leave_org`) guard the tier: the
   ADMIN org can never lose its last member, and a global admin cannot be removed
   from a single normal org (they belong to all of them).
+
+## Version-currency enrichment
+
+The version-currency analysis phase (`analysis.services.versions`) reports how far
+behind each dependency is, and reconciles two upstreams:
+
+- **PyPI Latest.** Each component carries a **PyPI Latest** column alongside the
+  installed version (Stories 8.22/8.23). When the installed version diverges from
+  the latest, the divergence is flagged — and the flag is carried into the **Excel
+  export as red text** so it stands out in a spreadsheet review.
+- **conda-forge disambiguation.** The conda-forge latest is resolved via
+  prefix.dev. Because many conda-forge feedstocks prefix the PyPI name with
+  `python-` (e.g. `python-dateutil`), a reverse lookup disambiguates the
+  `python-<name>` feedstock so the conda-forge latest matches the right package
+  (Story 8.24).
+
+The reconciled per-component versions feed both the in-app version report and the
+Excel export; the pure comparison logic lives in the service layer (see the
+[Code Reference](code-reference.md)).
 
 ## Dependency direction
 

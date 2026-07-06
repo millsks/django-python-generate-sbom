@@ -1,6 +1,6 @@
 # Story 11.17: Developer/Architecture Documentation Reconciliation (Admin Tier, 2nd Pass)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -62,9 +62,25 @@ so that I can reason about permissions and the codebase correctly.
 
 ### Agent Model Used
 
+claude-opus-4-8[1m] (Opus 4.8, 1M context)
+
 ### Debug Log References
+
+- `pixi run docs-build` (`mkdocs build --strict`) — green (mkdocstrings renders `generate_sbom.users.services`).
+- `pixi run ci` — green.
 
 ### Completion Notes List
 
+- Verified against `users/services.py`, `users/views.py`, `users/models.py`, `analysis/services/versions.py`, and the `seed_superuser` / `bootstrap_admin_org` management commands.
+- `architecture.md`: expanded the accounts/global-admin section — added the **admin-route + API authorization** pattern gated at both layers (AdminRoute/GlobalAdminRoute + API 403, Story 2.17), `auth/me` exposing `is_admin`/`is_global_admin`, per-org **promote/demote** (2.16/2.20), the **zero-org-restricted-to-home** rule (2.18), the env-driven `seed_superuser` bootstrap (2.13), and the global-admin management services (13.1). Added a **Version-currency enrichment** subsection (PyPI Latest column + Excel red divergence, 8.22/8.23; conda-forge `python-<name>` disambiguation, 8.24).
+- `data-model.md`: noted per-org `OrgMembership.role` toggling via promote/demote, distinct from the global-admin tier (the zero-org and ADMIN-org sections were already accurate).
+- `setup.md`: documented the env-driven `seed_superuser` command (idempotent; seeds into the ADMIN org, not a personal org).
+- `code-reference.md`: added `::: generate_sbom.users.services` so the membership / admin / global-admin services render via mkdocstrings.
+
 ### File List
+
+- `docs/developer/architecture.md`
+- `docs/developer/data-model.md`
+- `docs/developer/setup.md`
+- `docs/developer/code-reference.md`
 </content>

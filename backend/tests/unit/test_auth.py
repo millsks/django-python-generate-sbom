@@ -4,7 +4,8 @@ import pytest
 from rest_framework.test import APIClient
 
 from generate_sbom.users.auth import SESSION_ACTIVE_ORG
-from generate_sbom.users.services import create_org, register_user
+from generate_sbom.users.models import User
+from generate_sbom.users.services import create_org, get_the_admin_org, register_user
 
 
 @pytest.mark.django_db
@@ -84,6 +85,57 @@ def test_login_missing_fields_is_generic() -> None:
 
     assert response.status_code == 400
     assert response.data["error"] == "Invalid email or password"
+
+
+# --- Story 2.18: the ADMIN org is never the active working org -------------
+
+
+@pytest.mark.django_db
+def test_admin_org_never_active_via_session_path() -> None:
+    """A pinned ADMIN ``active_org_id`` resolves to no active org (session path, Story 2.18)."""
+    User.objects.create_superuser(email="root@example.com", password="pw12345678")
+    admin_org = get_the_admin_org()
+    assert admin_org is not None
+    client = APIClient()
+    client.post("/api/v1/auth/login/", {"email": "root@example.com", "password": "pw12345678"}, format="json")
+    session = client.session
+    session[SESSION_ACTIVE_ORG] = admin_org.pk
+    session.save()
+
+    response = client.get("/api/v1/orgs/me/")
+
+    assert response.status_code == 404
+    assert response.data["code"] == "no_active_org"
+
+
+@pytest.mark.django_db
+def test_admin_org_never_active_via_fallback_path() -> None:
+    """A user whose only membership is the ADMIN org resolves to no active org (fallback)."""
+    User.objects.create_superuser(email="root@example.com", password="pw12345678")
+    client = APIClient()
+    client.post("/api/v1/auth/login/", {"email": "root@example.com", "password": "pw12345678"}, format="json")
+    # Clear any pinned org so resolution goes through the fallback branch.
+    session = client.session
+    session.pop(SESSION_ACTIVE_ORG, None)
+    session.save()
+
+    response = client.get("/api/v1/orgs/me/")
+
+    assert response.status_code == 404
+    assert response.data["code"] == "no_active_org"
+
+
+@pytest.mark.django_db
+def test_org_scoped_endpoint_denies_with_no_active_org() -> None:
+    """An org-scoped endpoint denies a zero-org user (defense in depth, Story 2.18)."""
+    register_user(email="alice@example.com", password="pw12345678")
+    client = APIClient()
+    client.post("/api/v1/auth/login/", {"email": "alice@example.com", "password": "pw12345678"}, format="json")
+
+    response = client.get("/api/v1/keys/")
+
+    assert response.status_code == 404
+    assert response.data["code"] == "no_active_org"
 
 
 @pytest.mark.django_db

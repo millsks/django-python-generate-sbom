@@ -9,7 +9,7 @@ import { UploadPage } from './pages/UploadPage'
 import { ResultsPage } from './pages/ResultsPage'
 import { HistoryPage } from './pages/HistoryPage'
 import { GlobalAdminsPage } from './pages/GlobalAdminsPage'
-import { ProtectedRoute } from './components/ProtectedRoute'
+import { OrgRoute } from './components/OrgRoute'
 import { AdminRoute } from './components/AdminRoute'
 import { GlobalAdminRoute } from './components/GlobalAdminRoute'
 import { Layout } from './components/Layout'
@@ -43,33 +43,33 @@ function App() {
             <Route
               path="/keys"
               element={
-                <ProtectedRoute>
+                <OrgRoute>
                   <KeysPage />
-                </ProtectedRoute>
+                </OrgRoute>
               }
             />
             <Route
               path="/upload"
               element={
-                <ProtectedRoute>
+                <OrgRoute>
                   <UploadPage />
-                </ProtectedRoute>
+                </OrgRoute>
               }
             />
             <Route
               path="/results/:taskId"
               element={
-                <ProtectedRoute>
+                <OrgRoute>
                   <ResultsPage />
-                </ProtectedRoute>
+                </OrgRoute>
               }
             />
             <Route
               path="/history"
               element={
-                <ProtectedRoute>
+                <OrgRoute>
                   <HistoryPage />
-                </ProtectedRoute>
+                </OrgRoute>
               }
             />
             <Route

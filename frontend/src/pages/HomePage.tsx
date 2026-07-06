@@ -8,6 +8,8 @@ import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import { Link as RouterLink } from 'react-router-dom'
 import { APP_NAME, DOCS_URL } from '../config'
+import { useAuth } from '../auth/AuthProvider'
+import { NoOrgState } from '../components/NoOrgState'
 import { ExportIcon, TabIcon, UploadActionIcon } from '../icons'
 
 // The public landing page (Story 12.8) at `/`, rendered in the app shell for everyone
@@ -55,6 +57,15 @@ function FeatureCard({ Icon, title, blurb }: Feature) {
 }
 
 export function HomePage() {
+  // A signed-in user with no active org is restricted to home (Story 2.18): hide the
+  // "Upload a manifest" CTA — which points at an org-scoped route — and show the shared
+  // no-org empty state instead. Anonymous visitors and users with an active org see the
+  // normal landing page (an anonymous click on the CTA is sent to login by OrgRoute).
+  const { status, activeOrg } = useAuth()
+  if (status === 'authed' && !activeOrg) {
+    return <NoOrgState />
+  }
+
   return (
     <Container maxWidth="lg" sx={{ py: { xs: 4, md: 8 } }}>
       <Stack spacing={3} sx={{ textAlign: 'center', alignItems: 'center', mb: { xs: 6, md: 10 } }}>

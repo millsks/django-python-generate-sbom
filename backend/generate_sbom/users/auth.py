@@ -34,7 +34,10 @@ def get_request_org(request: Request) -> Org | None:
     memberships = OrgMembership.objects.filter(user=user).select_related("org")
     active_id = request.session.get(SESSION_ACTIVE_ORG)
     if active_id is not None:
-        membership = memberships.filter(org_id=active_id).first()
+        # Exclude the system ADMIN org even when it is pinned in the session (Story 2.18):
+        # a global admin whose only membership is the ADMIN org must resolve to zero-org,
+        # never have the ADMIN org act as their working org.
+        membership = memberships.filter(org_id=active_id, org__is_admin_org=False).first()
         if membership is not None:
             return membership.org
 

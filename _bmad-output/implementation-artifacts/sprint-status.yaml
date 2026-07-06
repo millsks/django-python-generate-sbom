@@ -83,7 +83,7 @@ development_status:
   6-1-jobs-list-api-and-dashboard-table: done
   6-2-live-progress-polling: done
   6-3-job-elapsed-time-on-history-page: done
-  6-4-fix-manifest-format-filter-on-history: ready-for-dev
+  6-4-fix-manifest-format-filter-on-history: review
 
   epic-7: done
   7-1-scheduled-artifact-expiry-and-cleanup: done

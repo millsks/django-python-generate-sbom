@@ -153,3 +153,55 @@ def test_endpoint_status_filter_param() -> None:
 
     assert response.data["count"] == 1
     assert response.data["results"][0]["status"] == "FAILED"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("fmt", list(ManifestUpload.Format.values))
+def test_endpoint_format_filter_matches_every_canonical_format(fmt: str) -> None:
+    """Every canonical format (incl. pixi_toml) returns 200 with only its matching job (AC #1)."""
+    alice, org = _org("alice@example.com")
+    match = _job(org, alice, fmt=fmt)
+    other = next(f for f in ManifestUpload.Format.values if f != fmt)
+    _job(org, alice, fmt=other)  # different format — must be excluded
+
+    response = _login("alice@example.com").get(f"/api/v1/sbom/jobs/?format={fmt}")
+
+    assert response.status_code == 200
+    assert response.data["count"] == 1
+    assert response.data["results"][0]["task_id"] == str(match.task_id)
+    assert response.data["results"][0]["manifest_format"] == fmt
+
+
+@pytest.mark.django_db
+def test_endpoint_format_filter_all_returns_every_format() -> None:
+    """No format param (the 'All' selection) returns jobs of every format (AC #2, no regression)."""
+    alice, org = _org("alice@example.com")
+    for fmt in ManifestUpload.Format.values:
+        _job(org, alice, fmt=fmt)
+
+    response = _login("alice@example.com").get("/api/v1/sbom/jobs/")
+
+    assert response.status_code == 200
+    assert response.data["count"] == len(ManifestUpload.Format.values)
+
+
+@pytest.mark.django_db
+def test_endpoint_invalid_format_degrades_to_empty_not_error() -> None:
+    """An unknown format degrades to an empty 200, never a 400/500 (AC #3)."""
+    alice, org = _org("alice@example.com")
+    _job(org, alice, fmt="pixi_toml")
+
+    response = _login("alice@example.com").get("/api/v1/sbom/jobs/?format=not_a_real_format")
+
+    assert response.status_code == 200
+    assert response.data["count"] == 0
+
+
+@pytest.mark.django_db
+def test_selector_invalid_format_returns_empty_queryset() -> None:
+    """The selector ignores nothing and raises nothing for a bad format — it returns empty (AC #3)."""
+    alice, org = _org("alice@example.com")
+    _job(org, alice, fmt="pixi_toml")
+
+    assert get_jobs(org, format_filter="bogus").count() == 0
+    assert get_jobs(org, format_filter="pixi_toml").count() == 1

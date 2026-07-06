@@ -6,6 +6,7 @@ from typing import cast
 
 from django.db.models import QuerySet
 
+from generate_sbom.manifests.models import ManifestUpload
 from generate_sbom.users.models import Org
 
 from .models import SBOMJob
@@ -43,5 +44,12 @@ def get_jobs(
     if statuses:
         jobs = jobs.filter(status__in=statuses)
     if format_filter:
-        jobs = jobs.filter(manifest__detected_format=format_filter)
+        # Filter only on a canonical ManifestUpload.Format code (Story 6.4, AD-2). An
+        # unknown value — a stale UI or backend/frontend format drift — degrades to an
+        # empty result set; it never raises, so a filter selection can't surface an
+        # error banner (AC #3).
+        if format_filter in ManifestUpload.Format.values:
+            jobs = jobs.filter(manifest__detected_format=format_filter)
+        else:
+            jobs = jobs.none()
     return jobs

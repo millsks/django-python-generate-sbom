@@ -18,6 +18,7 @@ urlpatterns = [
     path("api/v1/", include("generate_sbom.manifests.urls")),
     path("api/v1/", include("generate_sbom.sbom.urls")),
     path("api/v1/", include("generate_sbom.analysis.urls")),
+    path("api/v1/", include("generate_sbom.common.urls")),
 ]
 
 # Interactive API docs (Story 11.9) — served only when enabled for the environment.

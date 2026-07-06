@@ -18,13 +18,14 @@ import Typography from '@mui/material/Typography'
 import useMediaQuery from '@mui/material/useMediaQuery'
 import { useTheme } from '@mui/material/styles'
 import ListItemIcon from '@mui/material/ListItemIcon'
+import ApiIcon from '@mui/icons-material/Api'
 import FactCheckIcon from '@mui/icons-material/FactCheck'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import MenuBookIcon from '@mui/icons-material/MenuBook'
 import MenuIcon from '@mui/icons-material/Menu'
 import { useAuth } from '../auth/AuthProvider'
 import { AccountIcon, LogoutActionIcon } from '../icons'
-import { APP_NAME, DOCS_URL, REPO_URL } from '../config'
+import { APP_NAME, DOCS_API_URL, DOCS_URL, REPO_URL } from '../config'
 import { ThemeToggle } from '../ThemeModeProvider'
 import { Footer } from './Footer'
 import { OrgSwitcher } from './OrgSwitcher'
@@ -53,7 +54,7 @@ function NavButton({ to, label }: { to: string; label: string }) {
 }
 
 export function Layout() {
-  const { status, user, activeOrg, isAdmin, isGlobalAdmin, logout } = useAuth()
+  const { status, user, activeOrg, isAdmin, isGlobalAdmin, apiDocsEnabled, logout } = useAuth()
   const navigate = useNavigate()
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
@@ -90,6 +91,11 @@ export function Layout() {
           </Box>
 
           <Box sx={{ flexGrow: 1 }} />
+          {apiDocsEnabled && (
+            <ExternalIconLink href={DOCS_API_URL} label="API docs">
+              <ApiIcon />
+            </ExternalIconLink>
+          )}
           <ExternalIconLink href={DOCS_URL} label="Documentation">
             <MenuBookIcon />
           </ExternalIconLink>

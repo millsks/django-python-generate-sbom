@@ -1685,6 +1685,42 @@ Added 2026-07-03 (Kevin): the SPA has no MUI ThemeProvider, so the UI is stuck o
 **When** I switch light↔dark,
 **Then** the whole UI updates immediately and my choice persists (localStorage) across reloads with no wrong-theme flash on load.
 
+<!-- Epic 5 reopened (UX): Story 5.8 moves the Dependency Graph tab to the right of Version
+     Currency so the least-important report comes last on the Results tab bar. Frontend-only;
+     the tabs are position-indexed, so the header swap must be paired with a matching TabPanel
+     body swap and an Overview quick-nav index bump (versions 5→4). Deep-linking and Excel
+     export order are unaffected (tab is local state only; export order is independent). -->
+
+### Story 5.8: Move the Dependency Graph Tab to the Right of Version Currency
+
+As a user of the SBOM Results page,
+I want the Dependency Graph tab to sit to the right of Version Currency (last in the bar),
+So that the tab order reflects each report's importance and the least-central report comes last.
+
+**Context (UX):** the Results tab bar currently ends **Dependency Graph · Version Currency**
+(`ResultsPage.tsx:32-33`). Kevin's request (2026-07-05): the graph is less important than the
+other reports and should come last. The tabs are rendered by array position and the panels are
+index-based, so the header swap must be paired with a matching `TabPanel` body swap, and the
+Overview quick-nav card index for Version Currency must move 5→4 (`OverviewTab.tsx:20`).
+
+**Acceptance Criteria:**
+
+**Given** the Results tab bar,
+**When** the page renders,
+**Then** the tabs read Overview · SBOM · Vulnerabilities · Licenses · **Version Currency · Dependency Graph** — Version Currency before Dependency Graph, with Dependency Graph last.
+
+**Given** the reordered tab bar,
+**When** I select the Version Currency or Dependency Graph tab,
+**Then** the correct report renders (each `TabPanel` body's index still matches its header — no cross-wiring).
+
+**Given** the Overview quick-nav metric cards,
+**When** I click the Version currency card,
+**Then** it still jumps to the Version Currency tab at its new index, and the Vulnerabilities and Licenses cards still jump to their unchanged tabs.
+
+**Given** the reorder,
+**When** complete,
+**Then** deep-linking and Excel export ordering are unaffected — the active tab is local component state only (no URL coupling) and the "Export all to Excel" sheet order is independent of the tab array — and the `ResultsPage` tab-order test plus the Overview quick-nav index test are updated, with `pixi run ci` green.
+
 ---
 
 ## Epic 6: Job History Dashboard

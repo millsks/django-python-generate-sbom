@@ -1,6 +1,6 @@
 # Story 8.25: Include License in the SBOM Document
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -49,7 +49,7 @@ so that the SBOM tab's Components table License column (and the raw SBOM blob) s
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Share the Phase 5 license normalization (AC: #4)**
+- [x] **Task 1 — Share the Phase 5 license normalization (AC: #4)**
   - [ ] Promote the per-package resolver `_extract_license(session, pkg) -> str | None`
     (`backend/generate_sbom/analysis/services/license.py:71-90`) — plus the
     `_CLASSIFIER_SPDX` table (`license.py:50-68`) — into a single reusable normalization
@@ -63,7 +63,7 @@ so that the SBOM tab's Components table License column (and the raw SBOM blob) s
     (`analysis.services.license` already imports `PackageSpec` from `sbom.parsers._types`
     and `http` from `analysis.services`). One shared source is the invariant; the exact
     module is dev's call.
-- [ ] **Task 2 — Build a license map in the Phase 3 task, keep generation I/O-free (AC: #1, #2, #5)**
+- [x] **Task 2 — Build a license map in the Phase 3 task, keep generation I/O-free (AC: #1, #2, #5)**
   - [ ] In the Phase 3 task `generate_sbom_document` (`backend/generate_sbom/tasks/sbom_pipeline.py:144-176`),
     before calling the pure serializer (`:159`), resolve a license map over the resolved
     packages using the shared normalizer and the cached `http.pypi_session()`
@@ -74,7 +74,7 @@ so that the SBOM tab's Components table License column (and the raw SBOM blob) s
     (e.g. `license_map: dict[tuple[str, str], str | None]` keyed by `(name, version)`),
     not by fetching inside the serializer. This preserves the independently-testable
     contract and lets the AC #6 unit test drive it with a fixture map (no network).
-- [ ] **Task 3 — Emit the license on each component (AC: #1, #2)**
+- [x] **Task 3 — Emit the license on each component (AC: #1, #2)**
   - [ ] **CycloneDX** (`backend/generate_sbom/sbom/generation.py:97-106`): after building each
     `Component(...)`, set `component.licenses` from the map. Use
     `cyclonedx-python-lib`'s `LicenseFactory().make_from_string(value)`
@@ -85,13 +85,13 @@ so that the SBOM tab's Components table License column (and the raw SBOM blob) s
     call `set_licenseconcluded(value)` and `set_licensedeclared(value)` for a known value,
     else `NOASSERTION` (AC #2). `document.py::_spdx_license` reads
     `licenseConcluded`/`licenseDeclared`, so this surfaces in the viewer.
-- [ ] **Task 4 — Confirm the viewer surfaces it (AC: #3)**
+- [x] **Task 4 — Confirm the viewer surfaces it (AC: #3)**
   - [ ] No SBOM-viewer change is expected: `sbom/document.py::normalize_components` already
     parses `licenses` back out (`_component` `document.py:203-218`, `_cyclonedx_license`
     `:248-263`, `_spdx_license` `:361-367`), and `SbomTab.tsx:153` renders `row.license ?? '—'`
     from `SbomComponent.license` (`frontend/src/api/sbom.ts:6-13`). Verify end-to-end that
     an enriched document yields a populated License column and Raw view.
-- [ ] **Task 5 — Tests (AC: #6)**
+- [x] **Task 5 — Tests (AC: #6)**
   - [ ] Backend unit (`backend/tests/unit/test_sbom_generation.py`): with a fixture
     `license_map`, assert the generated CycloneDX components carry `licenses` for
     known-license packages (SPDX id, expression, and free-text/name cases) and carry none
@@ -206,8 +206,27 @@ the only frontend work is the null → `—` test assertion (Task 5).
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
 
 ### Completion Notes List
 
+- Added `build_license_map(packages, *, session)` to `analysis/services/license.py` — reuses the
+  existing `_extract_license` (single normalization shared with Phase 5 `classify`, AC #4).
+- `generation.generate_sbom_document` gains an optional `license_map` param and stays pure/I/O-free
+  (Story 3.4). CycloneDX emits `component.licenses` via `LicenseFactory().make_from_string` (imported
+  from the canonical `cyclonedx.contrib.license.factories` to avoid the deprecated re-export); SPDX
+  sets `licenseConcluded`/`licenseDeclared`, `NOASSERTION` when unknown (AC #1/#2).
+- The Phase 3 task (`tasks/sbom_pipeline.py`) resolves the map over the cached PyPI session before the
+  pure serializer, and passes it in — blob written once at Phase 3, Phase 8 untouched (AD-6, AC #5).
+- Viewer unchanged: existing `document.py` parse-back + `SbomTab.tsx` render the license (AC #3).
+
 ### File List
+
+- backend/generate_sbom/analysis/services/license.py
+- backend/generate_sbom/sbom/generation.py
+- backend/generate_sbom/tasks/sbom_pipeline.py
+- backend/tests/unit/test_sbom_generation.py
+- backend/tests/unit/test_license_service.py
+- frontend/src/components/SbomTab.test.tsx

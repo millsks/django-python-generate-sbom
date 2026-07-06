@@ -247,6 +247,7 @@
   <a href="#containers">Containers</a>
   <a href="#components">Components</a>
   <a href="#pipeline">Async Pipeline</a>
+  <a href="#org-admin">Org &amp; Admin</a>
   <a href="#data-model">Data Model</a>
   <a href="#dependency-direction">Dependency Direction</a>
   <a href="#decisions">Arch Decisions</a>
@@ -478,11 +479,58 @@ sequenceDiagram
 
   <div class="divider"></div>
 
+  <!-- ── Org & Admin Flows ── -->
+  <section class="diagram-section" id="org-admin">
+    <h2>Org &amp; Admin Flows <span class="level-badge">AD-14</span></h2>
+    <p class="diagram-desc">
+      The account / org / admin model. Registration creates a <strong>zero-org</strong> user; identity comes from <code>auth/me</code>, decoupled from the active org. Org creation and global-admin management are <strong>global-admin-gated</strong>; membership and promote/demote are per-org-admin actions. Every admin-only endpoint re-checks authorization server-side (<code>403</code>) — the SPA only hides affordances.
+    </p>
+    <div class="diagram-card">
+      <div class="mermaid">
+sequenceDiagram
+    participant SPA as React SPA
+    participant API as Django (DRF)
+    participant DB as PostgreSQL
+
+    Note over SPA,DB: Identity & onboarding (zero-org)
+    SPA->>API: POST /auth/register/
+    API->>DB: create User (no org)
+    API-->>SPA: 201 {user, org: null}
+    SPA->>API: GET /auth/me/
+    API-->>SPA: {id, email, is_admin, is_global_admin}
+
+    Note over SPA,DB: Org creation — global admin only
+    SPA->>API: POST /orgs/create/
+    API->>API: is_global_admin? else 403
+    API->>DB: create Org + admin membership; provision every global admin as admin
+    API-->>SPA: 201 {slug, name}
+
+    Note over SPA,DB: Membership — per-org admin
+    SPA->>API: POST /orgs/members/ (add existing by email)
+    API->>DB: add OrgMembership (no_such_user if unregistered)
+    SPA->>API: POST /orgs/members/create-user/ (new account)
+    API->>DB: create User + membership (email_taken if exists)
+    SPA->>API: POST /orgs/promote-admin/ · /orgs/demote-admin/
+    API->>DB: set role admin/member (guards last admin & global admin)
+
+    Note over SPA,DB: Global-admin management — global admin only
+    SPA->>API: GET /admin/global-admins/
+    API-->>SPA: {global_admins: [...]}
+    SPA->>API: POST /admin/global-admins/ (grant by email)
+    API->>DB: add to ADMIN org + admin of every org
+    SPA->>API: DELETE /admin/global-admins/{id}/ (revoke)
+    API->>DB: remove from ADMIN org + demote everywhere (blocked if last global admin)
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
   <!-- ── Data Model ── -->
   <section class="diagram-section" id="data-model">
     <h2>Core Data Model <span class="level-badge">ERD</span></h2>
     <p class="diagram-desc">
-      PostgreSQL is the durable system of record. Redis holds transient task state only. S3/MinIO holds artifact blobs — keys (storage paths) are stored in PostgreSQL, blobs never are (AD-6).
+      PostgreSQL is the durable system of record. Redis holds transient task state only. S3/MinIO holds artifact blobs — keys (storage paths) are stored in PostgreSQL, blobs never are (AD-6). A <code>User</code> may hold <strong>zero</strong> memberships (zero-org identity); exactly one <code>Org</code> has <code>is_admin_org=true</code> — the <strong>ADMIN org</strong> whose members are <strong>global admins</strong>, each carrying a real <code>role=admin</code> membership in every non-admin org, so no separate global-admin entity is needed (AD-14).
     </p>
     <div class="diagram-card">
       <div class="mermaid">
@@ -491,12 +539,12 @@ erDiagram
         uuid id PK
         string name
         string slug
+        bool is_admin_org "true for the ONE ADMIN org (global-admin tier)"
         datetime created_at
     }
     User {
         uuid id PK
         string email
-        string name
     }
     OrgMembership {
         uuid id PK
@@ -617,7 +665,7 @@ graph BT
   <section class="diagram-section" id="decisions">
     <h2>Architecture Decision Summary</h2>
     <p class="diagram-desc">
-      Twelve binding decisions. Each constrains a specific part of the codebase and prevents a named failure mode.
+      Thirteen binding decisions. Each constrains a specific part of the codebase and prevents a named failure mode.
     </p>
     <div class="ad-grid">
       <div class="ad-card">
@@ -667,6 +715,10 @@ graph BT
       <div class="ad-card">
         <h4>AD-12 · SBOMJob.status ownership</h4>
         <p><code>SBOMJob.status</code> written only by Celery task code via <code>sbom/services.py</code>. Views read status, never write it. Exception: initial <code>PENDING</code> at job creation.</p>
+      </div>
+      <div class="ad-card">
+        <h4>AD-14 · Org/admin/auth model</h4>
+        <p>Zero-org identity via <code>auth/me</code>. Per-org admin vs. <strong>global admin</strong> (the one <code>is_admin_org</code> org, provisioned as admin of every org). Org creation + global-admin management are global-admin-gated; promote/demote replaces transfer. Admin authorization enforced at both the SPA route and the API (<code>403</code>).</p>
       </div>
     </div>
   </section>

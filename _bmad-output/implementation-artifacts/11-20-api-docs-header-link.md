@@ -1,6 +1,6 @@
 # Story 11.20: API Docs (Swagger UI) Link in the App Header — Env-Gated
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -124,8 +124,42 @@ Build-time alternative:
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
+
+None — `pixi run ci` green on the first full run after the inner-loop checks.
 
 ### Completion Notes List
 
+- Chose the recommended **runtime config endpoint** path over the build-time Vite flag,
+  so the header link and the `/api/docs/` Swagger UI enable together from the single
+  `settings.API_DOCS_ENABLED` flag with no frontend rebuild.
+- Kept the footprint isolated from the concurrent Story 11.19 (schema annotations): the
+  config view lives in its own module `backend/generate_sbom/common/config_views.py` with
+  its own `backend/generate_sbom/common/urls.py`, wired into `backend/config/urls.py` with
+  a single new `include(...)` line matching the existing `api/v1/` pattern.
+- Surfaced the flag through `AuthProvider` bootstrap as `apiDocsEnabled`, fetched
+  independently of identity (its own try/catch, default **false** on failure) so the link
+  shows in both auth states and never points at a 404.
+- `Layout` conditionally renders an `ExternalIconLink` (MUI `Api` icon, label "API docs",
+  `target="_blank"` + `rel="noopener noreferrer"`) pointing at `DOCS_API_URL` (`/api/docs/`,
+  `VITE_API_DOCS_URL` override) — present only when `apiDocsEnabled` is true.
+- Tests: backend `test_app_config.py` (AllowAny, reflects the flag on/off via
+  `override_settings`); frontend `config.test.ts`, `AuthProvider.test.tsx` (flag true +
+  fetch-failure defaults to false), `Layout.test.tsx` (present-when-true both auth states,
+  absent-when-false while docs/repo links remain).
+
 ### File List
+
+- `backend/generate_sbom/common/config_views.py` (new) — `AppConfigView` (AllowAny)
+- `backend/generate_sbom/common/urls.py` (new) — `config/` route
+- `backend/config/urls.py` — one `include("generate_sbom.common.urls")` line
+- `backend/tests/unit/test_app_config.py` (new) — endpoint tests
+- `frontend/src/api/config.ts` (new) — `getAppConfig()`
+- `frontend/src/api/config.test.ts` (new) — client test
+- `frontend/src/config.ts` — `DOCS_API_URL`
+- `frontend/src/auth/AuthProvider.tsx` — `apiDocsEnabled` bootstrap
+- `frontend/src/auth/AuthProvider.test.tsx` — flag tests
+- `frontend/src/components/Layout.tsx` — conditional API-docs link
+- `frontend/src/components/Layout.test.tsx` — present/absent tests

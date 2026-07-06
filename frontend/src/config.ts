@@ -13,3 +13,7 @@ export const REPO_URL: string =
 
 export const DOCS_URL: string =
   import.meta.env.VITE_DOCS_URL ?? 'https://millsks.github.io/django-python-generate-sbom/'
+
+// Story 11.20: the interactive API docs (Swagger UI), served same-origin by the
+// backend when API docs are enabled. Overridable at build time via VITE_API_DOCS_URL.
+export const DOCS_API_URL: string = import.meta.env.VITE_API_DOCS_URL ?? '/api/docs/'

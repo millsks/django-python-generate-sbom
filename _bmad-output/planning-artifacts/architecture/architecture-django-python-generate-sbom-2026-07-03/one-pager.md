@@ -52,6 +52,16 @@
 
 ---
 
+## Teams and Access
+
+One installation can host many organisations, fully isolated from one another. Access follows a simple, deliberate model:
+
+- **Sign up, then get added.** A new account starts with **no organisation** — it is a valid login on its own. You gain access to a workspace when an admin adds you to their organisation (by your email, or by creating an account for you) or when a platform administrator sets up an organisation for you.
+- **Two admin levels.** Inside an organisation, an **admin** manages members, promotes or demotes other admins, and controls API keys. A **global administrator** operates across the whole installation: they create organisations, are automatically an admin of every organisation, and decide who else holds global-administrator rights.
+- **Guarded by design.** Every organisation always keeps at least one admin, and the platform always keeps at least one global administrator — access can never be accidentally locked out. Administrative actions are enforced on the server, not merely hidden in the interface.
+
+---
+
 ## Key Facts
 
 - Supports **5 Python package formats**: `requirements.txt`, `pyproject.toml`, `pixi.lock`, `pixi.toml`, and `conda environment.yml`

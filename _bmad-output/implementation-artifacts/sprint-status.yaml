@@ -186,12 +186,12 @@ development_status:
   11-12-api-reference-and-openapi-reconciliation: done
   11-13-developer-documentation-reconciliation: done
   11-14-cross-cutting-documentation-audit-and-refresh: done
-  11-15-user-facing-documentation-reconciliation-admin-tier: ready-for-dev
-  11-16-api-reference-and-openapi-reconciliation-admin-tier: ready-for-dev
-  11-17-developer-architecture-documentation-reconciliation-admin-tier: ready-for-dev
-  11-18-cross-cutting-documentation-sweep-admin-tier: ready-for-dev
+  11-15-user-facing-documentation-reconciliation-admin-tier: review
+  11-16-api-reference-and-openapi-reconciliation-admin-tier: review
+  11-17-developer-architecture-documentation-reconciliation-admin-tier: review
+  11-18-cross-cutting-documentation-sweep-admin-tier: review
   11-19-openapi-schema-completeness: review
-  11-20-api-docs-header-link: ready-for-dev
+  11-20-api-docs-header-link: review
 
   # Epic 12 — UI/UX Visual Design & Professional Polish (frontend; refines Epic 10
   # shell + Story 5.7 theme). 12-1 (theme/design system) is the foundation; 12-2 icons
@@ -219,5 +219,5 @@ development_status:
   # solution design, one-pager, and diagrams. Planning artifacts only (no docs/** or code edits).
   # Implemented against the then-current merged state (>= 13.1); recommended after Stories 2.18-2.20 merge.
   epic-14: in-progress
-  14-1-prd-reconciliation: ready-for-dev
-  14-2-architecture-reconciliation: ready-for-dev
+  14-1-prd-reconciliation: review
+  14-2-architecture-reconciliation: review

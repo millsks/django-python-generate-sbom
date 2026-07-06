@@ -93,15 +93,30 @@ Invalidate the current session. **Authentication required.**
 
 ## `GET /api/v1/auth/me/`
 
-Return the currently authenticated user's identity. **Authentication required.**
-This is the SPA's identity signal — a logged-in user with **zero organizations**
-is still authenticated and gets a `200` here.
+Return the currently authenticated user's identity and role flags.
+**Authentication required.** This is the SPA's identity signal — a logged-in user
+with **zero organizations** is still authenticated and gets a `200` here. The two
+boolean flags are the client's single source of truth for gating admin-only nav,
+routes, and affordances, so it never has to probe an admin-only endpoint to learn
+its role.
 
 **Response `200 OK`**
 
 ```json
-{ "id": 1, "email": "you@example.com" }
+{
+  "id": 1,
+  "email": "you@example.com",
+  "is_admin": false,
+  "is_global_admin": false
+}
 ```
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `id` | integer | The user's id |
+| `email` | string | The user's email (login identifier) |
+| `is_admin` | boolean | `true` when the user is an admin of the **active** organization (Story 2.6) |
+| `is_global_admin` | boolean | `true` when the user is a global admin — a member of the system ADMIN org (Story 2.12) |
 
 **Errors** — `401` when the request carries no valid session or API key. (The
 API accepts either scheme, and its API-key challenge sets a `WWW-Authenticate`

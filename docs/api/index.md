@@ -48,7 +48,9 @@ Errors return the appropriate HTTP status with a consistent JSON envelope:
 Some errors add fields (for example a failed report includes
 `failure_reason`). Codes you will encounter across the API include
 `validation_error`, `invalid_credentials`, `invalid_api_key`, `not_admin`,
-`no_active_org`, `not_a_member`, `not_found`, `not_ready`, `report_failed`,
+`not_global_admin`, `no_active_org`, `not_a_member`, `no_such_user`,
+`already_member`, `email_taken`, `last_admin`, `last_global_admin`,
+`global_admin_protected`, `not_found`, `not_ready`, `report_failed`,
 `rate_limited`, `unsupported_format`, and `parse_error`.
 
 ## Endpoint groups
@@ -56,7 +58,7 @@ Some errors add fields (for example a failed report includes
 | Group | Description |
 | --- | --- |
 | [Authentication](authentication.md) | Registration, session login/logout, and how session vs. API-key auth work |
-| [Organizations & Membership](organizations.md) | List/create/switch orgs, roster, add/remove members, transfer admin, leave |
+| [Organizations & Membership](organizations.md) | List/create/switch orgs, roster, add/create/remove members, promote/demote admins, global-admin management, leave |
 | [API Keys](api-keys.md) | List, create (plaintext shown once), and revoke org API keys |
 | [Jobs](jobs.md) | Upload manifests, submit SBOM jobs, list jobs, poll status |
 | [Reports](analysis.md) | Vulnerability, license, dependency-graph, and version-currency reports |

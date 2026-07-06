@@ -8,6 +8,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { getMe, logout as apiLogout, type CurrentUser, type OrgSummary } from '../api/auth'
 import { getActiveOrg } from '../api/orgs'
+import { getAppConfig } from '../api/config'
 
 type Status = 'loading' | 'authed' | 'anon'
 
@@ -17,6 +18,10 @@ interface AuthValue {
   activeOrg: OrgSummary | null
   isAdmin: boolean
   isGlobalAdmin: boolean
+  // Whether the backend serves the interactive API docs (Story 11.20). Sourced from the
+  // public config endpoint independent of auth, so the header link shows in both auth
+  // states and is driven by the same flag that gates /api/docs/.
+  apiDocsEnabled: boolean
   refresh: () => Promise<void>
   logout: () => Promise<void>
 }
@@ -35,8 +40,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [activeOrg, setActiveOrg] = useState<OrgSummary | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
   const [isGlobalAdmin, setIsGlobalAdmin] = useState(false)
+  const [apiDocsEnabled, setApiDocsEnabled] = useState(false)
 
   const refresh = useCallback(async () => {
+    // Public runtime config (Story 11.20): fetched independently of identity so the
+    // API-docs header link is driven by the backend flag in both auth states. Default
+    // to false on failure so a missing/errored config never links to a possibly-404 doc.
+    try {
+      setApiDocsEnabled((await getAppConfig()).api_docs_enabled)
+    } catch {
+      setApiDocsEnabled(false)
+    }
     // Identity first: only a failed auth/me call makes the user anonymous. The one
     // getMe() result feeds both the current user (Story 10.5) and global-admin (2.12).
     let me: CurrentUser
@@ -80,8 +94,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh])
 
   const value = useMemo<AuthValue>(
-    () => ({ status, user, activeOrg, isAdmin, isGlobalAdmin, refresh, logout }),
-    [status, user, activeOrg, isAdmin, isGlobalAdmin, refresh, logout],
+    () => ({ status, user, activeOrg, isAdmin, isGlobalAdmin, apiDocsEnabled, refresh, logout }),
+    [status, user, activeOrg, isAdmin, isGlobalAdmin, apiDocsEnabled, refresh, logout],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

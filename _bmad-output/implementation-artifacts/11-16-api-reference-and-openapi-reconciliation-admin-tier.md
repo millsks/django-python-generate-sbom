@@ -1,6 +1,6 @@
 # Story 11.16: API Reference & OpenAPI Reconciliation (Admin Tier, 2nd Pass)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -68,9 +68,23 @@ Verify these against the running backend and the Swagger UI rather than trusting
 
 ### Agent Model Used
 
+claude-opus-4-8[1m] (Opus 4.8, 1M context)
+
 ### Debug Log References
+
+- `pixi run docs-build` (`mkdocs build --strict`) — green.
+- `pixi run ci` — green.
 
 ### Completion Notes List
 
+- Reconciled prose against `users/urls.py`, `users/views.py`, and `users/serializers.py` (the drf-spectacular schema is generated at runtime — there is no committed schema artifact to regenerate).
+- `authentication.md`: `GET /auth/me/` now documents the `{id, email, is_admin, is_global_admin}` response with a field table (`is_admin` = admin of the active org, `is_global_admin` = ADMIN-org member). Kept the accurate `401`-anon behavior (the Api-Key authenticator sets `WWW-Authenticate`, so DRF renders anon as 401, per `test_auth_me_requires_authentication`).
+- `organizations.md`: create-org marked **global-admin gated** (403 `not_global_admin`); added `POST /orgs/members/create-user/` (`email_taken`), `POST /orgs/promote-admin/` and `POST /orgs/demote-admin/` (204; `user_id` body); replaced the stale `transfer-admin` endpoint; added a **Global-admin management** section — `GET`/`POST`(grant-by-email, `no_such_user`)/`DELETE`(revoke, `last_global_admin`) on `admin/global-admins/`.
+- `api/index.md`: refreshed the Organizations group description and the error-code list (`not_global_admin`, `last_global_admin`, `no_such_user`, `already_member`, `email_taken`, `last_admin`, `global_admin_protected`).
+
 ### File List
+
+- `docs/api/authentication.md`
+- `docs/api/organizations.md`
+- `docs/api/index.md`
 </content>

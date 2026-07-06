@@ -90,7 +90,7 @@ config/
 
 | Model | Key Fields |
 |---|---|
-| `Org` | name, slug, created_at |
+| `Org` | name, slug, is_admin_org, created_at |
 | `OrgMembership` | org (FK), user (FK), role (admin/member) |
 | `ApiKey` | org (FK), name, key_hash, prefix, created_at, last_used_at, revoked_at |
 | `ManifestUpload` | org (FK), user (FK), file_key, detected_format, uploaded_at |
@@ -98,6 +98,8 @@ config/
 | `AnalysisReport` | job (FK), report_type (vuln/license/graph/version), artifact_key, generated_at, failed, failure_reason |
 
 Redis stores transient progress only. PostgreSQL is the durable system of record.
+
+**Org / admin model (see PRD F1).** Registration creates a **zero-org** user — no personal org. Exactly one `Org` carries `is_admin_org=True`: the distinguished **ADMIN org** whose members are **global admins**, a cross-org superuser tier written as a real `OrgMembership(role=admin)` into every non-admin org (existing and future). Only global admins create orgs; per-org admins add/remove members (add existing by email, or create a new account) and **promote/demote** other admins — there is no admin *transfer*. Admin authorization is enforced at both the SPA route and the API (`403`).
 
 ---
 

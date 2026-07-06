@@ -1,6 +1,6 @@
 # Story 6.4: Fix the Manifest-Format Filter on the History Page (Bugfix)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -96,6 +96,35 @@ At the current worktree commit that raw `.filter(...)` returns an *empty* querys
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Completion Notes List
 
+- Confirmed the true root cause at HEAD: DRF's default content negotiation treats the
+  `?format=` query param as a renderer-format suffix (`URL_FORMAT_OVERRIDE` default
+  `'format'`). With only `JSONRenderer` configured, ANY value — even a valid
+  `requirements` — is an unsatisfiable renderer format, so `select_renderer` raises
+  `404` before `get_queryset` runs. That 404 is what the History page maps to the
+  "Could not load your jobs." banner. The enum-drift hypothesis in the analysis was a
+  contributing latent risk, not the live trigger; both are now addressed.
+- Fix (backend): added `ManifestFormatFilterNegotiation` (a `DefaultContentNegotiation`
+  subclass that always serves the first/JSON renderer) on `JobsListView`, so `format`
+  reaches the queryset filter instead of content negotiation. Verified every canonical
+  `Format` code (incl. `pixi_toml`) returns `200` and filters correctly.
+- Fix (backend, AC #3): `get_jobs` now filters only on a canonical `ManifestUpload.Format`
+  value; an unknown value degrades to an empty queryset (`.none()`) — never raises.
+- Fix (AC #4): frontend `FORMAT_OPTIONS` now derives from a single canonical constant
+  `MANIFEST_FORMATS` (`frontend/src/api/manifestFormats.ts`); a backend test pins that
+  constant to `ManifestUpload.Format.values`, so any drift fails CI. A frontend test
+  asserts the dropdown offers only canonical codes (a subset) and includes `pixi_toml`.
+- `pixi run ci` green.
+
 ### File List
+
+- backend/generate_sbom/sbom/views.py (ManifestFormatFilterNegotiation + JobsListView)
+- backend/generate_sbom/sbom/selectors.py (get_jobs canonical-format guard)
+- backend/tests/unit/test_jobs_list.py (format-filter endpoint + selector tests)
+- backend/tests/unit/test_manifest_format_consistency.py (new; drift guard)
+- frontend/src/api/manifestFormats.ts (new; canonical MANIFEST_FORMATS)
+- frontend/src/pages/HistoryPage.tsx (FORMAT_OPTIONS derives from MANIFEST_FORMATS)
+- frontend/src/pages/HistoryPage.test.tsx (format-selection + subset consistency tests)

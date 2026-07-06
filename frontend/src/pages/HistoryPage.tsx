@@ -37,6 +37,7 @@ import {
   type JobListItem,
   type Paginated,
 } from '../api/jobs'
+import { MANIFEST_FORMATS } from '../api/manifestFormats'
 import { useAuth } from '../auth/AuthProvider'
 import { JobStatusBadge } from '../components/JobStatusBadge'
 import { NoOrgState } from '../components/NoOrgState'
@@ -47,7 +48,9 @@ import { DeleteActionIcon, NavIcon } from '../icons'
 
 const PAGE_SIZE = 25
 const STATUS_OPTIONS = ['All', 'In Progress', 'Completed', 'Failed']
-const FORMAT_OPTIONS = ['All', 'requirements', 'pyproject', 'pixi_lock', 'pixi_toml', 'conda']
+// 'All' (no filter) plus every canonical backend format code — never a hand-kept list,
+// so the dropdown can't offer a value the backend rejects (Story 6.4, AC #4).
+const FORMAT_OPTIONS = ['All', ...MANIFEST_FORMATS]
 
 // What a pending confirmation will delete once the user accepts.
 type Confirm = { kind: 'single'; taskId: string } | { kind: 'selected' } | { kind: 'org' }

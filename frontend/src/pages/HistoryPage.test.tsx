@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { HistoryPage } from './HistoryPage'
 import { bulkDeleteArtifacts, deleteJobArtifacts, getJobStatus, listJobs } from '../api/jobs'
+import { MANIFEST_FORMATS } from '../api/manifestFormats'
 import { useAuth } from '../auth/AuthProvider'
 
 vi.mock('../api/jobs', async (importOriginal) => {
@@ -130,6 +131,38 @@ describe('HistoryPage', () => {
     await userEvent.click(screen.getByRole('option', { name: 'Failed' }))
 
     expect(mockList).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'Failed', page: 1 }))
+  })
+
+  it('re-queries with the pixi_toml format filter and renders rows, not the error banner', async () => {
+    mockList.mockResolvedValue(page([{ ...JOB, manifest_format: 'pixi_toml' }]))
+    renderPage()
+    await screen.findByRole('table')
+
+    await userEvent.click(screen.getByRole('combobox', { name: /manifest format/i }))
+    await userEvent.click(screen.getByRole('option', { name: 'pixi_toml' }))
+
+    // The request carries the exact backend format code, and 'All' status is dropped.
+    expect(mockList).toHaveBeenLastCalledWith(expect.objectContaining({ format: 'pixi_toml', page: 1 }))
+    // Results render; the generic failure banner never appears for a legitimate format.
+    expect(await screen.findByRole('table')).toBeInTheDocument()
+    expect(screen.queryByText('Could not load your jobs.')).not.toBeInTheDocument()
+  })
+
+  it('offers only canonical backend format codes in the manifest-format dropdown (AC #4)', async () => {
+    mockList.mockResolvedValue(page([JOB]))
+    renderPage()
+    await screen.findByRole('table')
+
+    await userEvent.click(screen.getByRole('combobox', { name: /manifest format/i }))
+    const offered = screen
+      .getAllByRole('option')
+      .map((o) => o.textContent ?? '')
+      .filter((label) => label !== 'All')
+
+    // Every non-'All' option is a canonical code (a subset), so the UI can't offer a
+    // value the backend rejects; pixi_toml — the reported bug's format — is present.
+    expect(offered.every((label) => (MANIFEST_FORMATS as readonly string[]).includes(label))).toBe(true)
+    expect(offered).toContain('pixi_toml')
   })
 
   it('shows an empty state when there are no jobs', async () => {

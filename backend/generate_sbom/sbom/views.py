@@ -9,6 +9,7 @@ gate-then-create) is preserved by the transaction, independent of file location.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterable
 from typing import cast
 
 from django.conf import settings
@@ -17,8 +18,10 @@ from django.db import transaction
 from django.db.models import QuerySet
 from rest_framework import status
 from rest_framework.generics import ListAPIView
+from rest_framework.negotiation import DefaultContentNegotiation
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.renderers import BaseRenderer
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -120,11 +123,33 @@ class JobsPagination(PageNumberPagination):
     max_page_size = 100
 
 
+class ManifestFormatFilterNegotiation(DefaultContentNegotiation):
+    """Content negotiation that ignores the ``format`` query param (Story 6.4).
+
+    The jobs list uses ``?format=`` as a *manifest-format filter* (e.g. ``pixi_toml``),
+    not a DRF renderer-format suffix. Default negotiation treats such a value as an
+    unsatisfiable renderer format and raises ``404`` before the view runs — the true
+    cause of the History-page error banner. The API serves a single (JSON) renderer,
+    so this always selects it and lets ``format`` reach the queryset filter.
+    """
+
+    def select_renderer(
+        self,
+        request: Request,
+        renderers: Iterable[BaseRenderer],
+        format_suffix: str | None = None,
+    ) -> tuple[BaseRenderer, str]:
+        """Always serve the first configured renderer, ignoring any ``format`` value."""
+        renderer = next(iter(renderers))
+        return renderer, renderer.media_type
+
+
 class JobsListView(ListAPIView[SBOMJob]):
     """List the active org's jobs, most-recent-first (GET /api/v1/sbom/jobs/)."""
 
     serializer_class = JobListSerializer
     pagination_class = JobsPagination
+    content_negotiation_class = ManifestFormatFilterNegotiation
 
     def get_queryset(self) -> QuerySet[SBOMJob]:
         """Return the org's jobs with the requested status/format filters (AD-2)."""

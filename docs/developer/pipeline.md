@@ -21,11 +21,10 @@ chain(
     detect_and_parse_manifest.si(task_id),   # 1
     resolve_transitive_deps.s(),             # 2
     generate_sbom_document.s(),              # 3
-    chord(                                    # 4–7 (parallel) → aggregate
+    chord(                                    # 4, 5, 7 (parallel) → aggregate
         group(
             scan_vulnerabilities.s(),
             classify_licenses.s(),
-            build_dependency_graph.s(),
             check_version_currency.s(),
         ),
         aggregate_analysis_results.s(task_id),
@@ -44,14 +43,13 @@ chain(
    blob to object storage, and record the `result_key`.
 4. **Scan vulnerabilities** (`analysis`)
 5. **Classify licenses** (`analysis`)
-6. **Build dependency graph** (`analysis`)
 7. **Check version currency** (`analysis`)
 8. **Aggregate + persist** (`pipeline`) — `aggregate_analysis_results` collects the
-   four analyses (tolerating partial failures), then `persist_artifacts` finalizes the
+   three analyses (tolerating partial failures), then `persist_artifacts` finalizes the
    job.
 
-Phases 4–7 form a Celery **chord**: the four analyses run as a parallel `group`, and
-`aggregate_analysis_results` is the chord callback that fires once they all complete.
+Phases 4, 5, and 7 form a Celery **chord**: the three analyses run as a parallel `group`,
+and `aggregate_analysis_results` is the chord callback that fires once they all complete.
 
 ## Keys, not blobs (AD-6)
 

@@ -62,7 +62,7 @@ API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED", default=True)
 SPECTACULAR_SETTINGS = {
     "TITLE": "generate-sbom API",
     "DESCRIPTION": "REST API for uploading manifests, running SBOM jobs, and reading "
-    "vulnerability, license, dependency-graph, and version-currency reports.",
+    "vulnerability, license, and version-currency reports.",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
     # Public serve permissions so the docs are reachable without a session/API key;

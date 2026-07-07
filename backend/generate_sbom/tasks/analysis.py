@@ -1,6 +1,6 @@
 """Celery analysis tasks (analysis queue, AD-4).
 
-Phases 4-7 run on the ``analysis`` queue. Each task returns the standard chord
+Phases 4, 5, and 7 run on the ``analysis`` queue. Each task returns the standard chord
 envelope and NEVER raises on an analysis failure — a failed report leaves the job
 SUCCESS with the SBOM + partial reports (FR-4.5). Story 4.6 wires these into the
 pipeline chord, replacing the Epic 3 no-op stubs.
@@ -22,7 +22,6 @@ from celery.exceptions import SoftTimeLimitExceeded
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 
-from generate_sbom.analysis.services import graph as graph_service
 from generate_sbom.analysis.services import license as license_service
 from generate_sbom.analysis.services import versions as versions_service
 from generate_sbom.analysis.services import vulnerability
@@ -132,47 +131,3 @@ def check_version_currency(self: Any, ctx: dict[str, Any]) -> dict[str, Any]:
         step="version currency",
         fail_reason="version_currency_failed",
     )
-
-
-@shared_task(bind=True, queue="analysis")  # type: ignore[untyped-decorator]
-def build_dependency_graph(self: Any, ctx: dict[str, Any]) -> dict[str, Any]:
-    """Phase 6 (88-93%): build the dependency graph; store the SVG, graph JSON in summary.
-
-    Unlike the JSON-report phases, the artifact is the Graphviz SVG and the
-    Cytoscape ``{nodes, edges}`` JSON lives in ``summary`` (served to the SPA, AD-9).
-    """
-    task_id = ctx["task_id"]
-    self.update_state(state="PROGRESS", meta={"progress": 88, "current_step": "dependency graph"})
-    job = get_job_by_task_id(task_id)
-    started = time.monotonic()
-    try:
-        packages = resolve_job_packages(task_id)
-        cytoscape, svg = graph_service.build(packages)
-        artifact_key = f"sbom-results/{job.org_id}/{task_id}/graph.svg"
-        if default_storage.exists(artifact_key):
-            default_storage.delete(artifact_key)
-        default_storage.save(artifact_key, ContentFile(svg))
-        summary = {
-            "node_count": len(cytoscape["nodes"]),
-            "edge_count": len(cytoscape["edges"]),
-            "nodes": cytoscape["nodes"],
-            "edges": cytoscape["edges"],
-        }
-        envelope = make_envelope("graph", artifact_key=artifact_key, summary=summary)
-        logger.info(
-            "phase_graph",
-            task_id=str(task_id),
-            org_id=job.org_id,
-            duration_s=round(time.monotonic() - started, 3),
-            node_count=summary["node_count"],
-            edge_count=summary["edge_count"],
-        )
-    except SoftTimeLimitExceeded:
-        logger.error("phase_graph_timeout", task_id=str(task_id), org_id=job.org_id, exc_info=True)
-        envelope = make_envelope("graph", failed=True, failure_reason="timeout")
-    except Exception as exc:  # analysis failures never abort the chord (FR-4.5)
-        logger.error("phase_graph_failed", task_id=str(task_id), org_id=job.org_id, error=str(exc), exc_info=True)
-        envelope = make_envelope("graph", failed=True, failure_reason="graph_build_failed")
-
-    self.update_state(state="PROGRESS", meta={"progress": 93, "current_step": "dependency graph complete"})
-    return envelope

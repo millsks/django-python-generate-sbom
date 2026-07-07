@@ -1,7 +1,7 @@
 """Celery SBOM pipeline: the orchestrated eight-phase chain (Stories 3.5, 4.6).
 
 Canvas (solution-design.md §4.1): ``detect → resolve → generate → chord(group of
-the four real analysis tasks, aggregate) → persist``. The analysis tasks live in
+the three real analysis tasks, aggregate) → persist``. The analysis tasks live in
 ``tasks/analysis.py`` and run on the ``analysis`` queue; Phases 1-3, aggregate, and
 8 run on ``pipeline`` (AD-4).
 
@@ -30,7 +30,6 @@ from generate_sbom.sbom.models import SBOMJob
 from generate_sbom.sbom.parsers import PackageSpec, ResolutionError
 from generate_sbom.sbom.selectors import get_job_by_task_id
 from generate_sbom.tasks.analysis import (
-    build_dependency_graph,
     check_version_currency,
     classify_licenses,
     scan_vulnerabilities,
@@ -91,7 +90,6 @@ def build_pipeline(task_id: str) -> chain:
     analysis_group = group(
         scan_vulnerabilities.s(),
         classify_licenses.s(),
-        build_dependency_graph.s(),
         check_version_currency.s(),
     )
     return chain(
@@ -182,7 +180,7 @@ def generate_sbom_document(self: Any, prev: dict[str, Any]) -> dict[str, Any]:
 
 @shared_task(queue="pipeline")  # type: ignore[untyped-decorator]
 def aggregate_analysis_results(results: list[dict[str, Any]], task_id: str) -> dict[str, Any]:
-    """Chord callback (pipeline queue): persist the four analysis reports, then proceed to persist.
+    """Chord callback (pipeline queue): persist the three analysis reports, then proceed to persist.
 
     Writes/updates one ``AnalysisReport`` per envelope (failed reports included, with
     their reason). Analysis-task failures never abort the chord — each task always

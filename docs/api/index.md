@@ -61,5 +61,5 @@ Some errors add fields (for example a failed report includes
 | [Organizations & Membership](organizations.md) | List/create/switch orgs, roster, add/create/remove members, promote/demote admins, global-admin management, leave |
 | [API Keys](api-keys.md) | List, create (plaintext shown once), and revoke org API keys |
 | [Jobs](jobs.md) | Upload manifests, submit SBOM jobs, list jobs, poll status |
-| [Reports](analysis.md) | Vulnerability, license, dependency-graph, and version-currency reports |
-| [Artifacts & Downloads](artifacts.md) | SBOM download redirect, inline SBOM document, graph SVG |
+| [Reports](analysis.md) | Vulnerability, license, and version-currency reports |
+| [Artifacts & Downloads](artifacts.md) | SBOM download redirect, inline SBOM document |

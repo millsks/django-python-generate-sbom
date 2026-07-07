@@ -64,7 +64,6 @@ describe('ResultsPage', () => {
       'Vulnerabilities',
       'Licenses',
       'Version Currency',
-      'Dependency Graph',
     ])
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true')
     // MUI Button with href renders an anchor (role "link").

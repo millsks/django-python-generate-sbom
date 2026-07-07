@@ -70,7 +70,7 @@ def test_write_report_persists_from_envelope() -> None:
 @pytest.mark.django_db
 def test_write_failed_report() -> None:
     job = _make_job()
-    report = write_report(job, make_envelope("graph", failed=True, failure_reason="solver error"))
+    report = write_report(job, make_envelope("version", failed=True, failure_reason="solver error"))
     assert report.failed is True
     assert report.failure_reason == "solver error"
     assert report.artifact_key is None

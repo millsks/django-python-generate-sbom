@@ -1,6 +1,6 @@
 # Reports
 
-Once a job succeeds, four analysis reports are available for its `task_id`. All
+Once a job succeeds, three analysis reports are available for its `task_id`. All
 endpoints require [authentication](authentication.md), are scoped to the active
 org, and are read with `GET`.
 
@@ -81,18 +81,3 @@ Version-currency per package (installed vs. latest, LTS, and conda-forge).
   ]
 }
 ```
-
-## `GET /api/v1/sbom/result/{task_id}/reports/graph/`
-
-The dependency graph as a Cytoscape-style `{ nodes, edges }` structure for the
-graph tab.
-
-```json
-{
-  "nodes": [ { "data": { "id": "django", "direct": true } } ],
-  "edges": [ { "data": { "source": "django", "target": "asgiref" } } ]
-}
-```
-
-To download the rendered graph as an image, see
-[the graph SVG download](artifacts.md#get-apiv1sbomresulttask_idreportsgraphdownload).

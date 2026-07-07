@@ -97,17 +97,15 @@ def record_generation(task_id: str, result_key: str, package_count: int) -> None
 
 
 def record_analysis_summaries(task_id: str, envelopes: list[dict[str, object]]) -> None:
-    """Merge the four analysis report summaries into ``summary_stats['reports']`` (Story 5.2).
+    """Merge the analysis report summaries into ``summary_stats['reports']`` (Story 5.2).
 
     Lets the Overview tab read every count from ``summary_stats`` without a per-report
-    fetch (NFR-2.2). Large fields (the graph's node/edge lists) are dropped — only
-    counts + the failed flag are kept.
+    fetch (NFR-2.2). Only the report counts + the failed flag are kept.
     """
     reports: dict[str, object] = {}
     for envelope in envelopes:
         raw = envelope.get("summary")
-        source = raw if isinstance(raw, dict) else {}
-        summary = {k: v for k, v in source.items() if k not in ("nodes", "edges")}
+        summary = raw if isinstance(raw, dict) else {}
         reports[str(envelope["report_type"])] = {
             "failed": envelope["failed"],
             "failure_reason": envelope["failure_reason"],

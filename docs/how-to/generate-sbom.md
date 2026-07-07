@@ -25,7 +25,7 @@ manifest.
 ## Result
 
 The Results page opens with tabs for **Overview**, **Vulnerabilities**, **Licenses**,
-**Dependency Graph**, **Version Currency**, and the raw **SBOM** document. From here you
+**Version Currency**, and the raw **SBOM** document. From here you
 can:
 
 - [Interpret the vulnerability report](interpret-vulnerabilities.md)

@@ -4,7 +4,7 @@ The **Results** page shows one job's SBOM and analysis across a set of tabs. Whi
 runs you see a progress bar; once it finishes the tabs populate.
 
 The tabs, left to right, are: **Overview**, **SBOM**, **Vulnerabilities**, **Licenses**,
-**Dependency Graph**, and **Version Currency**.
+and **Version Currency**.
 
 !!! note "A single report can fail without failing the whole job"
     Each analysis phase runs independently. If one phase fails (for example an external
@@ -45,13 +45,6 @@ Copyleft*, *Weak Copyleft*, and *Permissive* — so you can quickly see where th
 licenses are. Each entry shows the package, version, and detected license. Use
 **expand/collapse all** to open or close every tier at once. The report can be exported to
 Excel.
-
-## Dependency Graph
-
-The **Dependency Graph** tab visualizes the resolved dependencies as a graph, showing how
-packages relate. **Direct** dependencies (declared in your manifest) are distinguished
-from **transitive** ones (pulled in indirectly), so you can tell what your project asks
-for versus what it inherits.
 
 ## Version Currency
 

@@ -1,4 +1,4 @@
-// Analysis-report API calls (vulnerabilities, licenses, graph, versions).
+// Analysis-report API calls (vulnerabilities, licenses, versions).
 // Implemented in Epic 4; consumed by the results tabs (5.2-5.6). All calls go
 // through the shared client (AD-5). A failed report surfaces as an ApiError with
 // code "report_failed" and a failureReason.
@@ -37,19 +37,6 @@ export interface LicenseReport {
   summary: Record<string, number>
 }
 
-export interface GraphNode {
-  data: { id: string; label: string; version: string; relationship?: string | null }
-}
-
-export interface GraphEdge {
-  data: { source: string; target: string }
-}
-
-export interface GraphReport {
-  nodes: GraphNode[]
-  edges: GraphEdge[]
-}
-
 export interface VersionEntry {
   name: string
   installed: string
@@ -73,16 +60,6 @@ export function getVulnerabilities(taskId: string): Promise<VulnerabilityReport>
 
 export function getLicenses(taskId: string): Promise<LicenseReport> {
   return apiRequest<LicenseReport>(`${base(taskId)}/licenses/`)
-}
-
-export function getGraph(taskId: string): Promise<GraphReport> {
-  return apiRequest<GraphReport>(`${base(taskId)}/graph/`)
-}
-
-// The graph SVG is a genuine file download (303 → presigned URL); the browser
-// follows the redirect when navigated to this path.
-export function graphSvgDownloadUrl(taskId: string): string {
-  return `/api/v1${base(taskId)}/graph/download/`
 }
 
 export function getVersions(taskId: string): Promise<VersionReport> {

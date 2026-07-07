@@ -26,7 +26,6 @@ PIXI_LOCK = (
 ANALYSIS_TASKS = (
     pipeline.scan_vulnerabilities,
     pipeline.classify_licenses,
-    pipeline.build_dependency_graph,
     pipeline.check_version_currency,
 )
 
@@ -69,7 +68,6 @@ def test_full_pipeline_sequence_succeeds(settings: pytest.FixtureRequest, tmp_pa
         # Patch the analysis services so no network is needed (behavior covered in 4.6).
         patch("generate_sbom.analysis.services.vulnerability.scan", return_value={"summary": {}}),
         patch("generate_sbom.analysis.services.license.classify", return_value={"summary": {}}),
-        patch("generate_sbom.analysis.services.graph.build", return_value=({"nodes": [], "edges": []}, b"<svg/>")),
         patch("generate_sbom.analysis.services.versions.classify", return_value={"summary": {}}),
     ):
         detected = pipeline.detect_and_parse_manifest.apply(args=(str(job.task_id),)).get()
@@ -84,7 +82,7 @@ def test_full_pipeline_sequence_succeeds(settings: pytest.FixtureRequest, tmp_pa
     assert job.status == SBOMJob.Status.SUCCESS
     assert job.progress == 100
     assert job.summary_stats["total_packages"] == 2
-    assert set(job.summary_stats["reports"]) == {"vuln", "license", "graph", "version"}
+    assert set(job.summary_stats["reports"]) == {"vuln", "license", "version"}
     assert job.artifacts_expire_at is not None
     assert default_storage.exists(job.result_key)
 

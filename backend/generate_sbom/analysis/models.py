@@ -11,12 +11,11 @@ from django.db import models
 
 
 class AnalysisReport(models.Model):
-    """One analysis phase's result for a job (vuln / license / graph / version)."""
+    """One analysis phase's result for a job (vuln / license / version)."""
 
     class ReportType(models.TextChoices):
         VULN = "vuln", "Vulnerability"
         LICENSE = "license", "License"
-        GRAPH = "graph", "Dependency graph"
         VERSION = "version", "Version currency"
 
     job = models.ForeignKey("sbom.SBOMJob", on_delete=models.CASCADE, related_name="reports")

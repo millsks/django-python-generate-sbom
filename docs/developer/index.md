@@ -20,7 +20,7 @@ and anyone extending the backend or frontend.
 frontend, and a **Celery** worker fleet, all managed as one project by a **pixi**
 umbrella toolchain. A user uploads a Python dependency manifest; an asynchronous
 pipeline resolves the dependency tree, generates a CycloneDX SBOM, and enriches it
-with vulnerability, license, dependency-graph, and version-currency analysis. Results
+with vulnerability, license, and version-currency analysis. Results
 are read back through the REST API and rendered in the SPA.
 
 Supporting services are **PostgreSQL** (relational data), **Redis** (the Celery

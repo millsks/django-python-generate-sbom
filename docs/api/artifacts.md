@@ -41,15 +41,3 @@ text.
 
 **Errors** — `404 no_active_org`, `404 not_found`, or `404 not_ready` (not
 finished, or the artifact has expired/been deleted).
-
-## `GET /api/v1/sbom/result/{task_id}/reports/graph/download/`
-
-Download the rendered dependency graph as an SVG image. Like the SBOM download,
-this issues a `303` redirect to a pre-signed URL.
-
-**Response `303 See Other`** — `Location: https://<storage>/…graph.svg`.
-
-**Errors** — `404 not_ready` (graph not produced) or `404 report_failed` (graph
-generation failed; body includes `failure_reason`). The interactive graph JSON
-is available from
-[the graph report](analysis.md#get-apiv1sbomresulttask_idreportsgraph).

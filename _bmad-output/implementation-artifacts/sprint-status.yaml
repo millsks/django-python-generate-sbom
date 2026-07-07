@@ -345,7 +345,7 @@ development_status:
   # proposes django-celery-results and 20.5 proposes honcho (new deps -> user sign-off at impl time); the 20.1
   # removals (networkx/pygraphviz/graphviz) are user-approved (no add-gate).
   epic-20: in-progress
-  20-1-retire-dependency-graph: ready-for-dev
+  20-1-retire-dependency-graph: review
   20-2-add-win-64-platform-and-verify-env: ready-for-dev
   20-3-containerless-local-dev-settings: ready-for-dev
   20-4-cross-platform-async-worker: ready-for-dev

@@ -70,8 +70,8 @@ into every existing org. See [Architecture](architecture.md) for the tier's desi
 |---|---|
 | `AnalysisReport` | One enrichment result for a job |
 
-Each report has a `report_type` (`vuln`, `license`, `graph`, `version`), an optional
-`artifact_key` (blob in storage), and a JSON `summary`. A job has up to four reports —
+Each report has a `report_type` (`vuln`, `license`, `version`), an optional
+`artifact_key` (blob in storage), and a JSON `summary`. A job has up to three reports —
 one per analysis phase.
 
 ## Relationships

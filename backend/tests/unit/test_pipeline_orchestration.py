@@ -26,7 +26,6 @@ PKGS = [PackageSpec(name="numpy", version="1.26.0"), PackageSpec(name="requests"
 ANALYSIS_TASKS = (
     pipeline.scan_vulnerabilities,
     pipeline.classify_licenses,
-    pipeline.build_dependency_graph,
     pipeline.check_version_currency,
 )
 
@@ -72,11 +71,10 @@ def test_pipeline_canvas_shape() -> None:
     ]
     chord_el = canvas.tasks[3]
     assert chord_el["subtask_type"] == "chord"
-    # The four real analysis tasks (Story 4.6 replaced the Epic 3 stubs; shape unchanged).
+    # The three real analysis tasks (the dependency-graph phase was retired in Story 20.1).
     assert [t.name.split(".")[-1] for t in chord_el.tasks] == [
         "scan_vulnerabilities",
         "classify_licenses",
-        "build_dependency_graph",
         "check_version_currency",
     ]
     assert [t.name.split(".")[-1] for t in chord_el.body.tasks] == [
@@ -123,9 +121,9 @@ def test_aggregate_writes_reports_and_merges_summaries() -> None:
         },
         {"report_type": "license", "artifact_key": None, "summary": {}, "failed": True, "failure_reason": "pypi down"},
         {
-            "report_type": "graph",
-            "artifact_key": "g",
-            "summary": {"node_count": 3, "edge_count": 2, "nodes": [1, 2, 3], "edges": [1, 2]},
+            "report_type": "version",
+            "artifact_key": "v",
+            "summary": {"outdated_package_count": 2},
             "failed": False,
             "failure_reason": None,
         },
@@ -140,11 +138,11 @@ def test_aggregate_writes_reports_and_merges_summaries() -> None:
     assert reports["vuln"].failed is False and reports["vuln"].artifact_key == "k"
     assert reports["license"].failed is True and reports["license"].failure_reason == "pypi down"
 
-    # summary_stats.reports carries the counts + failed flags; graph's node/edge lists are stripped.
+    # summary_stats.reports carries each report's counts + failed flags.
     merged = job.summary_stats["reports"]
     assert merged["vuln"] == {"failed": False, "failure_reason": None, "vulnerable_package_count": 1}
     assert merged["license"] == {"failed": True, "failure_reason": "pypi down"}
-    assert merged["graph"] == {"failed": False, "failure_reason": None, "node_count": 3, "edge_count": 2}
+    assert merged["version"] == {"failed": False, "failure_reason": None, "outdated_package_count": 2}
 
 
 # --- Timeout handling (AC #4, #5, #6) ------------------------------------------------

@@ -3,8 +3,6 @@
 from django.urls import path
 
 from .views import (
-    GraphReportView,
-    GraphSvgDownloadView,
     LicenseReportView,
     VersionReportView,
     VulnerabilityReportView,
@@ -20,16 +18,6 @@ urlpatterns = [
         "sbom/result/<uuid:task_id>/reports/licenses/",
         LicenseReportView.as_view(),
         name="report-licenses",
-    ),
-    path(
-        "sbom/result/<uuid:task_id>/reports/graph/",
-        GraphReportView.as_view(),
-        name="report-graph",
-    ),
-    path(
-        "sbom/result/<uuid:task_id>/reports/graph/download/",
-        GraphSvgDownloadView.as_view(),
-        name="report-graph-download",
     ),
     path(
         "sbom/result/<uuid:task_id>/reports/versions/",

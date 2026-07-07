@@ -260,3 +260,44 @@ development_status:
   16-2-application-id-rollup-view: ready-for-dev
   16-3-consolidated-sbom-by-application-id: ready-for-dev
   16-4-admin-multi-select-consolidated-sbom: ready-for-dev
+
+  # Epic 17 — OIDC Authentication & OAuth2 API Authorization (Phase 1): migrate authentication to OIDC and ADD
+  # OAuth2 to the DRF API, while authorization stays app-managed (org membership + roles unchanged — mapping
+  # claims -> entitlements is Epic 18). Fixed decisions: the app is an OIDC Relying Party + OAuth2 Resource
+  # Server (NOT an IdP), IdP-agnostic via discovery; a BFF/server-side-session model — the Django backend runs
+  # the OIDC Authorization Code + PKCE flow and keeps setting the session cookie, so the SPA stays cookie-based
+  # (no tokens in the browser); JIT provisioning creates a zero-org user on first login (preserving Story 2.6),
+  # links to an existing local user by VERIFIED email, and persists sub<->user; a single installation-wide IdP
+  # (per-org SSO out of scope); coexistence behind OIDC_ENABLED then cutover (local password auth AND OIDC side
+  # by side, API keys keep working, OAuth2 added not rip-and-replace). Dependencies (PROPOSED, gated on the
+  # user's explicit approval): django-allauth for the authentication half (17.1-17.5 + Epic 18's claim access,
+  # via allauth.socialaccount.providers.openid_connect — server-side/session, PKCE+state+nonce, adapter hooks,
+  # SocialAccount.extra_data); authlib/PyJWT for the resource-server half (17.6/17.7 — allauth does NOT validate
+  # incoming API bearer/JWT tokens). Integration caveat: allauth's SocialAccount/EmailAddress models + adapter/
+  # URL conventions must be reconciled with the existing custom User, custom LoginView, and zero-org/active-org
+  # session (main risk). Build order: 17.1 -> 17.2 -> 17.3 -> 17.4 -> 17.5, with 17.6 -> 17.7 as a parallel
+  # resource-server track, and 17.8 last (coexistence matrix + rollout + cutover). Epic 18 depends on Epic 17.
+  epic-17: in-progress
+  17-1-oidc-provider-configuration-and-discovery: ready-for-dev
+  17-2-backend-oidc-login-bff-auth-code-pkce: ready-for-dev
+  17-3-jit-user-provisioning-and-account-linking: ready-for-dev
+  17-4-oidc-logout-and-session-lifecycle: ready-for-dev
+  17-5-frontend-sso-login: ready-for-dev
+  17-6-api-oauth2-resource-server: ready-for-dev
+  17-7-oauth2-client-credentials-m2m: ready-for-dev
+  17-8-coexistence-flag-rollout-and-cutover: ready-for-dev
+
+  # Epic 18 — IdP Claims -> Entitlements (Phase 2). DEPENDS ON EPIC 17 SHIPPING. Maps IdP groups/claims (read
+  # from django-allauth's SocialAccount.extra_data / adapter hooks) to entitlements — org membership + roles —
+  # sourcing only the EXISTING roles (member/manager/admin/global-admin; no new role). Split configure -> apply
+  # -> reconcile: 18.1 defines + validates the operator-configured claim -> (org, role)/global-admin mapping
+  # with a dry-run preview and NO membership writes; 18.2 applies it AT LOGIN (provision/sync memberships+roles,
+  # add + remove/downgrade), still provisioning only into EXISTING orgs (Story 2.12) and still allowing zero-org
+  # users (Story 2.6); 18.3 owns the explicit precedence rule (override/augment/seed, default augment), drift
+  # handling, and — over EVERY mode — preservation of the guarded invariants (org keeps >=1 admin; platform
+  # keeps >=1 global-admin; Stories 2.9/2.16/13.1): the invariant always wins over the IdP. Build order:
+  # 18.1 -> 18.2 -> 18.3 (18.2 calls into 18.3's pure reconcile(current, target, mode) diff).
+  epic-18: in-progress
+  18-1-claim-group-to-role-mapping-configuration: ready-for-dev
+  18-2-apply-mappings-on-login: ready-for-dev
+  18-3-precedence-and-reconciliation: ready-for-dev

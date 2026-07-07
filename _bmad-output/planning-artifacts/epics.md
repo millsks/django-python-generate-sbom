@@ -4575,3 +4575,507 @@ set spans App IDs), provenance referencing the source jobs, and a deterministic 
 **Then** the endpoint returns the merged SBOM as a download, wrapped in the admin route guard; backend +
 frontend tests cover the cross-App-ID merge, the manager 403 (tiering), the completed/active-org validation,
 and that the multi-select is hidden from a manager, and `pixi run ci` is green.
+
+## Epic 17: OIDC Authentication & OAuth2 API Authorization (Phase 1)
+
+Today authentication and authorization are entirely **app-managed**. The SPA logs in with an email/password
+against the Django backend, which sets a **session cookie** (`users/views.py::LoginView` → `authenticate()` +
+`login()`, `@ensure_csrf_cookie`); the SPA stays cookie-based (`frontend/src/api/client.ts` sends
+`credentials: 'include'` + `X-CSRFToken`) and derives identity from `auth/me`
+(`frontend/src/auth/AuthProvider.tsx`). Machine access uses **org API keys** (`OrgApiKey` /
+`OrgApiKeyAuthentication`, `Authorization: Api-Key <key>`). Identity and roles are local — `User`,
+`OrgMembership.Role` (member / manager / admin), and the global-admin tier — and `auth/me` is the single
+source of truth for gating.
+
+This epic (**Phase 1**) migrates **authentication** to **OIDC** and **adds** **OAuth2** authorization to the
+API, covering both the React SPA and the DRF API — while **authorization stays app-managed** (org membership +
+roles unchanged; mapping IdP groups/claims → entitlements is **Epic 18 / Phase 2**). The fixed architectural
+decisions are: the app is an **OIDC Relying Party + OAuth2 Resource Server** (it delegates login to an external
+IdP and validates tokens on the API — it is **not** an identity provider), **IdP-agnostic via OIDC discovery**;
+a **BFF / server-side session** — the Django backend runs the OIDC **Authorization Code + PKCE** flow and
+continues to set the Django **session cookie**, so the SPA stays cookie-based with **no tokens in the browser**;
+**JIT provisioning** — first OIDC login creates a **zero-org user** (preserving Story 2.6), linking to an
+existing local user by **verified email** and persisting the OIDC subject (`sub`) ↔ user; a **single
+installation-wide IdP** (operator-configured issuer + client credentials via discovery — **per-org SSO is
+explicitly out of scope**, future work); and **coexistence behind a feature flag, then cutover** — local
+password auth **and** OIDC run side by side under `OIDC_ENABLED`, **API keys keep working**, OAuth2 is **added**
+to the API (resource-server JWT/bearer validation + client-credentials M2M) rather than a rip-and-replace, and
+a final story plans the cutover + deprecation of local password auth.
+
+> **Division of labor between two dependencies.** **Authentication** (the OIDC login/RP flow — Stories
+> 17.1–17.5, plus Epic 18's claim access) is handled by **`django-allauth`** via its generic OIDC provider
+> (`allauth.socialaccount.providers.openid_connect`): natively **server-side / session-based** (matching the
+> BFF decision), IdP-agnostic by **discovery**, and providing **PKCE + state/nonce** and adapter hooks
+> (`pre_social_login` / `save_user` / `user_signed_up`, backed by `SocialAccount`/`EmailAddress`) out of the
+> box. The **resource-server** half (Stories 17.6/17.7 — validating incoming OAuth2 bearer/JWT tokens on the
+> DRF API) uses **`authlib`** or **`PyJWT`** instead, because **allauth does not validate incoming API
+> tokens** — that is a separate concern.
+>
+> **⚠ NEW RUNTIME DEPENDENCY (proposed; requires the user's explicit approval).** `django-allauth` (auth) and
+> `authlib`/`PyJWT` (resource server) are **proposed**; per the project rule a new runtime dependency is gated
+> on the user's explicit sign-off. Each relevant story states this gate and does **not** assume approval.
+>
+> **⚠ INTEGRATION CAVEAT (main risk).** `django-allauth` brings its own `SocialAccount` / `EmailAddress` models
+> and URL/adapter conventions that must be **reconciled** with the existing custom `User`, the custom
+> `LoginView` (`django.contrib.auth` session login), and the zero-org / active-org session model — flagged in
+> Stories 17.1 and 17.3. Account linking must use the **verified** email to avoid takeover.
+
+**ORDER:** **17.1 → 17.2 → 17.3 → 17.4 → 17.5** (the login/session/frontend spine), with **17.6 → 17.7** as a
+**parallel resource-server track** (needs 17.1's config/discovery), and **17.8 last** (coexistence matrix +
+rollout + cutover). **Epic 18 (Phase 2) depends on Epic 17 shipping.**
+
+### Story 17.1: OIDC Provider Configuration, Discovery & Feature Flag
+
+As an operator,
+I want to configure a single external OpenID Provider (issuer, client credentials, scopes, redirect) behind an
+`OIDC_ENABLED` flag with automatic discovery,
+So that the installation can delegate login to my IdP without hard-coding endpoints, and the SPA can tell
+whether SSO is available.
+
+**Context:** Settings live in `backend/config/settings/*.py` (DRF `DEFAULT_AUTHENTICATION_CLASSES` at
+`base.py:47-49`); the public flag channel is `GET /api/v1/config/`
+(`common/config_views.py::AppConfigView`, `AllowAny`, Story 11.20) surfaced to the SPA via
+`frontend/src/api/config.ts`.
+
+**Acceptance Criteria:**
+
+**Given** the auth config lives in settings,
+**When** this story lands,
+**Then** an env-driven OIDC block adds `OIDC_ENABLED` (bool, default **false**), `OIDC_ISSUER`,
+`OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_SCOPES` (default `openid email profile`), and
+`OIDC_REDIRECT_URI` — secrets only from the environment, never committed.
+
+**Given** an issuer URL,
+**When** the OIDC endpoints are resolved,
+**Then** the authorization/token/JWKS/userinfo/end-session endpoints come from the issuer's
+`.well-known/openid-configuration` **discovery** document (IdP-agnostic; no hard-coded IdP URLs; discovery
+failure logged, not swallowed), describing **one** installation-wide OP (**per-org SSO out of scope**).
+
+**Given** the feature flag,
+**When** `OIDC_ENABLED=false` (default),
+**Then** no OIDC behavior is active and the app is exactly as today; **when** enabled without a valid
+issuer/client, **then** a clear configuration error is raised/logged (the flag never half-enables).
+
+**Given** the SPA needs the flag before/without auth,
+**When** `GET /api/v1/config/` is called,
+**Then** the payload gains `oidc_enabled` next to `api_docs_enabled` (Story 11.20's object shape absorbs it),
+and `frontend/src/api/config.ts` `AppConfig` gains `oidc_enabled`.
+
+**Given** the change,
+**When** complete,
+**Then** the RP library is added **only after** the user approves the proposed dependency, tests cover the flag
+default, the config payload in both states, and the misconfig error, and `pixi run ci` is green.
+
+### Story 17.2: Backend OIDC Login (BFF, Authorization Code + PKCE)
+
+As a user of an OIDC-enabled installation,
+I want to log in through my organization's IdP and come back to the app already signed in,
+So that I authenticate once against the IdP and the app trusts that login — without the browser ever holding a
+token.
+
+**Context:** The security core of Phase 1. The Django backend acts as a **BFF** using **django-allauth**'s
+generic OIDC provider, which runs the OIDC **Authorization Code + PKCE (+ state/nonce)** flow server-side and
+establishes the ordinary Django session (mirroring `users/views.py::LoginView` → `login()` +
+`@ensure_csrf_cookie`), so the SPA stays cookie-based (`client.ts` `credentials: 'include'` + `X-CSRFToken`).
+allauth provides PKCE/state/nonce out of the box — the story **configures + verifies** its flow, not
+re-implements it. Depends on Story 17.1; the callback calls Story 17.3 (adapter) for user resolution.
+**Security-critical.**
+
+**Acceptance Criteria:**
+
+**Given** `OIDC_ENABLED=true`,
+**When** the SPA hits the login-initiate endpoint (`GET /api/v1/auth/oidc/login/`),
+**Then** the backend generates **PKCE** (`code_verifier`/S256 `code_challenge`), a random `state`, and a
+`nonce`, stashes them **server-side** (session), and redirects to the IdP authorization endpoint (from
+discovery) with `response_type=code`, `client_id`, `redirect_uri`, `scope`, `state`, `nonce`, `code_challenge`.
+
+**Given** the IdP redirects back to the callback with `code` + `state`,
+**When** the backend handles it,
+**Then** it verifies `state` matches the stashed value (CSRF/replay defense; mismatch → reject) and exchanges
+the `code` at the token endpoint using the stored `code_verifier` (PKCE) over the back channel.
+
+**Given** the token response,
+**When** the `id_token` is validated,
+**Then** **all** of signature (IdP **JWKS** from discovery), `iss` == issuer, `aud` == `OIDC_CLIENT_ID`,
+`exp`/`iat`/`nbf` (+ skew), and `nonce` == the stashed nonce must pass — any failure rejects the login (logged,
+specific exception, no session).
+
+**Given** a validated `id_token`,
+**When** login completes,
+**Then** the backend resolves the user (Story 17.3) and calls Django `login()` to set the **session cookie**
+(and `csrftoken` via `ensure_csrf_cookie`) — **no access/refresh/id token is returned to the browser**; any
+retained token lives server-side only, and the SPA continues to authenticate by session cookie.
+
+**Given** `OIDC_ENABLED=false`,
+**When** the OIDC endpoints are hit,
+**Then** they are inactive (flag-guarded) and local password login (`LoginView`) is unaffected either way;
+backend tests cover PKCE params, `state` match/mismatch, a mocked token exchange, `id_token` validation
+(happy path + bad `iss`/`aud`/expired/bad `nonce`), the session being set, no token in any response body, and
+`pixi run ci` is green.
+
+### Story 17.3: JIT User Provisioning & Account Linking
+
+As an operator,
+I want a first-time OIDC user to get a local account automatically, and a returning user to resolve to the same
+account,
+So that people can sign in via the IdP without a separate manual account-creation step, while the app keeps
+owning org membership and roles.
+
+**Context:** Runs in Story 17.2's allauth callback via allauth's `SocialAccountAdapter` hooks
+(`pre_social_login` / `save_user`) with the validated `id_token` claims; the `(iss, sub)` link + claims are
+stored on allauth's `SocialAccount` (`extra_data`). Preserves the Story 2.6 zero-org invariant; org creation
+stays global-admin-only (Story 2.12); the user model is email-based `User` + `OrgMembership.Role`
+(`users/models.py:53-94`). Linking uses the **verified** email (takeover guard). **Authorization stays
+app-managed — no roles from the IdP here (that is Epic 18).**
+
+**Acceptance Criteria:**
+
+**Given** a validated `id_token` with subject (`sub`) + issuer (`iss`),
+**When** a user logs in,
+**Then** the `(iss, sub)` identifier is persisted and associated with a local `User`, so a later login with the
+same `sub` re-resolves the same account (the `sub`, not the email, is the durable key).
+
+**Given** a `sub` never seen before **and** no local user matching the verified email,
+**When** they log in,
+**Then** a new `User` is provisioned with **ZERO org memberships** (Story 2.6 holds — Home until an admin adds
+them, Story 2.18; no org auto-created).
+
+**Given** a `sub` never seen before **but** an existing local user whose **verified** email (`email_verified`)
+matches,
+**When** they log in,
+**Then** the OIDC identity is **linked** to that user (store `(iss, sub)`), preserving their memberships/roles;
+an **unverified** email is not used for linking.
+
+**Given** conflicting identity,
+**When** resolving,
+**Then** the rules are explicit and tested: `sub` wins over a changed email; a verified email matching a user
+already linked to a **different** `sub` is **rejected** (no silent takeover, logged); a missing email claim
+provisions a `sub`-only zero-org user (or rejects, operator-documented). Provisioning is atomic, sets an
+**unusable password**, and no membership/role is read from the IdP (Phase 1 boundary).
+
+**Given** the change,
+**When** complete,
+**Then** backend tests cover new-sub/no-match → zero-org, verified-match → linked (no duplicate), returning-sub
+→ same user, unverified → not linked, the conflict rejection, and the unusable password, and `pixi run ci` is
+green.
+
+### Story 17.4: OIDC Logout & Session Lifecycle
+
+As an OIDC-authenticated user,
+I want logging out of the app to end my session cleanly (and optionally at the IdP),
+So that my authenticated session doesn't outlive my intent, and returning requires a fresh login.
+
+**Context:** Rounds out the session lifecycle. Logout is fundamentally a Django-session logout
+(`users/views.py::LogoutView` → `logout()`) plus discarding server-held OIDC tokens and an optional
+RP-initiated redirect using the discovery `end_session_endpoint` (Story 17.1). Depends on Stories 17.1–17.3.
+
+**Acceptance Criteria:**
+
+**Given** an OIDC-authenticated session,
+**When** the user logs out,
+**Then** Django `logout()` flushes the session and clears the cookie, any server-retained OIDC tokens for the
+session are discarded, and the result is indistinguishable (to the SPA) from a local logout.
+
+**Given** the IdP publishes an `end_session_endpoint`,
+**When** RP-initiated logout is enabled,
+**Then** the backend redirects to it (with `id_token_hint` / `post_logout_redirect_uri` as required) so the IdP
+session also ends; **when** there is no such endpoint, local logout still fully succeeds (graceful degradation,
+logged).
+
+**Given** the server-side session,
+**When** established,
+**Then** its lifetime follows Django's session policy; the Phase-1 refresh rule is **explicit** (default: **no**
+mid-session refresh — the session, not a live IdP token, drives authorization, since roles are app-managed).
+
+**Given** coexistence,
+**When** either a local-password or an OIDC user logs out,
+**Then** both work; the local logout is unchanged; OIDC-specific steps run only for OIDC sessions; backend
+tests cover the session flush, the RP-initiated-vs-local branch, and the documented refresh rule, and
+`pixi run ci` is green.
+
+### Story 17.5: Frontend SSO Login
+
+As a user on an OIDC-enabled installation,
+I want a "Sign in with SSO" button on the login page,
+So that I can start the IdP login without leaving the familiar login screen, while local password login still
+works when it's enabled.
+
+**Context:** `frontend/src/pages/LoginPage.tsx` submits local login today; identity flows through
+`AuthProvider` / `auth/me`. This story reads `oidc_enabled` from `getAppConfig()` (Story 17.1) and adds the SSO
+affordance. Build after Story 17.2 (needs the initiate endpoint). **BFF: the SPA never handles a code/token.**
+
+**Acceptance Criteria:**
+
+**Given** the login page,
+**When** it loads,
+**Then** it reads `oidc_enabled` from `getAppConfig()` and renders a **"Sign in with SSO"** control **only when**
+`oidc_enabled === true` (else the page is exactly as today — local form only).
+
+**Given** SSO is available,
+**When** the user clicks "Sign in with SSO",
+**Then** the browser does a **full-page navigation** to the backend initiate endpoint
+(`/api/v1/auth/oidc/login/`) — **not** a `fetch` — so the backend BFF drives the flow; the SPA never handles an
+authorization code or token, staying cookie/session-based.
+
+**Given** both auth methods enabled,
+**When** the login page renders,
+**Then** the local form **and** the SSO button coexist (local primary, SSO alternative, per Epic 12 styling);
+when the flag is false, only the local form shows (a future cutover, Story 17.8, may hide the local form).
+
+**Given** the backend established the session and redirected back,
+**When** the app loads,
+**Then** identity resolves through `AuthProvider`'s `auth/me` exactly as for local login (zero-org → Home,
+Story 2.18) — **no OIDC-specific client identity handling** — and a backend login-error state renders a generic
+error; frontend tests cover the flag gating, the navigation (not `fetch`), the coexisting local form, and the
+error state, and `pixi run ci` is green.
+
+### Story 17.6: API as OAuth2 Resource Server (Bearer/JWT Validation)
+
+As an API client or automation,
+I want to call the DRF API with an OAuth2 bearer token instead of (or alongside) an org API key,
+So that machine access can move onto standards-based OAuth2 while existing API keys keep working unchanged.
+
+**Context:** Resource-server track (parallel to 17.2–17.5; needs 17.1's config/discovery/JWKS). Built on
+**`authlib`/`PyJWT`** — **not** django-allauth, which handles login but does **not** validate incoming API
+bearer tokens. Adds a new `OAuth2ResourceServerAuthentication` **alongside** the existing
+`OrgApiKeyAuthentication` + `SessionAuthentication` (`config/settings/base.py:47-49`) — additive, not a
+replacement. Org resolution mirrors the API-key path (`users/auth.py::get_request_org`/`get_admin_org`).
+**Security-critical.**
+
+**Acceptance Criteria:**
+
+**Given** `DEFAULT_AUTHENTICATION_CLASSES` lists API-key + session auth,
+**When** this story lands,
+**Then** `OAuth2ResourceServerAuthentication` (bearer/JWT) is **added** to that list — API-key and session auth
+continue to work exactly as before.
+
+**Given** a request with `Authorization: Bearer <access_token>`,
+**When** authenticated,
+**Then** the token is validated (signature against IdP **JWKS** from discovery, `iss` == issuer, `aud` == the
+configured API audience, `exp`/`nbf` + skew, scope/audience) — any failure → **401** (`WWW-Authenticate:
+Bearer`), logged with a specific exception (never swallowed).
+
+**Given** a validated token,
+**When** the caller is resolved,
+**Then** the subject maps to the local `User` (Story 17.3 `(iss, sub)`) and the **active org** is resolved so
+`get_request_org`/`get_admin_org` keep working (as the API-key path sets `request.auth.org`); **authorization
+is unchanged** — the class only authenticates, existing permission/role/admin gates decide access (no privilege
+escalation via bearer).
+
+**Given** multiple schemes,
+**When** a request carries a bearer token vs `Api-Key` vs a session,
+**Then** each is unambiguously matched (documented order), `OIDC_ENABLED=false` leaves the API exactly as
+today, and backend tests cover a valid token mapping to the right user/org, each validation failure → 401,
+API-key/session requests unaffected, permissions still enforcing admin/org scoping under bearer, and
+`pixi run ci` is green.
+
+### Story 17.7: OAuth2 Client-Credentials for Machine-to-Machine
+
+As an operator running CI/automation,
+I want my automation to authenticate to the API with an OAuth2 client-credentials token,
+So that machine access uses standard OAuth2 (issued and revocable at the IdP) instead of a long-lived org API
+key, while existing keys keep working during the transition.
+
+**Context:** Builds on Story 17.6's bearer validation. Adds the **no-user** (client-credentials) resolution
+path — a machine principal mapped to an org/scope from validated claims + operator mapping — **coexisting with
+org API keys** (Story 2.4) so automation can migrate off keys. **Security-critical.** AD-2 org isolation is the
+invariant.
+
+**Acceptance Criteria:**
+
+**Given** a machine obtains a token via the **client-credentials grant** (its own client id/secret, no user),
+**When** it calls the API with `Authorization: Bearer <token>`,
+**Then** Story 17.6's validation accepts it and the request authenticates as a **machine principal**.
+
+**Given** a client-credentials token has no user subject,
+**When** the caller/org is resolved,
+**Then** the **active org** and scope are derived deterministically from the token's claims + an operator
+`client_id`/audience → org mapping, so `get_request_org`/`get_admin_org` resolve correctly and **AD-2** holds —
+a token scoped to org A can never act on org B.
+
+**Given** a machine principal,
+**When** it acts,
+**Then** it gets **only** its mapping's access (default non-admin; elevation only via explicit operator
+mapping), still through the existing permission gates — no entitlements are invented (Epic 18 owns claims→roles).
+
+**Given** the API-key path (Story 2.4),
+**When** automation runs,
+**Then** it may use **either** an API key **or** a client-credentials token — both reach the same API with the
+same org scoping (nothing about the API-key path changes; this is a *second* machine-auth option enabling the
+Story 17.8 migration); backend tests cover the machine principal + org mapping, org isolation, the non-admin
+default, the API-key path unchanged, and invalid/expired M2M tokens → 401, and `pixi run ci` is green.
+
+### Story 17.8: Coexistence Flag, Rollout & Cutover Plan
+
+As an operator,
+I want a clear rollout plan and coexistence matrix for turning on OIDC/OAuth2,
+So that I can migrate my installation from local passwords + API keys to IdP login + OAuth2 safely, in stages,
+with a defined cutover and deprecation path.
+
+**Context:** Ties Phase 1 together (depends on 17.1–17.7): the coexistence **matrix** (local vs OIDC login;
+API keys vs OAuth2 M2M), the rollout runbook, and the staged **deprecation path** for local password auth and
+API keys — with a break-glass admin path. The operator runbook lands as `docs/**` at dev time (not while
+authoring this story).
+
+**Acceptance Criteria:**
+
+**Given** the auth mechanisms,
+**When** documented,
+**Then** the coexistence **matrix** is explicit for every combination of `OIDC_ENABLED` (on/off) × login method
+(local / SSO) × machine auth (API key / OAuth2), stating what is available and what the SPA shows; the default
+(`OIDC_ENABLED=false`) row = "today's behavior, unchanged".
+
+**Given** an operator enabling OIDC,
+**When** they follow the runbook,
+**Then** it gives ordered steps (register the OIDC client, set `OIDC_*` + `OIDC_ENABLED=true`, verify discovery,
+test an SSO login incl. JIT zero-org provisioning, register a machine client + mint a client-credentials token,
+validate a bearer call) with rollback = `OIDC_ENABLED=false`.
+
+**Given** OIDC/OAuth2 are proven,
+**When** planning cutover,
+**Then** the **deprecation path** for local password auth (coexist → prefer SSO → disable local login, keeping a
+documented **break-glass** admin path) and for API keys (coexist → migrate CI to client-credentials →
+deprecate/disable key issuance) is staged and reversible until the final step; each preserves the zero-org +
+linking rules and reaffirms **per-org SSO out of scope** and **claims→entitlements = Epic 18**.
+
+**Given** the toggles this story formalizes,
+**When** implemented,
+**Then** tests assert the matrix behaves as documented (flag-off = today; the local-login-disable toggle blocks
+local login while SSO still works; break-glass preserved), the operator runbook/matrix land as `docs/**` at dev
+time (not while authoring the story), and `pixi run ci` is green.
+
+## Epic 18: IdP Claims → Entitlements (Phase 2)
+
+**Epic 18 depends on Epic 17 shipping.** Where Phase 1 (Epic 17) migrates **authentication** to OIDC while
+leaving **authorization app-managed**, Phase 2 closes the loop: it maps the IdP's **groups/claims** to
+**entitlements** — org membership + roles — so a user's access can be driven by their IdP identity instead of
+managed by hand. It reads the IdP groups/claims from **django-allauth's `SocialAccount.extra_data`** (and its
+adapter hooks) — the `(iss, sub)` ↔ user identity Phase 1 establishes (Stories 17.2/17.3) — and it sources only
+the **existing** roles (member / manager / admin / global-admin) — no new role is introduced.
+
+The epic is deliberately split into **configure → apply → reconcile**. Story 18.1 defines and validates the
+operator-configured mapping (claim value → `(org, role)` / global-admin) with a dry-run preview and **no**
+membership writes. Story 18.2 applies the mapping **at login** — provisioning and syncing memberships/roles
+from claims (add + remove/downgrade), still provisioning only into **existing** orgs (org creation stays
+global-admin-only, Story 2.12) and still allowing **zero-org** users (Story 2.6). Story 18.3 pins the hardest
+part: the explicit **precedence** rule (override / augment / seed) for when IdP claims and app-managed roles
+disagree, drift handling, and — over **every** mode — preservation of the guarded invariants (an org keeps
+**≥1 admin**; the platform keeps **≥1 global-admin**; Stories 2.9 / 2.16 / 13.1). The invariant always **wins
+over the IdP**: no claim change can strip the last admin or last global-admin.
+
+**ORDER:** **18.1 → 18.2 → 18.3.** 18.1 is the mapping config + validation + preview; 18.2 wires application at
+login and calls into 18.3; 18.3 owns the precedence/reconciliation semantics (a pure `reconcile(current,
+target, mode)` diff) that 18.2 applies transactionally. **All of Epic 18 is gated on Epic 17 being shipped.**
+
+### Story 18.1: Claim/Group → Role Mapping Configuration
+
+As an operator,
+I want to configure how IdP groups/claims map to org memberships and roles,
+So that Phase 2 can provision and sync a user's entitlements from their IdP identity instead of managing every
+role by hand.
+
+**Context:** Depends on Epic 17 (validated claims). Roles are the existing member / manager (Story 16.1) /
+admin (Story 2.3/2.16) / global-admin (Story 2.8/13.1) — no new role. This story defines + validates the
+mapping only; application is Story 18.2.
+
+**Acceptance Criteria:**
+
+**Given** the IdP emits group/role claims,
+**When** the operator configures Phase 2,
+**Then** a well-defined mapping goes from a **claim value** (group/claim string) to an **entitlement** —
+an `(org, role)` pair (role ∈ member/manager/admin) plus an optional **global-admin** grant — with its shape,
+source (settings/env/DB, documented), and precedence order specified.
+
+**Given** the claims captured in allauth's `SocialAccount.extra_data`,
+**When** the mapping is defined,
+**Then** the operator specifies **which claim** (key in `extra_data`) carries groups/roles and how multi-valued
+claims map to several entitlements; an absent/empty claim yields **no** IdP-derived entitlements (app-managed
+state untouched — reconciliation is Story 18.3).
+
+**Given** a configured mapping,
+**When** the app loads it,
+**Then** it is **validated** (well-formed; orgs resolvable; roles valid; no contradictory duplicates) with
+errors raised/logged — but **no user is modified** (a dry-run/preview turns a sample claim set into the
+entitlements it *would* produce, for operator verification).
+
+**Given** the guarded invariants (last-admin / last-global-admin, Stories 2.9/2.16/13.1),
+**When** the schema is defined,
+**Then** it documents that application (18.2) and reconciliation (18.3) must preserve them, and backend tests
+cover a valid mapping loading, malformed/contradictory mappings rejected, and the dry-run preview (incl.
+multi-valued and absent-claim cases) with **no** membership writes, and `pixi run ci` is green.
+
+### Story 18.2: Apply Mappings on Login (Provision/Sync Entitlements from Claims)
+
+As an operator,
+I want a user's org memberships and roles to be provisioned and kept in sync from their IdP groups/claims when
+they log in via OIDC,
+So that access is driven by the IdP as the source of truth for entitlements, without manual per-user role
+management.
+
+**Context:** Depends on Epic 17 (login/identity, Stories 17.2/17.3) and Story 18.1 (the mapping). Applies the
+mapping at login; the conflict/precedence/invariant semantics are Story 18.3, which this story calls into.
+Provisions only into existing orgs (Story 2.12); zero-org (Story 2.6) still allowed.
+
+**Acceptance Criteria:**
+
+**Given** the mapping is enabled and a user logs in via OIDC (Story 17.2 → 17.3),
+**When** login completes,
+**Then** the mapping (Story 18.1) is evaluated against the validated claims and the resulting entitlements are
+**applied** to the user's `OrgMembership`s on each login.
+
+**Given** a user's IdP-derived entitlements change between logins,
+**When** they next log in,
+**Then** the sync **adds** newly-granted memberships/roles and **removes/downgrades** ones no longer granted
+(subject to Story 18.3's precedence/drift rules), provisioning only into **existing** orgs (no auto-create,
+Story 2.12).
+
+**Given** a user whose claims map to **no** entitlement,
+**When** they log in,
+**Then** they remain/become a **zero-org** user (Story 2.6/17.3) landing on Home (Story 2.18) — IdP login never
+forces an org and an empty claim does not error.
+
+**Given** the guarded invariants,
+**When** a sync would strip the last admin of an org or the last global-admin,
+**Then** the application path **preserves the invariant** (skips + logs) by calling into Story 18.3 — never
+bypassing it; the sync is **atomic**, **idempotent** on unchanged claims, and audited (structlog provenance),
+and backend tests cover first-login provisioning, add + remove/downgrade, the zero-org case, the
+invariant-preserving skip, atomicity, and idempotency, and `pixi run ci` is green.
+
+### Story 18.3: Precedence & Reconciliation (IdP vs App-Managed Entitlements)
+
+As an operator,
+I want a precise, documented precedence rule for when IdP claims and app-managed roles disagree,
+So that entitlement sync is predictable, never strips protected access, and I know exactly whether the IdP
+overrides, augments, or merely seeds a user's roles.
+
+**Context:** Owns the conflict semantics Story 18.2 calls into. Reuses the existing guarded-invariant logic
+(last-admin, Stories 2.9/2.16; last-global-admin, Stories 2.8/13.1) and the existing manual role actions
+(Stories 2.16/2.20/2.7/16.1). Depends on Epic 17, Story 18.1, and Story 18.2.
+
+**Acceptance Criteria:**
+
+**Given** IdP-derived and app-managed entitlements can differ,
+**When** reconciliation runs,
+**Then** the behavior is one **explicitly configured** mode — **seed** (IdP sets only on first provision, then
+app-managed wins), **augment** (IdP can add but never remove app-granted; the union), or **override** (IdP is
+source of truth; unbacked app roles are removed/downgraded) — with a stated default (recommended **augment**,
+non-destructive).
+
+**Given** a user's roles drift from their claims between logins,
+**When** they next log in,
+**Then** the drift is reconciled per the mode deterministically, and each decision (kept/added/removed/skipped)
+is logged with its reason for audit.
+
+**Given** the guarded invariants (org ≥1 admin; platform ≥1 global-admin),
+**When** reconciliation in **any** mode (including override) would remove/downgrade the last admin or the last
+global-admin,
+**Then** the change is **refused/skipped**, the prior state kept, and a warning logged — the invariant **wins
+over the IdP**; granting global-admin via a claim is allowed only by explicit operator opt-in (Story 18.1) and
+its last holder is protected (Story 13.1).
+
+**Given** reconciliation must be testable,
+**When** it computes the diff,
+**Then** it is a **pure function** `reconcile(current, target, mode) -> planned_changes` that Story 18.2 applies
+transactionally, and backend tests cover each mode on a fixed drift scenario, the invariant guard refusing to
+strip the last admin/global-admin in override mode, manual-action interaction per mode, global-admin opt-in +
+last-holder protection, and `reconcile` purity, and `pixi run ci` is green.

@@ -5,7 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.1] - 2026-07-06
+## [0.9.2] - 2026-07-07
+
+### ⚙️ Miscellaneous Tasks
+
+- **bmad**: Add Epic 16 management views + manager role, reopen Epic 8 (8.26 ecosystem field)
+- **bmad**: Add Epic 17 (OIDC auth + OAuth2 API) and Epic 18 (claims-to-entitlements)
+- **bmad**: Reopen Epic 8 — Story 8.27 SBOM component table in Excel export
+- **bmad**: Close Epic 8 — Stories 8.26/8.27 done after merge
+- **bmad**: Add Epic 19 — OpenShift deployment implementation stories
+- **pre-commit**: Validate all YAML strictly, exclude only mkdocs.yml from check-yaml
+
+### ⭐ Features
+
+- **sbom**: Export the SBOM component table to Excel (Story 8.27)
+
+### 🐛 Bug Fixes
+
+- **sbom**: Embed package ecosystem (pypi/conda) in the SBOM document (Story 8.26)
+
+### 📚 Documentation
+
+- **deployment**: Add OpenShift migration guide
+
+### 🧪 Testing
+
+- **sbom**: Cover ecosystem/export fallback branches for Codecov patch
+
+## [0.9.1] - 2026-07-07
 
 ### ⚙️ Miscellaneous Tasks
 
@@ -13,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **bmad**: Reopen Epic 5 — Story 5.8 move Dependency Graph after Version Currency
 - **bmad**: Close Epic 5 — Story 5.8 done after merge
 - **bmad**: Add Epic 15 — uv/poetry/pipenv lockfile parser stories
+- **release**: Update CHANGELOG.md for v0.9.1
 
 ### ⭐ Features
 

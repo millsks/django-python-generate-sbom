@@ -44,6 +44,35 @@ def test_normalize_unknown_format_is_empty() -> None:
 
 
 @pytest.mark.parametrize("output_format", ["cyclonedx-json", "cyclonedx-xml", "spdx-json"])
+def test_ecosystem_round_trips_through_the_document(output_format: str) -> None:
+    # Story 8.26: the ecosystem (pypi/conda) is read back for every format so 16.3 can dedupe on it.
+    pkgs = [
+        PackageSpec(name="django", version="5.2.1", ecosystem="pypi"),
+        PackageSpec(name="numpy", version="1.26.0", ecosystem="conda"),
+    ]
+    raw, _ = generate_sbom_document(pkgs, output_format, PROV)
+
+    by_name = {c["name"]: c["ecosystem"] for c in normalize_components(raw, output_format)}
+
+    assert by_name["django"] == "pypi"
+    assert by_name["numpy"] == "conda"
+
+
+def test_ecosystem_falls_back_to_purl_type_then_pypi() -> None:
+    # Story 8.26 AC #4: an older CycloneDX doc with no package:ecosystem property still
+    # resolves an ecosystem — from the purl type when present, else the pypi default.
+    doc = (
+        '{"components": ['
+        '{"name": "numpy", "version": "1.0", "purl": "pkg:conda/numpy@1.0"},'
+        '{"name": "bare", "version": "2.0"}'
+        "]}"
+    )
+    by_name = {c["name"]: c["ecosystem"] for c in normalize_components(doc.encode("utf-8"), "cyclonedx-json")}
+    assert by_name["numpy"] == "conda"
+    assert by_name["bare"] == "pypi"
+
+
+@pytest.mark.parametrize("output_format", ["cyclonedx-json", "cyclonedx-xml", "spdx-json"])
 def test_direct_transitive_round_trips_through_the_document(output_format: str) -> None:
     # Story 8.4: the direct/transitive relationship is encoded in the SBOM and read back.
     pkgs = [

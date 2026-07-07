@@ -142,6 +142,7 @@ export function SbomTab({ taskId }: { taskId: string }) {
                 <TableCell>Type</TableCell>
                 <TableCell>License</TableCell>
                 {showRelationship && <TableCell>Relationship</TableCell>}
+                <TableCell>Ecosystem</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -152,6 +153,7 @@ export function SbomTab({ taskId }: { taskId: string }) {
                   <TableCell>{row.type ?? '—'}</TableCell>
                   <TableCell>{row.license ?? '—'}</TableCell>
                   {showRelationship && <TableCell>{row.relationship ?? '—'}</TableCell>}
+                  <TableCell>{row.ecosystem ?? '—'}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

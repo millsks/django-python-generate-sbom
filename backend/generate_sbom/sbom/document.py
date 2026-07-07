@@ -1,7 +1,7 @@
 """Parse a stored SBOM document into a normalized component list (Story 8.6).
 
 Pure, I/O-free functions (AD-3): the raw SBOM bytes + its serializer id in, a
-flat list of ``{name, version, type, purl, license, relationship}`` dicts out —
+flat list of ``{name, version, type, purl, license, relationship, ecosystem}`` dicts out —
 so the SPA never needs a CycloneDX/SPDX/JSON/XML parser. ``relationship`` is
 always ``None`` until the direct/transitive work (Stories 8.3/8.4) populates it.
 """
@@ -13,6 +13,7 @@ from typing import Any
 from xml.etree import ElementTree
 
 from .generation import CYCLONEDX_JSON, CYCLONEDX_XML, SPDX_JSON
+from .parsers import PYPI
 
 
 def normalize_components(raw: bytes, output_format: str) -> list[dict[str, Any]]:
@@ -200,6 +201,19 @@ def _spdx_comment_provenance(comment: Any) -> dict[str, str]:
     return result
 
 
+def _ecosystem_from_purl(purl: str | None) -> str:
+    """Derive the ecosystem from a ``pkg:<type>/...`` purl, defaulting to ``pypi`` (Story 8.26).
+
+    Lets the ecosystem round-trip for older stored documents that predate the explicit
+    ``package:ecosystem`` property (graceful default, AC #4).
+    """
+    if purl and purl.startswith("pkg:") and "/" in purl:
+        purl_type = purl[len("pkg:") :].split("/", 1)[0]
+        if purl_type:
+            return purl_type
+    return PYPI
+
+
 def _component(
     name: str,
     version: str,
@@ -207,14 +221,18 @@ def _component(
     purl: str | None,
     license_: str | None,
     relationship: str | None = None,
+    ecosystem: str | None = None,
 ) -> dict[str, Any]:
+    resolved_purl = purl or None
     return {
         "name": name,
         "version": version,
         "type": (type_ or "").lower() or None,
-        "purl": purl or None,
+        "purl": resolved_purl,
         "license": license_ or None,
         "relationship": relationship or None,  # direct | transitive | unknown (Story 8.4)
+        # Ecosystem from the package:ecosystem property, falling back to the purl type (Story 8.26).
+        "ecosystem": ecosystem or _ecosystem_from_purl(resolved_purl),
     }
 
 
@@ -229,18 +247,19 @@ def _from_cyclonedx_json(text: str) -> list[dict[str, Any]]:
                 type_=comp.get("type"),
                 purl=comp.get("purl"),
                 license_=_cyclonedx_license(comp.get("licenses")),
-                relationship=_cyclonedx_relationship(comp.get("properties")),
+                relationship=_cyclonedx_property(comp.get("properties"), "sbom:relationship"),
+                ecosystem=_cyclonedx_property(comp.get("properties"), "package:ecosystem"),
             )
         )
     return components
 
 
-def _cyclonedx_relationship(properties: Any) -> str | None:
-    """Read the ``sbom:relationship`` property value from a CycloneDX component (Story 8.4)."""
+def _cyclonedx_property(properties: Any, name: str) -> str | None:
+    """Read a named property value from a CycloneDX component (Story 8.4/8.26)."""
     if not isinstance(properties, list):
         return None
     for prop in properties:
-        if isinstance(prop, dict) and prop.get("name") == "sbom:relationship":
+        if isinstance(prop, dict) and prop.get("name") == name:
             return str(prop.get("value")) or None
     return None
 
@@ -279,6 +298,7 @@ def _from_cyclonedx_xml(text: str) -> list[dict[str, Any]]:
         purl: str | None = None
         license_parts: list[str] = []
         relationship: str | None = None
+        ecosystem: str | None = None
         for child in element:
             local = _local(child.tag)
             if local in ("name", "version") and child.text:
@@ -288,7 +308,8 @@ def _from_cyclonedx_xml(text: str) -> list[dict[str, Any]]:
             elif local == "licenses":
                 license_parts.extend(_cyclonedx_xml_licenses(child))
             elif local == "properties":
-                relationship = _cyclonedx_xml_relationship(child) or relationship
+                relationship = _cyclonedx_xml_property(child, "sbom:relationship") or relationship
+                ecosystem = _cyclonedx_xml_property(child, "package:ecosystem") or ecosystem
         components.append(
             _component(
                 name=fields.get("name", ""),
@@ -297,15 +318,16 @@ def _from_cyclonedx_xml(text: str) -> list[dict[str, Any]]:
                 purl=purl,
                 license_=", ".join(license_parts) or None,
                 relationship=relationship,
+                ecosystem=ecosystem,
             )
         )
     return components
 
 
-def _cyclonedx_xml_relationship(properties_el: ElementTree.Element) -> str | None:
-    """Read the ``sbom:relationship`` property value from a CycloneDX XML component (Story 8.4)."""
+def _cyclonedx_xml_property(properties_el: ElementTree.Element, name: str) -> str | None:
+    """Read a named property value from a CycloneDX XML component (Story 8.4/8.26)."""
     for node in properties_el.iter():
-        if _local(node.tag) == "property" and node.get("name") == "sbom:relationship" and node.text:
+        if _local(node.tag) == "property" and node.get("name") == name and node.text:
             return node.text.strip()
     return None
 

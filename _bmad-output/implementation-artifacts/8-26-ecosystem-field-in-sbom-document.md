@@ -1,6 +1,6 @@
 # Story 8.26: Include Ecosystem (PyPI/Conda) in the SBOM Document
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -155,8 +155,34 @@ implementation detail seems to require Phase 8 rewriting the blob, STOP and rais
 
 ### Agent Model Used
 
+claude-opus-4-8[1m] (Claude Opus 4.8, 1M context)
+
 ### Debug Log References
+
+- Initial SPDX ecosystem test hit `StopIteration`: the root application package carries a `vcs`
+  external ref but no `purl`, so a naive `next(... referenceType == "purl")` over every package with
+  `externalRefs` raised. Fixed by reusing the existing `_spdx_purl` helper in the test.
 
 ### Completion Notes List
 
+- CycloneDX (`generation.py`): each library `Component` now sets `purl=PackageURL(type=<ecosystem>, ...)`
+  (previously no purl) and adds a `package:ecosystem` property mirroring `sbom:relationship`.
+- SPDX (`generation.py`): the hard-coded `pkg:pypi/...` purl is replaced with `pkg:<ecosystem>/...`
+  (correctness fix — conda packages were mislabeled pypi).
+- `_purl_ecosystem` normalizes empty/unexpected ecosystem values to `pypi` (AC #3) so generation never raises.
+- Round-trip (`document.py`): `normalize_components` returns an `ecosystem` key for all three formats,
+  read from the `package:ecosystem` property (CycloneDX JSON + XML) and falling back to the purl type
+  (`pkg:<type>/...`), then to `pypi`, so older stored documents still resolve an ecosystem.
+- Frontend: `SbomComponent` gains `ecosystem: string | null`; the SBOM tab Components table renders an
+  Ecosystem column.
+- AD-6 preserved: purely a serialize + parse-back change at Phase 3; no new I/O, no downstream blob rewrite.
+
 ### File List
+
+- backend/generate_sbom/sbom/generation.py
+- backend/generate_sbom/sbom/document.py
+- backend/tests/unit/test_sbom_generation.py
+- backend/tests/unit/test_sbom_document.py
+- frontend/src/api/sbom.ts
+- frontend/src/components/SbomTab.tsx
+- frontend/src/components/SbomTab.test.tsx

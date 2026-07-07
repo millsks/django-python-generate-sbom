@@ -12,7 +12,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from .parsers import DIRECT, PackageSpec
+from .parsers import CONDA, DIRECT, PYPI, PackageSpec
 
 # Internal serializer ids (OUTPUT_FORMAT_MAP values).
 CYCLONEDX_JSON = "cyclonedx-json"
@@ -43,6 +43,15 @@ class Provenance:
     component_name: str
     repository_url: str
     source_branch: str
+
+
+def _purl_ecosystem(pkg: PackageSpec) -> str:
+    """Normalize a package's ecosystem to a known purl type, defaulting to ``pypi`` (Story 8.26).
+
+    An empty or unexpected ``ecosystem`` value falls back to ``pypi`` (AC #3) so the
+    component still emits with a valid purl type rather than raising.
+    """
+    return pkg.ecosystem if pkg.ecosystem in (PYPI, CONDA) else PYPI
 
 
 def sbom_extension(output_format: str) -> str:
@@ -93,6 +102,7 @@ def _generate_cyclonedx(
     from cyclonedx.model.component import Component, ComponentType
     from cyclonedx.output import make_outputter
     from cyclonedx.schema import OutputFormat, SchemaVersion
+    from packageurl import PackageURL
 
     bom = Bom()
     root = Component(
@@ -111,13 +121,17 @@ def _generate_cyclonedx(
     components = []
     direct_components = []
     for pkg in packages:
+        ecosystem = _purl_ecosystem(pkg)
         component = Component(
             name=pkg.name,
             version=pkg.version,
             type=ComponentType.LIBRARY,
             bom_ref=f"{pkg.name}@{pkg.version}",
+            purl=PackageURL(type=ecosystem, name=pkg.name, version=pkg.version),
         )
         component.properties.add(Property(name="sbom:relationship", value=pkg.relationship))
+        # Record the ecosystem (pypi/conda, Story 8.26) so it round-trips and 16.3 can dedupe on it.
+        component.properties.add(Property(name="package:ecosystem", value=ecosystem))
         # Emit the resolved license (SPDX id, expression, or free-text name); none if unknown (AC #2).
         license_value = license_map.get((pkg.name, pkg.version))
         if license_value:
@@ -185,7 +199,8 @@ def _generate_spdx(
         entry.set_name(pkg.name)
         entry.set_version(pkg.version)
         entry.set_type("library")
-        entry.set_purl(f"pkg:pypi/{pkg.name}@{pkg.version}")
+        # Purl type reflects the actual ecosystem (Story 8.26) — conda packages were mislabeled pypi.
+        entry.set_purl(f"pkg:{_purl_ecosystem(pkg)}/{pkg.name}@{pkg.version}")
         # Concluded == declared from the resolved license; NOASSERTION when unknown (AC #2).
         license_value = license_map.get((pkg.name, pkg.version)) or "NOASSERTION"
         entry.set_licenseconcluded(license_value)

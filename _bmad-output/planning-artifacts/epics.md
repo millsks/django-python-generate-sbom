@@ -5443,3 +5443,328 @@ data-integrity checks at each step.
 **When** the story is implemented,
 **Then** it **cites** `docs/deployment/openshift/` for the detailed runbook (avoiding duplication) and captures
 only the migration-specific commands and the verification/rollback checklist here.
+
+## Epic 20: Unified Cross-Platform Local Development (containerless)
+
+Today local development runs under Docker Compose (`docker-compose.yml`) against in-cluster Postgres, Redis, and
+MinIO. Enterprise policy blocks Docker/Podman on **Windows**, so there is no containerless local path today —
+and `win-64` is not even a supported pixi platform (`pixi.toml:9`). This epic makes local development run
+**containerless on BOTH macOS (osx-arm64) and Windows (win-64)**: **SQLite** as the local DB, the **local
+filesystem** for object storage, a **real separate Celery worker** on a container-free transport, and everything
+driven by **pixi tasks** — one `pixi run dev` brings the whole stack up. All **other** environments (OCP/prod,
+Epic 19) stay containerized with enterprise-managed **PostgreSQL**, **Redis**, and **S3** — this epic changes
+**local dev only**.
+
+**Fixed decisions (architecture consult with the product owner):**
+- **Async jobs stay Celery.** Local swaps the transport to a Kombu **`filesystem://`** broker + a **DB result
+  backend** (SQLite, via **django-celery-results**) running a **real, separate worker** (local mirrors OCP — not
+  eager). **Windows** uses a **`solo`/`threads`** worker pool (Celery prefork is Unix-only). **Eager mode**
+  (`CELERY_TASK_ALWAYS_EAGER`) is reserved for the **test suite** so tests stay offline.
+- **Local runner:** `runserver` for web + **honcho** (pure-Python, cross-platform) + a **`Procfile`** so
+  `pixi run dev` launches web + worker + beat together. **gunicorn is Unix-only → scoped to containers/OCP
+  only** (kept, not deleted).
+- **Retire the dependency graph entirely** (product-owner decision — unreadable at scale), which also removes
+  the fragile `win-64` conda deps (`pygraphviz`/`graphviz`). Only the *visualization* is retired; the
+  direct/transitive relationship **data** in the SBOM document (Stories 8.3–8.5, 8.26) is **preserved**.
+- **CI:** add a **`win-64`** job to catch cross-platform regressions.
+
+**Grounded facts this epic must honor (verified against the repo):**
+- **SQLite + filesystem storage are ALREADY the base defaults.** `backend/config/settings/base.py` L108–110
+  defaults `DATABASES` to `sqlite:///{BASE_DIR}/db.sqlite3` when `DATABASE_URL` is unset; L130–137 defaults
+  `STORAGES["default"]` to `FileSystemStorage` (`MEDIA_ROOT = BASE_DIR / "media"`). `production.py` swaps to
+  S3/MinIO (L38–44) and (via `DATABASE_URL` env) Postgres. So local needs mainly the **Celery wiring + a local
+  settings module**, not a DB/storage rewrite. `config.settings.local` already exists (SQLite + filesystem, no
+  infra swap) and is the default for `manage.py` (L10), `celery_app.py` (L14), and pytest (L18).
+- **Celery** (`base.py` L147–158): broker + result backend both = `REDIS_URL` (default
+  `redis://localhost:6379/0`); `CELERY_TASK_DEFAULT_QUEUE = "pipeline"`; soft/hard limits 1800/2100s. Tasks
+  (`pixi.toml`): `worker-pipeline` (`-Q pipeline -c 4`), `worker-analysis` (`-Q analysis -c 4`), `beat`
+  (`-s /tmp/celerybeat-schedule` — `/tmp` is POSIX-only, needs a portable path). `django-celery-results` and
+  `CELERY_TASK_ALWAYS_EAGER` are **not present today** (tests currently assume live infra).
+- **pixi.toml:** `platforms = ["osx-arm64", "linux-64", "linux-aarch64"]` (L9 — add `win-64`); `web` =
+  `gunicorn config.wsgi …` (L138–140, Unix-only); `worker-*` = `celery … -c 4` (prefork); deps include
+  `networkx` (L39), `pygraphviz` (L40), `graphviz` (L41) — **all three exist only for the dependency graph**.
+  There is **no** `runserver`/`dev` task, **no `Procfile`, no honcho**, and **no `[target.*]`** tables.
+- **Dependency-graph footprint (retire it), verified graph-only:** backend `analysis/services/graph.py`
+  (Phase 6 — networkx DiGraph, Cytoscape JSON `_to_cytoscape` [AD-9], pygraphviz SVG `_render_svg`); the
+  `build_dependency_graph` analysis-worker task (`tasks/analysis.py` L137–178) + its slot in `analysis_group`
+  (`tasks/sbom_pipeline.py` L94); `ReportType.GRAPH` (`analysis/models.py` L19); endpoints `reports/graph/` +
+  `reports/graph/download/` (`analysis/urls.py`/`views.py`/`serializers.py`); the **Dependency Graph tab**
+  (`frontend/src/components/DepGraph.tsx`, the ResultsPage tab at index 5 — moved last by Story 5.8) +
+  Cytoscape.js (`cytoscape`/`cytoscape-dagre`/`react-cytoscapejs`); the `Dockerfile` `pixi run dot -c` step and
+  the `networkx.*`/`pygraphviz.*` mypy overrides. **No Overview quick-nav/metric references the graph** — nothing
+  to remove there. The report **count** drops (e.g. `docs/developer/data-model.md` "up to **four** reports" →
+  "**three**"; the landing/one-pager feature list drops the graph entry). **Preserve** the direct/transitive
+  SBOM data (`sbom/parsers/_types.py`, `sbom/generation.py`, `sbom/document.py`) — only the visualization goes.
+
+> **⚠ SIGN-OFF GATES (proposed dependencies).** Two stories introduce a **new dependency** and require the
+> **user's explicit sign-off at implementation time** (Control Constraints §7): **20.4** proposes
+> **`django-celery-results`** (the DB result backend) and **20.5** proposes **`honcho`** (the Procfile runner).
+> Each story **proposes** and does not add the dep until approved. By contrast, the dependency **removals** in
+> **20.1** (`networkx`/`pygraphviz`/`graphviz`) are **already user-approved** — no add-gate applies to a removal.
+
+**ORDER:** **20.1 → 20.2 → 20.3 → 20.4 → 20.5 → 20.6 → 20.7.** 20.1 (retire the graph) goes **first** because it
+removes the `pygraphviz`/`graphviz` builds that block a clean `win-64` solve; 20.2 then adds `win-64`; 20.3
+establishes the local settings module; 20.4 wires the containerless worker; 20.5 adds `pixi run dev`; 20.6 adds
+the Windows CI job; 20.7 documents it all.
+
+### Story 20.1: Retire the Dependency Graph
+
+As the product owner,
+I want the dependency-graph report, endpoints, tab, and its heavyweight visualization libraries removed,
+So that the least-used report (unreadable at scale) stops carrying the cross-platform-hostile
+`pygraphviz`/`graphviz` build and the app's footprint shrinks.
+
+**Context:** The dependency graph is graph-ONLY across backend service/phase/report-type/endpoints, the frontend
+tab + Cytoscape.js, the `networkx`/`pygraphviz`/`graphviz` conda deps, the `Dockerfile` `dot -c` step, and docs.
+The direct/transitive relationship **data** in the SBOM document (Stories 8.3–8.5, 8.26) is **preserved** — only
+the visualization is retired. Dependency **removals are user-approved** (no add-gate).
+
+**Acceptance Criteria:**
+
+**Given** Phase 6 builds a networkx graph and renders SVG via pygraphviz,
+**When** the graph is retired,
+**Then** `analysis/services/graph.py` is deleted, the `build_dependency_graph` task
+(`tasks/analysis.py` L137–178, import L25) is removed and dropped from the `analysis_group`
+(`tasks/sbom_pipeline.py` L94) — leaving the group with the three remaining phases.
+
+**Given** the `ReportType.GRAPH` enum and its two endpoints,
+**When** the graph is retired,
+**Then** `GRAPH` is removed from `analysis/models.py` (L19) with a choice-only `AlterField` migration
+(`max_length=10` unchanged), and `GraphReportView`/`GraphSvgDownloadView` (`views.py` L138–158), the
+`reports/graph/` + `reports/graph/download/` routes (`urls.py` L5–9, L24–33), and `GraphReportResponseSerializer`
+(`serializers.py` L15–19) are removed.
+
+**Given** the three libraries are verified graph-only,
+**When** the graph is retired,
+**Then** `networkx`/`pygraphviz`/`graphviz` are removed from `pixi.toml` (L39–41), the `pixi run dot -c` step is
+removed from the `Dockerfile` (L15–18), the `networkx.*`/`pygraphviz.*` mypy overrides are removed from
+`backend/pyproject.toml` (L66–67), and `pixi.lock` is re-solved.
+
+**Given** the Dependency Graph is the last Results tab (index 5, Story 5.8),
+**When** the graph is retired,
+**Then** `DepGraph.tsx`/`DepGraph.test.tsx`/`react-cytoscapejs.d.ts` are deleted, the tab is stripped from
+`ResultsPage.tsx` (import L23, `TABS` L33, `TabPanel index={5}` L148–150) — **indices 0–4 unchanged** —
+`cytoscape`/`cytoscape-dagre`/`react-cytoscapejs` are removed from `package.json` (L20/L21/L24), and the graph
+types/helpers (`GraphNode`/`GraphEdge`/`GraphReport`, `getGraph`, `graphSvgDownloadUrl`) leave `api/reports.ts`
+(L40–50, L78–85); the HomePage graph copy (L29/L37/L79–80) and the `graph` icon (`icons.ts` L69) are removed.
+The Overview tab has **no** graph reference, so it needs no change.
+
+**Given** the docs describe the graph as a report/feature,
+**When** the graph is retired,
+**Then** all graph mentions are removed and the report count is decremented wherever it appears
+(`docs/developer/data-model.md` "four reports" → "three"; plus `docs/index.md`, `README.md`, `user-guide/*`,
+`how-to/generate-sbom.md`, `developer/{index,project-layout,pipeline}.md`, `api/{index,analysis,artifacts}.md`).
+
+**Given** the SBOM document still encodes direct/transitive relationships,
+**When** the graph is retired,
+**Then** `sbom/parsers/_types.py`, `sbom/generation.py`, and `sbom/document.py` are **untouched**, the SBOM
+viewer still shows direct/transitive, and `pixi run ci` is green (backend coverage ≥90%) with the graph-only
+tests removed and the analysis-group/pipeline tests updated to three fan-out tasks.
+
+### Story 20.2: Add win-64 to pixi & Verify Cross-Platform Environment
+
+As a developer on Windows,
+I want `win-64` added to the pixi platforms and the environment to resolve cleanly,
+So that the same pixi environment installs on macOS (osx-arm64) and Windows (win-64) with no container.
+
+**Context:** After Story 20.1 removes `pygraphviz`/`graphviz` (the hardest conda-forge Windows builds), the
+`win-64` solve becomes tractable. `pixi.toml` has no `[target.*]` tables today, so per-platform scoping of any
+remaining Unix-only dep (notably `gunicorn`, L29) is net-new.
+
+**Acceptance Criteria:**
+
+**Given** `pixi.toml:9` lists `["osx-arm64", "linux-64", "linux-aarch64"]`,
+**When** `win-64` is added,
+**Then** the list becomes `["osx-arm64", "linux-64", "linux-aarch64", "win-64"]` and `pixi install` re-solves
+`pixi.lock` to include the `win-64` sub-lock for every dependency, with no unsatisfiable solve.
+
+**Given** `gunicorn` (L29) is Unix-only and used only by the container/prod `web` task,
+**When** the `win-64` environment is solved,
+**Then** any dependency without a `win-64` build is moved out of `[dependencies]` into per-target tables
+(`[target.linux-64.dependencies]`/`[target.osx-arm64.dependencies]`) so `win-64` resolves — `gunicorn` is the
+known case (Windows uses `runserver`, Story 20.5).
+
+**Given** the re-solved lock,
+**When** `pixi install` runs on macOS and Windows,
+**Then** both succeed and a core-runtime import (`django`, `celery`, `kombu`) works on each, and the existing
+platforms (`linux-64`, `linux-aarch64`, `osx-arm64`) still resolve with the dev-host tasks (lint/check/test)
+unregressed.
+
+### Story 20.3: Containerless Local Dev Settings
+
+As a developer,
+I want a local dev settings module that uses SQLite, filesystem storage, and a containerless Celery config,
+So that the whole stack runs on macOS or Windows with no Postgres, Redis, MinIO, or Docker.
+
+**Context:** SQLite (`base.py` L108–110) and FileSystemStorage (L130–137) are already the base defaults, and
+`config.settings.local` (SQLite + filesystem, no swap) is already the default for `manage.py`/`celery_app.py`/
+pytest. This story confirms/extends that module as the containerless home and adds a containerless env example —
+**no DB/storage rewrite**.
+
+**Acceptance Criteria:**
+
+**Given** the base SQLite + FileSystemStorage defaults,
+**When** the local dev settings load with no `DATABASE_URL`/`AWS_*`,
+**Then** the app uses `backend/db.sqlite3` + `backend/media/` and the local settings module does **not**
+re-introduce Postgres/S3.
+
+**Given** `config.settings.local` already exists (no infra swap),
+**When** this story lands,
+**Then** the local dev settings inherit SQLite + filesystem + console logs and host the Story 20.4 containerless
+Celery config, so a single `DJANGO_SETTINGS_MODULE=config.settings.local` gives a fully container-free local app.
+
+**Given** `wsgi`/`asgi` default to `config.settings.production` while `manage.py`/celery/pytest default to
+`config.settings.local`,
+**When** containerless local runs,
+**Then** every local process (`runserver`, worker, beat, tests) resolves to the local module, and the
+production-defaulting `wsgi`/`asgi` (gunicorn) are reserved for the container/prod path.
+
+**Given** the existing `.env.example` targets the container stack,
+**When** this story lands,
+**Then** a containerless example env sets `DJANGO_SETTINGS_MODULE=config.settings.local`, leaves
+`DATABASE_URL`/`AWS_*`/`REDIS_URL` unset (SQLite/filesystem defaults apply), documents the Story 20.4 Celery
+filesystem vars, and `pixi run ci` is green with a test asserting the local module resolves to SQLite +
+FileSystemStorage.
+
+### Story 20.4: Cross-Platform Async Worker (Filesystem Broker + DB Result Backend)
+
+As a developer,
+I want the local Celery broker and result backend to run without Redis, on both macOS and Windows,
+So that a **real, separate** Celery worker processes SBOM jobs locally — mirroring OCP — with no container.
+
+**Context:** `base.py` L147–158 sets broker + result backend to `REDIS_URL`. Local swaps to a Kombu
+`filesystem://` broker + a **`django-celery-results`** DB backend. **`django-celery-results` is a PROPOSED new
+dependency → sign-off gate.** `CELERY_TASK_ALWAYS_EAGER` is not set today — this story makes eager the explicit
+test path.
+
+**Acceptance Criteria:**
+
+**Given** the broker is `REDIS_URL` today,
+**When** the local dev settings load,
+**Then** the broker is a Kombu `filesystem://` transport with `broker_transport_options` pointing at a portable,
+git-ignored `backend/.celery/broker/` that exists on macOS and Windows — no Redis required.
+
+**Given** the result backend is `REDIS_URL` and `django-celery-results` is absent,
+**When** the user approves the dependency (**SIGN-OFF**),
+**Then** `CELERY_RESULT_BACKEND = "django-db"`, `django_celery_results` joins `INSTALLED_APPS`, the dep is added
+to `pixi.toml`, and its migrations apply against local SQLite — results persist without Redis. If sign-off is
+withheld, the story stops at the proposal.
+
+**Given** Celery prefork is Unix-only and `beat` writes `/tmp/celerybeat-schedule` (`pixi.toml` L151),
+**When** the worker/beat run,
+**Then** the Windows worker uses `--pool=solo`/`threads` (macOS/Linux keep prefork), and the beat schedule uses
+a portable git-ignored path (e.g. `backend/.celery/celerybeat-schedule`) — no hardcoded `/tmp`.
+
+**Given** the test suite must stay offline,
+**When** tests run,
+**Then** Celery executes eagerly for tests (`CELERY_TASK_ALWAYS_EAGER = True` +
+`CELERY_TASK_EAGER_PROPAGATES = True`), so the filesystem broker never leaks into the unit suite.
+
+**Given** the filesystem broker + DB backend,
+**When** a worker is started and an SBOM job is submitted containerless,
+**Then** a **separate** worker process drains the job through the pipeline (not eager, mirroring OCP), and
+`pixi run ci` is green (coverage ≥90%) with the eager test path intact.
+
+### Story 20.5: Cross-Platform pixi Tasks & `pixi run dev`
+
+As a developer,
+I want a single `pixi run dev` that launches web + worker + beat together on macOS or Windows,
+So that I can run the whole containerless stack with one command and no Docker.
+
+**Context:** No `Procfile`/`honcho`/`runserver`/`dev` task exists today; the only combined-run path is
+docker-compose. **`honcho` is a PROPOSED new dev dependency → sign-off gate.** gunicorn (`web`, L138–140) stays
+container/prod-scoped; local web uses `runserver`. No task may use `sh -c`/POSIX-only chaining.
+
+**Acceptance Criteria:**
+
+**Given** there is no Procfile/honcho today,
+**When** the user approves `honcho` (**SIGN-OFF**),
+**Then** a root `Procfile` declares `web` (`runserver`), `worker`, and `beat`, and `pixi run dev` runs
+`honcho start` to launch all three in one foreground command on macOS and Windows. If sign-off is withheld, the
+story stops at the proposal (documenting the manual fallback).
+
+**Given** the `web` task is `gunicorn config.wsgi …` (Unix-only),
+**When** local dev runs,
+**Then** the local web process uses `python manage.py runserver 0.0.0.0:8000` under
+`config.settings.local`, and the gunicorn `web` task is **kept, scoped to containers/prod only**.
+
+**Given** Celery prefork is Unix-only,
+**When** the worker task runs,
+**Then** a `[target.win-64.tasks]` override runs the worker with `--pool=solo`/`threads` while the default
+(macOS/Linux) keeps prefork `-c 4`.
+
+**Given** docker-compose bundles commands with `sh -c`,
+**When** the cross-platform local tasks are authored,
+**Then** they avoid `sh -c` and POSIX-only chaining/paths — each task is a single portable invocation, ordered
+via pixi `depends-on`, not a shell operator — and beat uses the portable schedule path with every local task
+setting `DJANGO_SETTINGS_MODULE=config.settings.local`.
+
+**Given** the wiring,
+**When** `pixi run dev` runs on macOS and Windows,
+**Then** web serves on `:8000`, a real worker drains a submitted job, beat starts against the portable schedule,
+no process fails on a pool/path/shell incompatibility, and `pixi run ci` stays green.
+
+### Story 20.6: Add win-64 to CI
+
+As a maintainer,
+I want a Windows job in the CI matrix running the unit suite,
+So that cross-platform regressions (POSIX paths, Celery pool, gunicorn) are caught automatically.
+
+**Context:** `.github/workflows/ci.yml` runs every job on `ubuntu-latest` with no OS matrix and zero Windows
+coverage (the header note L17–21 explains the single-locked-env rationale). This adds an additive Windows job on
+the `win-64` environment (Story 20.2).
+
+**Acceptance Criteria:**
+
+**Given** CI is Ubuntu-only with no OS matrix,
+**When** this story lands,
+**Then** a `windows-latest` job uses `prefix-dev/setup-pixi@v0.8.1` against the `win-64` environment and runs the
+backend + frontend **unit** suites.
+
+**Given** the Windows risks are POSIX paths, the Celery pool, and gunicorn,
+**When** the Windows job runs the unit suite under `config.settings.local` (SQLite + filesystem + eager Celery),
+**Then** the tests pass on `windows-latest`, confirming the portable paths (20.4) and settings (20.3) hold on
+Windows without a broker/worker/gunicorn in CI.
+
+**Given** gunicorn is scoped off `win-64` (Story 20.2),
+**When** the Windows job installs the environment,
+**Then** it resolves without gunicorn and the unit suite requires no web server or real worker.
+
+**Given** the existing Ubuntu jobs,
+**When** the Windows job is added,
+**Then** the existing jobs are unchanged (Windows is additive), and the `ci.yml` header note (L17–21) records
+that a `win-64` cross-platform job now runs the unit suite.
+
+### Story 20.7: Docs — Cross-Platform Local Development
+
+As a new contributor,
+I want the developer setup docs to cover containerless local dev on macOS and Windows plus the environment matrix,
+So that I can run the stack with no Docker on either OS and understand how local differs from OCP/prod.
+
+**Context:** Implemented last, after 20.1–20.6 land. Updates `docs/developer/setup.md` and adds an environment
+matrix; sweeps out residual dependency-graph/Graphviz setup instructions (paired with Story 20.1's doc edits).
+
+**Acceptance Criteria:**
+
+**Given** the developer setup docs,
+**When** this story lands,
+**Then** `docs/developer/setup.md` documents the containerless workflow for **both** macOS and Windows
+(`pixi install` → `pixi run dev`: `runserver` web + real Celery worker + beat via honcho/Procfile) under
+`config.settings.local` with SQLite + filesystem + `filesystem://` broker + DB result backend — no Docker/
+Postgres/Redis/MinIO locally.
+
+**Given** local and OCP/prod diverge,
+**When** the docs are updated,
+**Then** an environment matrix states **local** = SQLite / filesystem / `filesystem://` + DB backend / no
+containers / `runserver`, and **OCP/prod** = enterprise PostgreSQL / S3 / Redis / containerized umbrella image /
+gunicorn, noting the settings module driving each (`config.settings.local` vs `config.settings.production`).
+
+**Given** the Windows-specific differences,
+**When** the docs are updated,
+**Then** they call out the Windows worker pool (`--pool=solo`/`threads`), that gunicorn is not used locally
+(`runserver` instead), and the portable git-ignored `backend/.celery/` broker/beat paths.
+
+**Given** Story 20.1 retired the dependency graph,
+**When** this docs story lands,
+**Then** the developer docs contain no residual dependency-graph/pygraphviz/Graphviz setup instructions, and the
+docs build/link-check passes with no broken links to removed graph pages.

@@ -2677,6 +2677,65 @@ pypi, and `normalize_components` round-trips the ecosystem for all three formats
 
 ---
 
+### Reopened (export): Story 8.27
+
+Story 8.27 reopens Epic 8 to close the last gap in the Excel exports (8.12–8.15): the **SBOM component table
+itself**, the core artifact of the app, is missing from Excel. The Overview "Export all to Excel" (8.15) bundles
+Version Currency, Vulnerabilities, and Licenses but not the SBOM, and the SBOM tab has no standalone export
+(unlike the per-tab exports 8.12–8.14). 8.27 adds a single `sbomComponentsSheet(doc)` builder (in
+`reportSheets.ts`) that both the SBOM tab's own "Export to Excel" button and the combined workbook use. The
+**Raw** view is explicitly excluded from Excel — JSON/XML is not spreadsheet-shaped and the native
+CycloneDX/SPDX document is already downloadable. Pairs with (but is independent of) Story 8.26: if the
+normalized component carries ecosystem/purl, the sheet gains those columns; otherwise it mirrors whatever the
+Components table shows.
+
+### Story 8.27: Include the SBOM Component Table in the Excel Export
+
+As a user,
+I want the SBOM component table exported to Excel — on its own from the SBOM tab and inside the combined
+"Export all" workbook,
+So that the core SBOM artifact is analyzable in a spreadsheet alongside the other three reports, instead of
+being the one report missing from Excel.
+
+**Context:** Story 8.15 composes the Overview "Export all to Excel" from Version Currency, Vulnerabilities, and
+Licenses — the SBOM is absent — and the SBOM tab (`SbomTab.tsx`) has no per-tab export, breaking parity with
+8.12–8.14. `reportSheets.ts` holds one builder per report; add `sbomComponentsSheet(doc)` there so the tab and
+the combined workbook stay a single source. The **Raw** view is deliberately not exported (documented decision).
+
+**Acceptance Criteria:**
+
+**Given** a loaded `SbomDocument`,
+**When** `sbomComponentsSheet(doc)` is called,
+**Then** it returns a `SheetSpec` named "SBOM Components" whose columns mirror the SBOM tab's Components view
+(Name, Version, Type, License, Relationship; null → `''`), one row per `doc.components` entry — plus an
+Ecosystem (and PURL) column **only when** the normalized component carries that field (pairs with Story 8.26),
+so the sheet always mirrors whatever the Components table shows.
+
+**Given** the SBOM tab in the Components view with a loaded document,
+**When** I click "Export to Excel",
+**Then** a single-sheet `.xlsx` downloads (e.g. `sbom-components.xlsx`) built via `sbomComponentsSheet(doc)` +
+the shared `buildWorkbook`/`downloadWorkbook` helper — no new export mechanism, no new dependency.
+
+**Given** the Overview tab,
+**When** I click "Export all to Excel",
+**Then** the workbook includes the SBOM Components sheet alongside the other three, placed **first** (SBOM is
+the core artifact): SBOM Components → Version Currency → Vulnerabilities → Licenses; a report whose fetch fails
+is omitted and the export still succeeds for the rest (8.15 precedent).
+
+**Given** the SBOM tab Raw view,
+**When** it is shown,
+**Then** it exposes **no** Excel export — the raw CycloneDX/SPDX document is not spreadsheet-shaped and is
+already downloadable as the native file; only the Components view exports to Excel.
+
+**Given** the change,
+**When** verified,
+**Then** a `reportSheets` test covers `sbomComponentsSheet` (mirrored columns/rows, ecosystem/purl column
+present when the field exists and absent when it does not), an `SbomTab` test covers the Components-view export
+button + Raw-view absence, and the Overview export-all sheet-name assertion is updated to the four-sheet set
+(SBOM first); `pixi run ci` is green.
+
+---
+
 ## Epic 9: Project Management & CI/CD Workflows
 
 Port the enabled GitHub workflows and project-management automation from the

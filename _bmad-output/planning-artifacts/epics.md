@@ -5138,3 +5138,308 @@ its last holder is protected (Story 13.1).
 transactionally, and backend tests cover each mode on a fixed drift scenario, the invariant guard refusing to
 strip the last admin/global-admin in override mode, manual-action interaction per mode, global-admin opt-in +
 last-holder protection, and `reconcile` purity, and `pixi run ci` is green.
+
+## Epic 19: OpenShift (OCP) Deployment
+
+Today the stack ships as a single umbrella container image (`Dockerfile`, `FROM ghcr.io/prefix-dev/pixi:0.72.0`,
+AD-13) run as four process types via `pixi run <task>` (`pixi.toml`): **web** (gunicorn `config.wsgi` on
+`0.0.0.0:8000`, serving the DRF API **and** the baked-in React SPA + static assets via WhiteNoise — there is **no
+separate frontend pod**), **worker-pipeline** (`celery -A config.celery_app worker -Q pipeline`),
+**worker-analysis** (`-Q analysis`), and **beat** (`celery … beat -s /tmp/celerybeat-schedule`, a **singleton**).
+Locally this runs under Docker Compose (`docker-compose.yml`) against in-cluster Postgres, Redis, and MinIO. This
+epic is the **implementation** of migrating that stack to **enterprise OpenShift (OCP)**, following the companion
+design guide at **`docs/deployment/openshift/`** (branch `docs/openshift-migration-guide`) — the guide is the
+authoritative design reference and each story cites it rather than re-deriving the design.
+
+**Fixed decisions (product owner):**
+- **Only the stateless app runs in OCP.** All three backing services — **PostgreSQL, Redis, and object storage** —
+  run on **enterprise-managed infrastructure**, reached through **env-configured endpoints + Kubernetes Secrets**
+  (`DATABASE_URL`, `REDIS_URL`, the django-storages S3 vars). OCP never runs a database, cache, or object store.
+- **Packaging is a committed Helm chart** under **`deploy/helm/generate-sbom/`** — the sole deployment artifact.
+- **Images are built by external CI and pushed to the enterprise registry** (e.g. Quay), then **pulled by OCP**
+  via an `imagePullSecret`. There is **no** in-cluster BuildConfig / S2I.
+
+**Grounded facts this epic must honor:**
+- The `Dockerfile` has **no `USER`** → OCP's default `restricted-v2` SCC runs the container as a **random,
+  high, non-root UID in group 0 (root group)**. The image must support **arbitrary UID** (Story 19.1).
+- Docker Compose runs `migrate` + `seed-superuser` **inside the web start command**
+  (`sh -c "pixi run migrate && pixi run seed-superuser && pixi run web"`). Across OCP web replicas that **races** —
+  schema migration and superuser seeding must move to a one-shot **Job** (Story 19.3), and the web command becomes
+  just `pixi run web`.
+- Config is already **env-driven** (`backend/config/settings/{base,production}.py`): `ALLOWED_HOSTS`,
+  `DATABASES` (`DATABASE_URL`), `REDIS_URL` → `CELERY_BROKER_URL`/`CELERY_RESULT_BACKEND`, django-storages S3
+  (`AWS_STORAGE_BUCKET_NAME`, `AWS_S3_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, and
+  **`AWS_S3_PUBLIC_ENDPOINT_URL`** — the browser-reachable presigned-URL endpoint, **AD-11**, which must resolve
+  from a user's browser), `SECRET_KEY`, `DJANGO_SETTINGS_MODULE=config.settings.production`, and the superuser-seed
+  vars (`DJANGO_SUPERUSER_EMAIL` / `DJANGO_SUPERUSER_PASSWORD`). A liveness `/health/` endpoint already exists
+  (`backend/config/urls.py:15` → `generate_sbom/common/views.py::health`; deliberately **does not touch the DB**).
+
+> **⚠ SEQUENCING.** Epic 19 implementation should **follow the `docs/deployment/openshift/` guide landing** — the
+> stories cite it as the design source. Build order is bottom-up: the image must be OCP-ready before anything runs
+> on it; the chart's workloads and the config/secrets they consume come next; then the Job that gates them;
+> then health/scaling/resources; the CI push track can run in parallel once the image lands; ingress/egress
+> policy and the one-time data cutover are last.
+>
+> **⚠ SIGN-OFF GATES.** Stories that introduce **runtime configuration, new secrets, or a new dependency**
+> (19.4's Secret/ESO wiring, 19.6's registry credentials, and any Dockerfile base/runtime change in 19.1) require
+> the **user's explicit sign-off at implementation time** per the project's control constraints — the story
+> **proposes** and does not assume approval.
+
+**ORDER:** **19.1 → 19.2 → 19.3 → 19.4 → 19.5**, with **19.6** (CI build & push) runnable **in parallel** once
+19.1's image is OCP-ready, then **19.7** (NetworkPolicy/egress) and finally **19.8** (data migration & cutover) at
+go-live. 19.4 (config & secrets) underpins the workloads (19.2) and the Job (19.3) — land its Secret/ConfigMap
+shape alongside them.
+
+### Story 19.1: OCP-Ready Container Image (Arbitrary UID / restricted-v2 SCC)
+
+As a platform engineer,
+I want the umbrella container image to run correctly as a random non-root UID in the root group,
+So that it satisfies OCP's default `restricted-v2` SCC without requiring an elevated or custom SCC.
+
+**Context:** Modifies the real `Dockerfile` (`FROM ghcr.io/prefix-dev/pixi:0.72.0`, `WORKDIR /app`, no `USER`)
+**at implementation time** — this story defines the change; nothing is applied now. OCP assigns a random high UID
+in **GID 0**, so every path the app writes (the pixi env, `$HOME`, the beat schedule) must be **group-writable**.
+Design source: `docs/deployment/openshift/`.
+
+**Acceptance Criteria:**
+
+**Given** OCP's `restricted-v2` SCC runs the container as a **random UID in group 0**,
+**When** the image is built,
+**Then** the `Dockerfile` makes `/app` (and the pixi environment, static root, and any other written path)
+**group-owned by root and group-writable** — `chgrp -R 0 /app && chmod -R g=u /app` (the OpenShift arbitrary-UID
+idiom) — and sets a non-root `USER` (e.g. a numeric UID) whose supplementary group is 0, so a random assigned UID
+inherits the same access.
+
+**Given** the beat singleton writes its schedule to `/tmp/celerybeat-schedule` and Django/pixi need a writable
+`$HOME`,
+**When** the container runs as an unknown UID,
+**Then** `HOME` points at a **group-writable** directory (not a UID-specific home that won't exist) and the beat
+schedule path is writable by GID 0 (relocate it out of a root-only path if needed) — no process fails on a
+read-only or absent home.
+
+**Given** the four process types (`pixi run web` / `worker-pipeline` / `worker-analysis` / `beat`),
+**When** the image is exercised **as a random high UID** (e.g. `docker run -u 1000670000:0 …`),
+**Then** each process type starts, gunicorn binds `0.0.0.0:8000`, `/health/` returns `{"status":"ok"}`, and no
+step fails on file-permission or home-directory errors — verified before the story is done.
+
+**Given** any change to the base image or a new runtime step,
+**When** the Dockerfile is edited,
+**Then** the dependency/runtime-change **sign-off gate** is honored (propose, don't assume), the change is the
+minimum needed for arbitrary-UID support, and the existing build stages (SPA build, `collectstatic`, `dot -c`)
+still succeed.
+
+### Story 19.2: Helm Chart — Workloads, Service & Route
+
+As a platform engineer,
+I want a committed Helm chart that renders the four workloads plus the web Service and Route,
+So that the stateless app deploys to OCP from a single versioned, parameterized artifact.
+
+**Context:** New chart under `deploy/helm/generate-sbom/` (`Chart.yaml`, `values.yaml`, `templates/`). The four
+process types map to four `Deployment`s selecting their command via `pixi run <task>`; **beat is a singleton**
+(`replicas: 1`, `Recreate` strategy). Only `web` gets a `Service` + `Route`. Design source:
+`docs/deployment/openshift/`.
+
+**Acceptance Criteria:**
+
+**Given** the chart scaffold,
+**When** it is rendered,
+**Then** `Chart.yaml` + `values.yaml` parameterize the image (repository/tag/pullPolicy), replica counts,
+resources, and env/secret refs, and `helm template` (and `helm lint`) produce valid manifests for a review.
+
+**Given** the four process types,
+**When** the workloads render,
+**Then** there are four `Deployment`s — **web** (`pixi run web`), **worker-pipeline**, **worker-analysis**, and
+**beat** — each pulling the **same** umbrella image with a different command, and **beat is fixed at
+`replicas: 1`** with a non-rolling (`Recreate`) strategy so only one scheduler ever runs.
+
+**Given** the web process serves the API + SPA on `:8000` and needs external ingress,
+**When** web renders,
+**Then** it has a `Service` (port 8000) and an OCP **`Route` with edge TLS** (HTTPS terminated at the router), and
+the Route's host is fed into **`ALLOWED_HOSTS`** so Django accepts the request (no `DisallowedHost`).
+
+**Given** images come from the enterprise registry,
+**When** pods schedule,
+**Then** every workload references an **`imagePullSecret`** (name from `values.yaml`) so OCP can pull the private
+image; migrations/seeding are **not** in the web command (deferred to Story 19.3).
+
+### Story 19.3: Migrations & Seeding as a Helm Job Hook
+
+As a platform engineer,
+I want database migration and superuser seeding to run once per release as a pre-install/pre-upgrade Job,
+So that concurrent web replicas never race to migrate or seed the shared enterprise database.
+
+**Context:** Compose runs `pixi run migrate && pixi run seed-superuser` inside the web command — safe with one
+web container, a **race** across OCP replicas. This story moves both into a Helm **`Job`** gated on a hook, and
+strips them from the web `Deployment` command (Story 19.2's web becomes just `pixi run web`). Design source:
+`docs/deployment/openshift/`.
+
+**Acceptance Criteria:**
+
+**Given** schema changes must apply exactly once before new pods serve traffic,
+**When** a release is installed or upgraded,
+**Then** a Helm **`Job`** annotated `helm.sh/hook: pre-install,pre-upgrade` (with `hook-weight` ordering and a
+`hook-delete-policy`) runs `pixi run migrate` then `pixi run seed-superuser`, and the rollout of the web/worker
+Deployments proceeds only after it completes.
+
+**Given** `migrate` and `seed-superuser` are both idempotent (seeding is a no-op when the user exists or when
+`DJANGO_SUPERUSER_*` is unset),
+**When** the Job re-runs on every upgrade,
+**Then** re-running is safe — migrations are no-ops when already applied and seeding never duplicates or errors —
+and the Job reads the **same** DB/superuser Secrets the app uses (Story 19.4).
+
+**Given** the web command previously bundled migrate+seed,
+**When** this story lands,
+**Then** the web `Deployment` command is reduced to **`pixi run web`** only, and no web/worker replica runs
+`migrate` or `seed-superuser` — that logic exists solely in the Job.
+
+### Story 19.4: Config & Secrets Externalization
+
+As a platform engineer,
+I want app configuration split into a ConfigMap and Kubernetes Secrets wired to enterprise service endpoints,
+So that credentials never live in the image and every environment is configured declaratively.
+
+**Context:** All config is already env-driven (`backend/config/settings/{base,production}.py`). This story maps
+those vars to a **ConfigMap** (non-secret) vs. **Secrets** (credentials), pointing the S3/DB/Redis vars at the
+**enterprise-managed** endpoints. Critically, **`AWS_S3_PUBLIC_ENDPOINT_URL` (AD-11)** must be set to a
+**browser-reachable** object-storage endpoint or SBOM downloads break. Design source: `docs/deployment/openshift/`.
+**Introduces new secrets → sign-off gate applies.**
+
+**Acceptance Criteria:**
+
+**Given** the env-driven settings,
+**When** the chart renders config,
+**Then** non-secret values (`DJANGO_SETTINGS_MODULE=config.settings.production`, `ALLOWED_HOSTS`,
+`AWS_STORAGE_BUCKET_NAME`, `AWS_S3_ENDPOINT_URL`, `AWS_S3_PUBLIC_ENDPOINT_URL`, `API_DOCS_ENABLED`) live in a
+**ConfigMap**, and secrets (`SECRET_KEY`, `DATABASE_URL`, `REDIS_URL`, `AWS_ACCESS_KEY_ID`,
+`AWS_SECRET_ACCESS_KEY`, `DJANGO_SUPERUSER_EMAIL`/`DJANGO_SUPERUSER_PASSWORD`) live in **Secret(s)** — each
+consumed via `envFrom`/`secretKeyRef` by the Deployments and the Job.
+
+**Given** the three backing services are enterprise-managed,
+**When** the Secrets are defined,
+**Then** `DATABASE_URL` targets the enterprise **PostgreSQL**, `REDIS_URL` the enterprise **Redis** (broker +
+result backend), and the S3 vars the enterprise **object storage** — never an in-cluster instance — and
+`values.yaml` documents each endpoint/credential as an operator-supplied input.
+
+**Given** presigned download URLs are handed to the user's browser (AD-11, `PublicEndpointS3Storage`),
+**When** `AWS_S3_PUBLIC_ENDPOINT_URL` is set,
+**Then** it points at the **externally resolvable** object-storage endpoint (not an in-cluster service DNS name),
+so a browser can fetch the SBOM — with a note that a wrong value silently breaks downloads (per project memory).
+
+**Given** enterprise secret management is preferred over raw `Secret` manifests,
+**When** the chart is designed,
+**Then** it supports an **External Secrets Operator / Vault** option (e.g. an `ExternalSecret` that materializes
+the Secret) alongside the plain-Secret path, toggled in `values.yaml`, and **no** real credential is committed —
+only templates/placeholders — with the new-secret **sign-off gate** honored.
+
+### Story 19.5: Health Probes, Autoscaling & Resources
+
+As a platform engineer,
+I want readiness/liveness probes, autoscaling for the stateless tiers, and resource requests/limits,
+So that OCP can schedule, scale, and self-heal the workloads reliably.
+
+**Context:** `/health/` exists as a **liveness** check that deliberately does **not** touch the DB
+(`generate_sbom/common/views.py::health`). Readiness that gates traffic may want a dependency-aware check —
+this story confirms the endpoint(s) to use. Web and both workers are horizontally scalable; **beat stays at 1**.
+Design source: `docs/deployment/openshift/`.
+
+**Acceptance Criteria:**
+
+**Given** the existing `/health/` liveness endpoint,
+**When** the web Deployment defines probes,
+**Then** it has a **liveness** probe on `/health/` and a **readiness** probe that gates traffic — confirming
+whether `/health/` suffices or a DB/broker-aware readiness signal is needed — with sane `initialDelay`/`period`/
+`failureThreshold` values, and the workers get an appropriate liveness signal (Celery workers have no HTTP port).
+
+**Given** web and the two worker tiers are stateless and scalable,
+**When** load varies,
+**Then** an **`HPA`** targets **web**, **worker-pipeline**, and **worker-analysis** (min/max replicas + a CPU or
+memory target from `values.yaml`), while **beat is explicitly excluded and pinned at `replicas: 1`** (never
+autoscaled — two schedulers double-fire).
+
+**Given** OCP requires requests for scheduling and quotas,
+**When** the workloads render,
+**Then** every Deployment and the Job set **resource `requests` and `limits`** (CPU + memory) parameterized in
+`values.yaml`, sized per process type (gunicorn web vs. Celery workers).
+
+### Story 19.6: CI Build & Push to the Enterprise Registry
+
+As a platform engineer,
+I want CI to build the umbrella image from the Dockerfile and push it to the enterprise registry,
+So that OCP pulls a versioned, immutable image instead of building in-cluster.
+
+**Context:** Images are built **externally** (no in-cluster BuildConfig/S2I) and pulled by OCP via an
+`imagePullSecret` (Story 19.2). This adds a build-and-push pipeline (alongside Epic 9's CI) and defines the tag
+strategy and the pull secret. Design source: `docs/deployment/openshift/`. **Registry credentials → sign-off
+gate applies.**
+
+**Acceptance Criteria:**
+
+**Given** the OCP-ready `Dockerfile` (Story 19.1),
+**When** CI runs on a release/tag (and optionally main),
+**Then** a pipeline **builds** the image and **pushes** it to the **enterprise registry** (e.g. Quay) under a
+defined path, authenticating with **CI-held registry credentials** (never committed — sign-off gate).
+
+**Given** OCP must pull the private image,
+**When** the image is published,
+**Then** the deployment consumes an **`imagePullSecret`** (the `values.yaml` name from Story 19.2) whose creation
+is documented, and the chart's `image.repository`/`image.tag` point at the pushed reference.
+
+**Given** deployments must be traceable and rollback-able,
+**When** the image is tagged,
+**Then** the **tag strategy** is explicit (immutable per-release tags — e.g. semver/git-sha — not a floating
+`latest` for production), documented so a Helm release pins an exact digest/tag.
+
+### Story 19.7: NetworkPolicy & Egress
+
+As a platform engineer,
+I want default-deny NetworkPolicies with explicit ingress and egress allows,
+So that the namespace only accepts Route traffic and only reaches the enterprise backing services.
+
+**Context:** Ingress is the web Route (edge TLS, Story 19.2); egress targets the **enterprise** Postgres, Redis,
+and object storage plus the IdP/external analysis APIs the app already calls. Design source:
+`docs/deployment/openshift/`.
+
+**Acceptance Criteria:**
+
+**Given** a hardened namespace,
+**When** policies render,
+**Then** a **default-deny** ingress/egress baseline applies, with an explicit **ingress** allow from the OCP
+router to the web `Service` (:8000) — no pod-to-pod ingress beyond what workers need.
+
+**Given** the backing services are external to the cluster,
+**When** egress is defined,
+**Then** explicit **egress** allows cover the enterprise **PostgreSQL**, **Redis**, and **object-storage**
+endpoints (plus DNS and the outbound analysis/IdP APIs the app requires), and nothing else is reachable.
+
+**Given** the policies must not break the running app,
+**When** they are applied,
+**Then** the four workloads still reach their dependencies and the Route still serves the SPA/API — verified
+against the allow-list (no silent connectivity loss).
+
+### Story 19.8: Data Migration & Cutover
+
+As a platform engineer,
+I want a documented data-migration and cutover/rollback runbook,
+So that existing Postgres and object-storage data moves to the enterprise services with a reversible go-live.
+
+**Context:** One-time migration of the local/legacy data to the enterprise-managed services, plus the cutover
+sequence. This story **references the `docs/deployment/openshift/` runbook** rather than duplicating it. Design
+source: `docs/deployment/openshift/`.
+
+**Acceptance Criteria:**
+
+**Given** an existing PostgreSQL database and a MinIO/S3 bucket of artifacts,
+**When** the data is migrated,
+**Then** the procedure uses **`pg_dump`/`pg_restore`** for Postgres and **`mc mirror`** (or `rclone`) for the
+object store (MinIO → enterprise S3), preserving the artifact bucket contents the presigned-URL flow depends on.
+
+**Given** go-live must be reversible,
+**When** the cutover runs,
+**Then** the runbook states the **ordered cutover sequence** (freeze/quiesce writes → final sync → switch
+endpoints via the Secrets in Story 19.4 → verify) and an explicit **rollback** path if verification fails, with
+data-integrity checks at each step.
+
+**Given** the design guide already documents this,
+**When** the story is implemented,
+**Then** it **cites** `docs/deployment/openshift/` for the detailed runbook (avoiding duplication) and captures
+only the migration-specific commands and the verification/rollback checklist here.

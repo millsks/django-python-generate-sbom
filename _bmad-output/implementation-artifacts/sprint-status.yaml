@@ -5,7 +5,7 @@
 #   in-progress    — dev-story implementation underway
 #   review         — implementation complete, awaiting code-review
 #   done           — merged and verified
-last_updated: 2026-07-06
+last_updated: 2026-07-07
 
 development_status:
   epic-1: done
@@ -302,3 +302,30 @@ development_status:
   18-1-claim-group-to-role-mapping-configuration: ready-for-dev
   18-2-apply-mappings-on-login: ready-for-dev
   18-3-precedence-and-reconciliation: ready-for-dev
+
+  # Epic 19 — OpenShift (OCP) Deployment. Implementation of the OCP migration the companion docs describe
+  # (design source: docs/deployment/openshift/, branch docs/openshift-migration-guide — implement AFTER it lands).
+  # Fixed decisions: only the STATELESS app runs in OCP; all three backing services (PostgreSQL, Redis, object
+  # storage) are ENTERPRISE-MANAGED, reached via env-configured endpoints + Secrets; packaging is a committed
+  # Helm chart (deploy/helm/generate-sbom/); images are built by EXTERNAL CI -> enterprise registry (e.g. Quay)
+  # and PULLED by OCP (no in-cluster BuildConfig/S2I). Grounded on the single umbrella image (Dockerfile, AD-13)
+  # run as four process types via pixi run <task> (web/worker-pipeline/worker-analysis/beat; beat is a singleton).
+  # 19.1 makes the image OCP-ready for restricted-v2's arbitrary UID/GID-0 (non-root USER, chgrp/chmod g=u,
+  # writable HOME + beat schedule). 19.2 is the Helm chart (four Deployments, web Service + edge-TLS Route,
+  # imagePullSecret, ALLOWED_HOSTS=Route host). 19.3 moves migrate + seed-superuser out of the racy web command
+  # into a pre-install/pre-upgrade Job hook. 19.4 externalizes config (ConfigMap vs Secret; enterprise DB/Redis/
+  # object-storage endpoints; AWS_S3_PUBLIC_ENDPOINT_URL browser-reachable per AD-11; ESO/Vault option). 19.5 adds
+  # probes/HPA/resources (beat pinned at 1). 19.6 is the CI build-and-push-to-registry track (parallel after 19.1).
+  # 19.7 is NetworkPolicy/egress (default-deny + explicit allows). 19.8 is the pg_dump/mc-mirror data migration +
+  # cutover/rollback (cites the docs runbook). Stories that add runtime config/secrets/deps (19.1 base/runtime,
+  # 19.4 secrets, 19.6 registry creds) need the user's explicit sign-off at implementation time. Build order:
+  # 19.1 -> 19.2 -> 19.3 -> 19.4 -> 19.5, with 19.6 in parallel after 19.1, then 19.7, and 19.8 last at go-live.
+  epic-19: in-progress
+  19-1-ocp-ready-container-image: ready-for-dev
+  19-2-helm-chart-workloads: ready-for-dev
+  19-3-migrations-and-seeding-job: ready-for-dev
+  19-4-config-and-secrets-externalization: ready-for-dev
+  19-5-health-probes-autoscaling-resources: ready-for-dev
+  19-6-ci-build-and-push: ready-for-dev
+  19-7-networkpolicy-and-egress: ready-for-dev
+  19-8-data-migration-and-cutover: ready-for-dev

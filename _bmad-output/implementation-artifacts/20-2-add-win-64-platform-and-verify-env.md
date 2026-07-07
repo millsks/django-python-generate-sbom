@@ -1,6 +1,6 @@
 # Story 20.2: Add win-64 to pixi & Verify Cross-Platform Environment
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -38,12 +38,12 @@ so that the same pixi environment installs on macOS (osx-arm64) and Windows (win
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Add the platform (AC: #1)** — Edit `pixi.toml` L9 to append `"win-64"`; run `pixi install`
+- [x] **Task 1 — Add the platform (AC: #1)** — Edit `pixi.toml` L9 to append `"win-64"`; run `pixi install`
   and inspect the solve for any unsatisfiable dependency.
-- [ ] **Task 2 — Scope Unix-only deps (AC: #2)** — For each dep with no `win-64` build (start with
+- [x] **Task 2 — Scope Unix-only deps (AC: #2)** — For each dep with no `win-64` build (start with
   `gunicorn`), move it from `[dependencies]` into a per-target table so the `win-64` solve resolves; document
   why (Windows uses `runserver`, not gunicorn — Story 20.5). Re-solve.
-- [ ] **Task 3 — Verify install both OSes (AC: #3, #4)** — Confirm `pixi install` on osx-arm64 (and, where
+- [x] **Task 3 — Verify install both OSes (AC: #3, #4)** — Confirm `pixi install` on osx-arm64 (and, where
   available, win-64) plus a core-import smoke check; re-run lint/check/test on the dev host to confirm no
   regression. Commit the updated `pixi.lock`.
 
@@ -83,8 +83,31 @@ per-platform, so listing the dep only under the platforms that need it keeps `wi
 
 ### Agent Model Used
 
+Claude Opus 4.8 (1M context) — claude-opus-4-8[1m]
+
 ### Debug Log References
+
+- Initial `pixi lock` after adding `win-64`: `No candidates were found for gunicorn >=22` — gunicorn is Unix-only
+  (no win-64 conda build). This was the single unsatisfiable dependency; no others surfaced.
+- Post-fix `pixi lock`: solved all four platforms; `pixi.lock` gained a `win-64` section (line ~642) with win-only
+  packages (ucrt, vc14_runtime, win_inet_pton) and no gunicorn under win-64.
 
 ### Completion Notes List
 
+- Added `win-64` to `pixi.toml` `platforms` → `["osx-arm64", "linux-64", "linux-aarch64", "win-64"]` (AC #1).
+- gunicorn was the only Unix-only dep to scope. Removed it from the shared `[dependencies]` and added it to
+  `[target.linux-64.dependencies]`, `[target.linux-aarch64.dependencies]`, and `[target.osx-arm64.dependencies]`
+  so the win-64 solve resolves while linux/osx keep it identically (AC #2). No other dependency lacked a win-64
+  build — verified against the solver output rather than guessed.
+- `pixi.lock` re-solved: `win-64` sub-lock present; `linux-64` / `linux-aarch64` / `osx-arm64` still resolve with
+  gunicorn pinned identically (26.0.0) — no regression to existing platforms (AC #4).
+- Verified on this osx-arm64 host: `pixi install` succeeds; `python -c "import django; import celery; import kombu"`
+  imports cleanly (django 6.0.6, celery 5.5.3); gunicorn still importable (26.0.0) — no container/prod change (AC #3).
+- Windows RUNTIME verification is deferred to Story 20.6 (win-64 CI job); this story verifies the cross-platform
+  SOLVE only (this machine is osx-arm64).
+- Gate: `pixi run ci` exits 0.
+
 ### File List
+
+- `pixi.toml` (modified — added win-64 platform; moved gunicorn to per-target tables)
+- `pixi.lock` (modified — re-solved with win-64 sub-lock)

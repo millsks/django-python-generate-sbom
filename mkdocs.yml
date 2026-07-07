@@ -63,7 +63,13 @@ markdown_extensions:
   - toc:
       permalink: true
   - pymdownx.details
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      # Render fenced ```mermaid blocks as diagrams (mkdocs-material bundles
+      # mermaid.js and hydrates any element with class="mermaid").
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.snippets:
@@ -108,4 +114,10 @@ nav:
     - Jobs: api/jobs.md
     - Reports: api/analysis.md
     - Artifacts & Downloads: api/artifacts.md
+  - Deployment:
+      - OpenShift:
+          - deployment/openshift/index.md
+          - Architecture: deployment/openshift/architecture.md
+          - Migration Guide: deployment/openshift/migration-guide.md
+          - Reference: deployment/openshift/reference.md
   - Contributing: contributing.md

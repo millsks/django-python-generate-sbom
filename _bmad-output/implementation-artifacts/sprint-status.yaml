@@ -112,7 +112,7 @@ development_status:
   # document (CycloneDX package:ecosystem property + correct purl type; SPDX purl type) — the same
   # enrichment shape as 8.25's license. It EXISTS TO ENABLE Story 16.3's dedupe key
   # (name, version, ecosystem); 8.26 is a hard prerequisite for 16.3 (build 8.26 before 16.3).
-  epic-8: in-progress
+  epic-8: done
   8-1-broaden-lts-coverage-via-endoflife-date: done
   8-2-spike-direct-vs-transitive-dependency-design: done
   8-3-capture-direct-transitive-relationships-during-resolution: done
@@ -139,8 +139,8 @@ development_status:
   8-23-version-currency-pypi-latest-column: done
   8-24-fix-pypi-conda-forge-python-name-disambiguation: done
   8-25-include-license-in-sbom-document: done
-  8-26-ecosystem-field-in-sbom-document: review
-  8-27-export-sbom-components-to-excel: review
+  8-26-ecosystem-field-in-sbom-document: done
+  8-27-export-sbom-components-to-excel: done
 
   # Epic 9 — Project Management & CI/CD Workflows (ported from millsks/idp-app,
   # excluding renovate + disabled workflows). External secrets are operator-supplied.

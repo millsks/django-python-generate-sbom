@@ -2624,6 +2624,57 @@ known-license packages and omit it cleanly for unknown ones (and the SPDX path s
 `licenseConcluded`/`NOASSERTION`); a frontend test asserts the Components table renders a license and
 shows "—" for a null-license component; and `pixi run ci` is green.
 
+### Reopened (enrichment): Story 8.26
+
+Story 8.26 reopens Epic 8 to embed the package **ecosystem** (PyPI/conda) into the generated SBOM document —
+the same enrichment shape as Story 8.25 did for licenses. It exists to **enable Story 16.3** (the consolidated
+de-duplicated SBOM), whose dedupe key is `(name, version, ecosystem)`; that key only works if ecosystem is
+present in the *stored* document. So 8.26 is a hard prerequisite for 16.3 (Epic 16 build order: 16.1 → 16.2 →
+**8.26** → 16.3 → 16.4).
+
+### Story 8.26: Include Ecosystem (PyPI/Conda) in the SBOM Document
+
+As a user reading (or consuming) the SBOM document,
+I want each component to carry its ecosystem (PyPI or conda),
+So that the ecosystem is an explicit, queryable field in the stored SBOM — visible where useful and available
+as the dedupe key for the consolidated-SBOM feature (Story 16.3).
+
+**Context:** `PackageSpec.ecosystem` (`pypi`/`conda`, Story 8.8, `parsers/_types.py:16-30`) is captured at
+resolution but **never written into the generated SBOM document** — the situation license was in before 8.25.
+The SPDX purl is hardcoded to `pkg:pypi/...` (`generation.py:188`) and CycloneDX sets no purl at all
+(`generation.py:114-125`).
+
+**Acceptance Criteria:**
+
+**Given** a resolved `PackageSpec` with `ecosystem` ∈ {`pypi`, `conda`},
+**When** Phase 3 generates the SBOM document,
+**Then** each component records the ecosystem — CycloneDX: a component property `package:ecosystem` (mirroring
+the existing `sbom:relationship` property) **and** a `purl` whose type reflects the ecosystem
+(`pkg:pypi/...` vs `pkg:conda/...`); SPDX: the package `purl` type likewise reflects the ecosystem — fixing the
+hardcoded `pkg:pypi` and the CycloneDX missing-purl. This holds for `cdx-json`, `cdx-xml`, and `spdx-2.3`.
+
+**Given** a spec whose ecosystem is missing or unexpected,
+**When** the SBOM is generated,
+**Then** the component still emits (falls back to the `pypi` default) and generation never raises.
+
+**Given** the enriched document,
+**When** it is parsed back by `sbom/document.py::normalize_components`,
+**Then** each returned component dict carries an `ecosystem` field (from the `package:ecosystem` property
+and/or the purl type, with a graceful default for older documents), and it is surfaced in the SBOM tab where
+it fits.
+
+**Given** AD-6 (Phase 3 writes the blob),
+**When** the ecosystem is added,
+**Then** it is written at Phase 3 generation time (the ecosystem is already on the `PackageSpec` handed to the
+pure serializer — no new I/O, no chain plumbing); the persisted blob is not rewritten downstream and Phase 8
+still only finalizes the DB.
+
+**Given** the change,
+**When** verified,
+**Then** backend unit tests assert the generated CycloneDX components carry `package:ecosystem` + the correct
+purl type for pypi and conda, the SPDX path sets the correct purl type, an unknown ecosystem falls back to
+pypi, and `normalize_components` round-trips the ecosystem for all three formats; `pixi run ci` is green.
+
 ---
 
 ## Epic 9: Project Management & CI/CD Workflows
@@ -4340,3 +4391,187 @@ supported-format prose/count (now **8 Python package formats**) are updated to i
 **Then** `pixi run ci` is green (coverage ≥90%) with a parser unit test against a committed real `Pipfile.lock`
 fixture (self-contained, no network) asserting the pinned set across `default` + `develop`, a detection test
 (including the `Pipfile.lock` mixed-case name), and the Story 6.4 consistency test kept green.
+
+## Epic 16: Management Views & Manager Role
+
+Today the org has two membership roles — **admin** (per-org member-management authority; Stories 2.3 / 2.16 /
+2.20) and **member** — plus the platform-wide global-admin tier (the ADMIN org, Story 2.8 / Epic 13). This
+epic adds a third role, **manager**, that sits **between** member and admin, and two management **views** that
+aggregate results across the org's manifests and jobs by **Application ID** (`ManifestUpload.application_id`,
+`manifests/models.py:47` — the grouping key already written into every SBOM as the `application:id` property,
+`generation.py:106`).
+
+The manager role is an **additive tier**: a manager is a regular member *plus* access to the management views.
+Access to a management view is granted to `manager`, `admin`, **and** global-admin — org admins and global
+admins **inherit** management-view access automatically (they do not need the explicit `manager` role). Org
+admins promote members to manager and demote them back; **managers gain no member-management powers** — the
+views only. The `auth/me` capability, a `ManagerRoute` guard, and a `has_management_access` server-side gate
+(role ∈ {manager, admin} OR global-admin) are the reusable primitives the whole epic hangs off.
+
+The epic's payoff is a **consolidated, de-duplicated SBOM** per Application ID. It reads the **stored** SBOM
+documents of an application's completed jobs and unions their components, deduping by **(name, version,
+ecosystem)** — PyPI and conda of the same name/version stay **distinct**. That dedupe key requires ecosystem
+to be present in the stored document, which is why **Story 8.26** (reopened Epic 8 — ecosystem in the SBOM
+document) is a **hard prerequisite** for Story 16.3. Merge access is **tiered**: a **manager** may consolidate
+only **within a single Application ID** (16.3); an **admin** may arbitrarily multi-select any completed results
+across App IDs (16.4), reusing the same merge/dedupe engine.
+
+**ORDER:** **16.1 → 16.2 → 8.26 → 16.3 → 16.4.** 16.1 establishes the role, gate, guard, and `auth/me`
+capability; 16.2 adds the read-only rollup view; **Story 8.26 (reopened Epic 8)** embeds ecosystem in the
+stored document; 16.3 builds the manager single-App-ID consolidated SBOM on top of it; 16.4 extends the same
+engine to the admin cross-App-ID multi-select.
+
+### Story 16.1: Manager Role & Management-View Access
+
+As an org admin,
+I want to promote a member to a **manager** who can see the management views,
+So that I can delegate read-level oversight of the org's results without granting member-management powers.
+
+**Context:** `OrgMembership.Role` currently has `ADMIN`/`MEMBER` (`users/models.py:92`, `role`
+`max_length=10`); `promote_member_to_admin` (Story 2.16) / `demote_admin_to_member` (Story 2.20) are the
+service precedent; `AdminRoute` / `GlobalAdminRoute` (Story 2.17) are the route-guard precedent; `auth/me`
+returns `is_admin` / `is_global_admin` (Story 2.12).
+
+**Acceptance Criteria:**
+
+**Given** the role enum has `ADMIN`/`MEMBER`,
+**When** this story lands,
+**Then** a third value `MANAGER = "manager"` is added (`"manager"` is 7 chars — fits `max_length=10`) with a
+generated `users` migration (choice-only `AlterField`), and `promote_member_to_manager(org, target)` /
+`demote_manager_to_member(org, target)` services (mirroring 2.16/2.20 — set only that org's role, idempotent,
+`NotAMemberError` for a non-member, no other-org or global writes) are exposed on **admin-gated** endpoints
+returning 204.
+
+**Given** management-view access must be additive,
+**When** access is evaluated,
+**Then** a caller is granted access iff their active-org role ∈ {`manager`, `admin`} **OR** they are a global
+admin (`has_management_access`) — org admins and global admins **inherit** access without the `manager` role —
+and `auth/me` exposes this as an `is_manager` capability. `is_admin` (member-management authority) is unchanged
+and still means role == admin OR global-admin.
+
+**Given** a manager,
+**When** they act,
+**Then** they get the management **views only** — they **cannot** promote/demote/add/remove members, create
+orgs, or reach any admin-only endpoint (every existing admin-only endpoint stays admin-gated; a manager 403s
+on it).
+
+**Given** the SPA gates the management nav/route,
+**When** a non-manager types a management URL,
+**Then** a `ManagerRoute` guard (built like `AdminRoute`, gated on `isManager`) redirects them **and** the
+management endpoints enforce the same rule server-side (403) — nav hiding is not the gate (Story 2.17); the
+management nav entry shows only when `isManager`, and the MembersPage gains admin-only "Make manager" /
+"Make member" actions.
+
+**Given** the change,
+**When** complete,
+**Then** backend + frontend tests cover the role/migration, the additive `has_management_access` rule, the
+promote/demote endpoints (403 for non-admins), the manager's lack of member-management powers, and the
+`ManagerRoute` guard, and `pixi run ci` is green.
+
+### Story 16.2: Application-ID Rollup (Tree / Accordion View)
+
+As a manager (or admin/global-admin),
+I want a management view that groups the org's results by Application ID,
+So that I can see, in one tree, every manifest and job rolled up under each application.
+
+**Context:** `application_id` (`ManifestUpload.application_id`, `manifests/models.py:47`) is carried onto jobs
+(`sbom/services.py:208`) and is the natural rollup key. This is the first management view; it reuses the
+`has_management_access` gate and `ManagerRoute` guard from Story 16.1.
+
+**Acceptance Criteria:**
+
+**Given** a manager (or admin/global-admin) of the active org,
+**When** they call a new org-scoped endpoint (e.g. `GET /api/v1/management/application-rollup/`),
+**Then** it returns the org's results **grouped by `application_id`** → manifests/jobs → a per-result summary
+(status, lightweight key counts, a link to the individual result), gated by `has_management_access` (403
+otherwise) and scoped strictly to the caller's **active org** (AD-2 — a second org's results never appear).
+
+**Given** the summaries already exist in the DB (job history / results tabs),
+**When** the rollup is built,
+**Then** it reads those persisted DB summaries and **does not** re-parse stored SBOM blobs (the heavier blob
+read is Story 16.3's concern) — the endpoint stays cheap and navigational.
+
+**Given** the management nav entry (Story 16.1),
+**When** a manager opens the page,
+**Then** a new page renders the rollup as a **tree/accordion** (Application ID → manifests → jobs) wrapped in
+`ManagerRoute`, with a clear empty state and applications/manifests whose jobs are only pending/failed still
+shown with their status; a non-manager typing the URL is redirected (route) and 403'd (API).
+
+**Given** the change,
+**When** complete,
+**Then** backend + frontend tests cover the grouping, org isolation, the empty state, the result links, and the
+403, and `pixi run ci` is green.
+
+### Story 16.3: Consolidated De-Duplicated SBOM by Application ID
+
+As a manager (or admin/global-admin),
+I want to download one consolidated, de-duplicated SBOM for an Application ID,
+So that I get a single standards-compliant document covering all of that application's completed results
+without duplicate components.
+
+**Context:** **Depends on Story 8.26** (ecosystem embedded in the stored SBOM document) — the dedupe key is
+**(name, version, ecosystem)**, which can only be computed if ecosystem is present in the stored document.
+Also builds on 16.1 (gate/guard) and 16.2 (the rollup surface the action hangs off).
+
+**Acceptance Criteria:**
+
+**Given** a manager (or admin/global-admin) and an Application ID with ≥1 completed job in the active org,
+**When** they request a consolidated SBOM,
+**Then** the engine unions the components of **all completed results for that single Application ID** and emits
+**one** document; a manager may consolidate only **within a single Application ID** (cross-App-ID is admin-only,
+Story 16.4), gated by `has_management_access` (403 otherwise) and org-scoped (AD-2).
+
+**Given** components merged across results,
+**When** deduplicated,
+**Then** two components are the same iff **name, version, AND ecosystem** all match — **PyPI and conda are kept
+distinct** — reading each job's **persisted** SBOM document via `sbom/document.py::normalize_components` (no
+re-resolution, no per-job regeneration). Only **completed** results contribute; pending/failed are skipped.
+
+**Given** the merged component set,
+**When** the document is built,
+**Then** it is a valid standards SBOM (**CycloneDX** primary; **SPDX** where supported) with `application:id`
+set to the Application ID, metadata marking it an **aggregate/merged** document referencing the source jobs,
+and a **deterministic** stable sort so repeated runs are byte-identical.
+
+**Given** the management surface (Story 16.2),
+**When** a manager triggers "consolidate" for an Application ID,
+**Then** the endpoint returns the merged SBOM as a download (same delivery as the single-job SBOM download),
+wrapped in `ManagerRoute`; backend + frontend tests cover the dedupe correctness (incl. pypi-vs-conda distinct),
+determinism, completed-only inclusion, org isolation, and the 403, and `pixi run ci` is green.
+
+### Story 16.4: Admin Arbitrary Multi-Select Consolidated SBOM
+
+As an admin (or global-admin),
+I want to hand-pick any set of completed results across Application IDs and merge them into one SBOM,
+So that I can produce an ad-hoc consolidated document spanning multiple applications.
+
+**Context:** Extends Story 16.3's merge/dedupe engine to an **admin-only** arbitrary multi-select across
+Application IDs. Reuses the engine + `(name, version, ecosystem)` dedupe key unchanged; adds the selection UI
+and the stricter admin gate.
+
+**Acceptance Criteria:**
+
+**Given** the multi-select consolidate feature,
+**When** access is evaluated,
+**Then** it is restricted to **admin or global-admin** — a plain manager is **403'd** and does not see the UI
+(the merge-tiering split: managers get single-App-ID consolidation, only admins get arbitrary cross-App-ID
+multi-select) — enforced server-side, not by hiding the UI (Story 2.17).
+
+**Given** an admin,
+**When** they select results to merge,
+**Then** they may pick **any** completed results in the active org across **different Application IDs**,
+manifests, any combination; every selected id is validated as a **completed** job in the caller's **active
+org** (AD-2), rejecting/skipping otherwise.
+
+**Given** the selected results,
+**When** merged,
+**Then** the **same** Story 16.3 merge/dedupe engine runs with the **same** `(name, version, ecosystem)` key
+(pypi vs conda distinct), reading the stored documents; the output is one valid **aggregate/merged** standards
+SBOM (CycloneDX primary; SPDX where supported) with `application:id` set to an explicit aggregate marker (the
+set spans App IDs), provenance referencing the source jobs, and a deterministic sort.
+
+**Given** the admin management surface,
+**When** the admin multi-selects results (checkboxes) and triggers consolidate,
+**Then** the endpoint returns the merged SBOM as a download, wrapped in the admin route guard; backend +
+frontend tests cover the cross-App-ID merge, the manager 403 (tiering), the completed/active-org validation,
+and that the multi-select is hidden from a manager, and `pixi run ci` is green.

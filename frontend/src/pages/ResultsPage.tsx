@@ -20,7 +20,6 @@ import { OverviewTab } from '../components/OverviewTab'
 import { SbomTab } from '../components/SbomTab'
 import { VulnerabilitiesTab } from '../components/VulnerabilitiesTab'
 import { LicensesTab } from '../components/LicensesTab'
-import { DepGraph } from '../components/DepGraph'
 import { VersionsTab } from '../components/VersionsTab'
 import { TabIcon } from '../icons'
 
@@ -30,7 +29,6 @@ const TABS = [
   { label: 'Vulnerabilities', Icon: TabIcon.vulnerabilities },
   { label: 'Licenses', Icon: TabIcon.licenses },
   { label: 'Version Currency', Icon: TabIcon.versions },
-  { label: 'Dependency Graph', Icon: TabIcon.graph },
 ] as const
 
 function TabPanel({ index, value, children }: { index: number; value: number; children: ReactNode }) {
@@ -144,9 +142,6 @@ export function ResultsPage() {
       </TabPanel>
       <TabPanel index={4} value={tab}>
         <VersionsTab taskId={taskId!} />
-      </TabPanel>
-      <TabPanel index={5} value={tab}>
-        <DepGraph taskId={taskId!} />
       </TabPanel>
     </Container>
   )

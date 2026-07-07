@@ -9,8 +9,8 @@ report.
 You upload a Python dependency manifest (for example a `requirements.txt` or
 `pyproject.toml`), and the app resolves the full transitive dependency set, generates a
 standards-based SBOM (CycloneDX or SPDX), and enriches it with analysis:
-**vulnerabilities**, **license compliance**, a **dependency graph**, and **version
-currency** (how far behind the latest each package is). You can read every report in the
+**vulnerabilities**, **license compliance**, and **version currency** (how far behind the
+latest each package is). You can read every report in the
 browser, export any of them to Excel, and download the SBOM document itself.
 
 ## How this guide is organized

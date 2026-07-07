@@ -6,7 +6,6 @@ dependency tree and produces an SBOM plus enrichment reports:
 
 - **Vulnerabilities** — known CVEs/GHSAs with severity and CVSS.
 - **Licenses** — license compliance grouped by legal-risk tier.
-- **Dependency graph** — direct vs. transitive relationships.
 - **Version currency** — installed vs. latest (PyPI and conda-forge), with LTS tracking.
 
 ## Documentation

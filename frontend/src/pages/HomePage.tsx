@@ -26,7 +26,6 @@ const FEATURES: Feature[] = [
   { Icon: TabIcon.sbom, title: 'SBOM document', blurb: 'A standards-based CycloneDX/SPDX bill of materials — view it in-app or download it.' },
   { Icon: TabIcon.vulnerabilities, title: 'Vulnerability report', blurb: 'Known CVEs across your dependencies, ranked by severity.' },
   { Icon: TabIcon.licenses, title: 'License compliance', blurb: 'Every dependency’s license, surfaced for review.' },
-  { Icon: TabIcon.graph, title: 'Dependency graph', blurb: 'Direct and transitive relationships, visualized.' },
   { Icon: TabIcon.versions, title: 'Version currency', blurb: 'How far behind each package is — latest on PyPI vs conda-forge.' },
   { Icon: ExportIcon, title: 'Excel export', blurb: 'Export any report to a formatted spreadsheet.' },
 ]
@@ -34,7 +33,7 @@ const FEATURES: Feature[] = [
 const STEPS: { title: string; blurb: string }[] = [
   { title: 'Upload a manifest', blurb: 'requirements.txt, pyproject.toml, or environment.yml.' },
   { title: 'Resolve & analyze', blurb: 'Dependencies are resolved and checked for vulnerabilities, licenses, and version currency.' },
-  { title: 'Review the reports', blurb: 'Explore the SBOM, vulnerabilities, licenses, graph, and versions.' },
+  { title: 'Review the reports', blurb: 'Explore the SBOM, vulnerabilities, licenses, and versions.' },
   { title: 'Export & share', blurb: 'Download the SBOM or export any report to Excel.' },
 ]
 
@@ -76,7 +75,7 @@ export function HomePage() {
           Generate Software Bills of Materials from Python dependency manifests.
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 640 }}>
-          Upload a manifest and get a standards-based SBOM plus vulnerability, license, dependency-graph,
+          Upload a manifest and get a standards-based SBOM plus vulnerability, license,
           and version-currency reports — all in one place.
         </Typography>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ pt: 1 }}>

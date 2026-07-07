@@ -63,8 +63,6 @@ module = [
     "storages.*",
     "requests_cache.*",
     "requests_ratelimiter.*",
-    "networkx.*",
-    "pygraphviz.*",
 ]
 ignore_missing_imports = true
 

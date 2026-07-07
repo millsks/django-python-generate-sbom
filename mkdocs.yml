@@ -1,7 +1,7 @@
 # MkDocs Material configuration (Story 11.1). The nav skeleton below is filled in
 # by the Epic 11 content stories (11.2–11.6). Build strictly with `pixi run docs-build`.
 site_name: django-python-generate-sbom
-site_description: Generate and analyze CycloneDX SBOMs for Python projects — vulnerabilities, licenses, dependency graph, and version currency.
+site_description: Generate and analyze CycloneDX SBOMs for Python projects — vulnerabilities, licenses, and version currency.
 site_url: https://millsks.github.io/django-python-generate-sbom/
 repo_url: https://github.com/millsks/django-python-generate-sbom
 repo_name: millsks/django-python-generate-sbom

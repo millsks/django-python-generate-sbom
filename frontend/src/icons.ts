@@ -24,7 +24,6 @@ import InfoIcon from '@mui/icons-material/Info'
 import Inventory2Icon from '@mui/icons-material/Inventory2'
 import LogoutIcon from '@mui/icons-material/Logout'
 import ReportProblemIcon from '@mui/icons-material/ReportProblem'
-import AccountTreeIcon from '@mui/icons-material/AccountTree'
 import TableViewIcon from '@mui/icons-material/TableView'
 import UnfoldLessIcon from '@mui/icons-material/UnfoldLess'
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore'
@@ -66,7 +65,6 @@ export const TabIcon = {
   sbom: Inventory2Icon,
   vulnerabilities: BugReportIcon,
   licenses: GavelIcon,
-  graph: AccountTreeIcon,
   versions: UpdateIcon,
 } as const
 

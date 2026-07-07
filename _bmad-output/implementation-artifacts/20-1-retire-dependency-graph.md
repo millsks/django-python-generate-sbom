@@ -1,6 +1,6 @@
 # Story 20.1: Retire the Dependency Graph
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -79,22 +79,22 @@ so that the least-used report (unreadable at scale) stops carrying the cross-pla
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Backend service/task/pipeline (AC: #1)** — Delete `analysis/services/graph.py`; remove
+- [x] **Task 1 — Backend service/task/pipeline (AC: #1)** — Delete `analysis/services/graph.py`; remove
   `build_dependency_graph` and its import from `tasks/analysis.py`; drop it from the `analysis_group` in
   `tasks/sbom_pipeline.py` (import + group member). Confirm the group now fans out to 3 tasks.
-- [ ] **Task 2 — Enum, migration, endpoints, serializer (AC: #2)** — Remove `ReportType.GRAPH`; run
+- [x] **Task 2 — Enum, migration, endpoints, serializer (AC: #2)** — Remove `ReportType.GRAPH`; run
   `makemigrations analysis` (choice-only `AlterField`) and commit it; delete `GraphReportView`,
   `GraphSvgDownloadView`, their URL routes, and `GraphReportResponseSerializer`.
-- [ ] **Task 3 — pixi / Docker / mypy (AC: #3)** — Remove `networkx`/`pygraphviz`/`graphviz` from `pixi.toml`;
+- [x] **Task 3 — pixi / Docker / mypy (AC: #3)** — Remove `networkx`/`pygraphviz`/`graphviz` from `pixi.toml`;
   remove the `pixi run dot -c` step from the `Dockerfile`; remove the `networkx.*`/`pygraphviz.*` mypy
   overrides from `backend/pyproject.toml`; re-run `pixi install` to re-solve `pixi.lock`.
-- [ ] **Task 4 — Frontend tab & deps (AC: #4, #5)** — Delete `DepGraph.tsx`, `DepGraph.test.tsx`,
+- [x] **Task 4 — Frontend tab & deps (AC: #4, #5)** — Delete `DepGraph.tsx`, `DepGraph.test.tsx`,
   `react-cytoscapejs.d.ts`; strip the tab from `ResultsPage.tsx` (import, `TABS` entry, `TabPanel index 5`);
   remove `cytoscape`/`cytoscape-dagre`/`react-cytoscapejs` from `package.json` + lockfile; remove the graph
   types/helpers from `api/reports.ts`; drop the HomePage graph copy and the `graph` icon entry.
-- [ ] **Task 5 — Docs + count (AC: #6)** — Remove graph mentions across `docs/**` + `README.md`; decrement the
+- [x] **Task 5 — Docs + count (AC: #6)** — Remove graph mentions across `docs/**` + `README.md`; decrement the
   report count wherever it appears (data-model "four" → "three"; drop the graph from feature/report lists).
-- [ ] **Task 6 — Tests + gate (AC: #7)** — Delete `test_graph_service.py` and `test_graph_task_api.py`; update
+- [x] **Task 6 — Tests + gate (AC: #7)** — Delete `test_graph_service.py` and `test_graph_task_api.py`; update
   `ResultsPage.test.tsx` and any pipeline/analysis-group test asserting the graph task; confirm the SBOM
   viewer's direct/transitive still renders; run `pixi run ci` to green (backend coverage ≥90%).
 
@@ -154,8 +154,84 @@ Story 15.3 migration). The remaining longest value (`version`) still fits — no
 
 ### Agent Model Used
 
+claude-opus-4-8[1m] (Claude Opus 4.8, 1M context)
+
 ### Debug Log References
+
+- `pixi run ci` — green (exit 0): precommit, build, check (mypy strict), lint, fmt-check, security
+  (bandit), cov (backend 374 unit + integration, ≥90%), fe-lint, fe-typecheck, fe-cov, fe-build,
+  docs-build (mkdocs --strict). One pre-commit ruff-format auto-fix on the generated migration was
+  re-staged before the final green run.
+- `makemigrations analysis` → `0002_alter_analysisreport_report_type.py` (choice-only `AlterField`,
+  `max_length=10` unchanged).
 
 ### Completion Notes List
 
+- Retired the dependency-graph *visualization* only. The direct/transitive relationship DATA
+  (`sbom/parsers/_types.py`, `sbom/generation.py`, `sbom/document.py`) is untouched and the SBOM viewer
+  tab still renders it (AC #7 guardrail honored).
+- Analysis chord group now fans out to **three** tasks: `scan_vulnerabilities`, `classify_licenses`,
+  `check_version_currency` (verified by `test_pipeline_canvas_shape`). Phase numbering left intact
+  (version currency stays Phase 7); Phase 6 is retired, leaving an intentional gap.
+- Beyond the literal AC list, also removed the now-dead `_PresignedDownloadView` base class, `_presigned`
+  helper, `_PRESIGN_TTL_SECONDS`, and the `OpenApiResponse` import from `analysis/views.py` (the graph SVG
+  download was their only consumer), and simplified `record_analysis_summaries` (dropped the graph-only
+  `nodes`/`edges` stripping). Updated the SPECTACULAR API description in `config/settings/base.py`.
+- `networkx`/`pygraphviz`/`graphviz` removed from `pixi.toml`; `pixi.lock` re-solved (0 references remain).
+  `cytoscape`/`cytoscape-dagre`/`react-cytoscapejs` removed from `frontend/package.json` +
+  `package-lock.json`. Dockerfile `pixi run dot -c` step removed.
+- Results tabs are now 5 (indices 0–4 unchanged); `ResultsPage.test.tsx` updated accordingly.
+
 ### File List
+
+**Deleted**
+- backend/generate_sbom/analysis/services/graph.py
+- backend/generate_sbom/analysis/serializers.py
+- backend/tests/unit/test_graph_service.py
+- backend/tests/unit/test_graph_task_api.py
+- frontend/src/components/DepGraph.tsx
+- frontend/src/components/DepGraph.test.tsx
+- frontend/src/react-cytoscapejs.d.ts
+
+**Added**
+- backend/generate_sbom/analysis/migrations/0002_alter_analysisreport_report_type.py
+
+**Modified**
+- backend/generate_sbom/tasks/analysis.py
+- backend/generate_sbom/tasks/sbom_pipeline.py
+- backend/generate_sbom/analysis/models.py
+- backend/generate_sbom/analysis/views.py
+- backend/generate_sbom/analysis/urls.py
+- backend/generate_sbom/analysis/__init__.py
+- backend/generate_sbom/analysis/services/__init__.py
+- backend/generate_sbom/sbom/services.py
+- backend/config/settings/base.py
+- backend/pyproject.toml
+- backend/tests/unit/test_pipeline_orchestration.py
+- backend/tests/unit/test_analysis_reports.py
+- backend/tests/integration/test_pipeline_orchestration.py
+- backend/tests/integration/test_analysis_integration.py
+- frontend/src/pages/ResultsPage.tsx
+- frontend/src/pages/ResultsPage.test.tsx
+- frontend/src/pages/HomePage.tsx
+- frontend/src/api/reports.ts
+- frontend/src/icons.ts
+- frontend/package.json
+- frontend/package-lock.json
+- pixi.toml
+- pixi.lock
+- Dockerfile
+- mkdocs.yml
+- README.md
+- docs/index.md
+- docs/developer/pipeline.md
+- docs/developer/project-layout.md
+- docs/developer/index.md
+- docs/developer/data-model.md
+- docs/user-guide/index.md
+- docs/user-guide/reading-the-results.md
+- docs/how-to/generate-sbom.md
+- docs/api/index.md
+- docs/api/analysis.md
+- docs/api/artifacts.md
+- _bmad-output/implementation-artifacts/sprint-status.yaml

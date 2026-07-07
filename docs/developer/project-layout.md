@@ -22,7 +22,7 @@ django-python-generate-sbom/          # project root (pixi umbrella environment)
       sbom/                           # SBOMJob · generation
         parsers/                      # requirements · pyproject · pixi · conda
       analysis/                       # AnalysisReport
-        services/                     # vulnerability · license · graph · versions
+        services/                     # vulnerability · license · versions
       tasks/
         sbom_pipeline.py              # the 8-phase Celery chain (pipeline queue)
         analysis.py                   # the parallel analysis group (analysis queue)

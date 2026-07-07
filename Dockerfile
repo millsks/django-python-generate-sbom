@@ -12,10 +12,6 @@ WORKDIR /app
 COPY pixi.toml pixi.lock ./
 COPY backend/ backend/
 RUN pixi install --locked
-# Register Graphviz plugins for pygraphviz SVG rendering (the conda post-link
-# script that does this is skipped without the local .pixi/config.toml, which the
-# image doesn't carry).
-RUN pixi run dot -c
 
 # Build the SPA into frontend/dist, then collect static assets into STATIC_ROOT.
 COPY frontend/ frontend/

@@ -2,9 +2,9 @@
 
 A self-hosted, open-source Django web service that accepts Python dependency
 manifests and generates production-grade Software Bills of Materials (SBOMs) in
-standard formats (CycloneDX, SPDX), alongside four analysis reports:
-vulnerability findings, license obligations, dependency graph, and version
-currency — through both a web UI and a REST API.
+standard formats (CycloneDX, SPDX), alongside three analysis reports:
+vulnerability findings, license obligations, and version currency — through
+both a web UI and a REST API.
 
 <!-- Status -->
 [![CI](https://github.com/millsks/django-python-generate-sbom/actions/workflows/ci.yml/badge.svg)](https://github.com/millsks/django-python-generate-sbom/actions/workflows/ci.yml)
@@ -39,7 +39,6 @@ is multi-tenant and scoped to your organization.
   `environment.yml`, with transitive dependencies resolved.
 - **Vulnerability report** — known advisories (CVE/GHSA) with severity and CVSS.
 - **License compliance** — per-package licenses grouped by legal-risk tier.
-- **Dependency graph** — direct vs. transitive relationships, visualized.
 - **Version currency** — installed vs. latest, LTS tracking, and the
   conda-forge latest (via prefix.dev) flagged when it diverges from PyPI.
 - **In-app SBOM viewer** and **Excel export** of every report.

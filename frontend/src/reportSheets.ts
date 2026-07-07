@@ -1,7 +1,8 @@
 // Report → Excel sheet specs (Stories 8.12–8.15). One builder per report so the
 // per-tab export and the Overview combined workbook produce identical sheets.
 import type { LicenseReport, VersionEntry, VulnerabilityReport } from './api/reports'
-import type { SheetSpec } from './excelExport'
+import type { SbomDocument } from './api/sbom'
+import type { ExcelColumn, SheetSpec } from './excelExport'
 import { registryUrl } from './registryLinks'
 
 const onLtsCell = (onLts: boolean | null): string => (onLts === null ? '' : onLts ? 'yes' : 'no')
@@ -68,6 +69,41 @@ export function vulnerabilitiesSheet(report: VulnerabilityReport): SheetSpec {
         advisory: v.advisory_url,
       })),
     ),
+  }
+}
+
+// Mirrors the SBOM tab's Components view (Story 8.27): one row per component with the
+// same Name/Version/Type/License/Relationship columns. The Ecosystem and PURL columns
+// are emitted only when the normalized components carry those fields (Story 8.26), so the
+// sheet always reflects whatever the Components table currently shows.
+export function sbomComponentsSheet(doc: SbomDocument): SheetSpec {
+  const components = doc.components
+  const hasEcosystem = components.some((c) => c.ecosystem != null)
+  const hasPurl = components.some((c) => c.purl != null)
+  const columns: ExcelColumn[] = [
+    { key: 'name', header: 'Name' },
+    { key: 'version', header: 'Version' },
+    { key: 'type', header: 'Type' },
+    { key: 'license', header: 'License' },
+    { key: 'relationship', header: 'Relationship' },
+  ]
+  if (hasEcosystem) columns.push({ key: 'ecosystem', header: 'Ecosystem' })
+  if (hasPurl) columns.push({ key: 'purl', header: 'PURL' })
+  return {
+    name: 'SBOM Components',
+    columns,
+    rows: components.map((c) => {
+      const row: Record<string, unknown> = {
+        name: c.name,
+        version: c.version ?? '',
+        type: c.type ?? '',
+        license: c.license ?? '',
+        relationship: c.relationship ?? '',
+      }
+      if (hasEcosystem) row.ecosystem = c.ecosystem ?? ''
+      if (hasPurl) row.purl = c.purl ?? ''
+      return row
+    }),
   }
 }
 

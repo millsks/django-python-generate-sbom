@@ -5,17 +5,23 @@ import userEvent from '@testing-library/user-event'
 import { OverviewTab } from './OverviewTab'
 import type { JobStatus } from '../api/jobs'
 import { getLicenses, getVersions, getVulnerabilities } from '../api/reports'
+import { getSbomDocument } from '../api/sbom'
 import { buildWorkbook, downloadWorkbook } from '../excelExport'
 
 vi.mock('../api/reports', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/reports')>()
   return { ...actual, getVersions: vi.fn(), getVulnerabilities: vi.fn(), getLicenses: vi.fn() }
 })
+vi.mock('../api/sbom', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../api/sbom')>()
+  return { ...actual, getSbomDocument: vi.fn() }
+})
 vi.mock('../excelExport', () => ({ buildWorkbook: vi.fn(() => ({})), downloadWorkbook: vi.fn() }))
 
 const mockVersions = getVersions as Mock
 const mockVulns = getVulnerabilities as Mock
 const mockLicenses = getLicenses as Mock
+const mockSbom = getSbomDocument as Mock
 const mockBuild = buildWorkbook as Mock
 const mockDownload = downloadWorkbook as Mock
 const sheetNames = () => (mockBuild.mock.calls.at(-1)![0] as { name: string }[]).map((s) => s.name)
@@ -90,7 +96,8 @@ describe('OverviewTab', () => {
     expect(onNavigate).toHaveBeenCalledWith(4)
   })
 
-  it('exports all reports into one workbook, a sheet per report (Story 8.15)', async () => {
+  it('exports all reports into one workbook, the SBOM sheet first (Stories 8.15/8.27)', async () => {
+    mockSbom.mockResolvedValue({ format: 'cyclonedx-json', components: [], raw: '' })
     mockVersions.mockResolvedValue({ packages: [], summary: {} })
     mockVulns.mockResolvedValue({ packages: [], summary: { vulnerable_package_count: 0, severity_breakdown: {} } })
     mockLicenses.mockResolvedValue({ tiers: [], summary: {} })
@@ -99,10 +106,11 @@ describe('OverviewTab', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Export all to Excel' }))
 
     await waitFor(() => expect(mockDownload).toHaveBeenCalledWith(expect.anything(), 'sbom-report.xlsx'))
-    expect(sheetNames()).toEqual(['Version Currency', 'Vulnerabilities', 'Licenses'])
+    expect(sheetNames()).toEqual(['SBOM Components', 'Version Currency', 'Vulnerabilities', 'Licenses'])
   })
 
   it('omits a failed report and still exports the rest (AC #3)', async () => {
+    mockSbom.mockResolvedValue({ format: 'cyclonedx-json', components: [], raw: '' })
     mockVersions.mockResolvedValue({ packages: [], summary: {} })
     mockVulns.mockRejectedValue(new Error('vuln report failed'))
     mockLicenses.mockResolvedValue({ tiers: [], summary: {} })
@@ -111,7 +119,7 @@ describe('OverviewTab', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Export all to Excel' }))
 
     await waitFor(() => expect(mockDownload).toHaveBeenCalled())
-    expect(sheetNames()).toEqual(['Version Currency', 'Licenses'])
+    expect(sheetNames()).toEqual(['SBOM Components', 'Version Currency', 'Licenses'])
   })
 
   it('hides the export control when no report is available (AC #5)', () => {

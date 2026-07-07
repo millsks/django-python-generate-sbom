@@ -1,6 +1,6 @@
 # Story 8.27: Include the SBOM Component Table in the Excel Export
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -190,8 +190,33 @@ workbook build needed (mirror the existing builder tests). `SbomTab.test.tsx` mo
 
 ### Agent Model Used
 
+claude-opus-4-8[1m] (Claude Opus 4.8, 1M context)
+
 ### Debug Log References
+
+None.
 
 ### Completion Notes List
 
+- `reportSheets.ts`: added `sbomComponentsSheet(doc)` producing the `'SBOM Components'` sheet with
+  Name/Version/Type/License/Relationship, and guarded Ecosystem / PURL columns emitted only when a
+  component carries the field (present now that 8.26 landed; independent otherwise). Null → `''`.
+- `SbomTab.tsx`: added an "Export to Excel" button in the Components view only (via
+  `buildWorkbook([sbomComponentsSheet(doc)])` + `downloadWorkbook(..., 'sbom-components.xlsx')`);
+  the Raw view has no export control (documented exclusion).
+- `OverviewTab.tsx::exportAll`: fetches `getSbomDocument` alongside the three reports in the
+  `Promise.allSettled` set and pushes the SBOM sheet FIRST (order: SBOM Components → Version Currency →
+  Vulnerabilities → Licenses); a rejected SBOM fetch is omitted like the others.
+- Tests: `reportSheets.test.ts` (sheet columns/rows incl. ecosystem/purl present + absent cases);
+  `SbomTab.test.tsx` (Export button click → `sbom-components.xlsx`; Raw view shows no export);
+  `OverviewTab.test.tsx` (added `getSbomDocument` mock; updated both sheet-name assertions to expect the
+  SBOM sheet first).
+
 ### File List
+
+- frontend/src/reportSheets.ts
+- frontend/src/reportSheets.test.ts
+- frontend/src/components/SbomTab.tsx
+- frontend/src/components/SbomTab.test.tsx
+- frontend/src/components/OverviewTab.tsx
+- frontend/src/components/OverviewTab.test.tsx

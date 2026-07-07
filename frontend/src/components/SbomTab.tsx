@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import Table from '@mui/material/Table'
 import TableBody from '@mui/material/TableBody'
@@ -18,6 +19,9 @@ import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Typography from '@mui/material/Typography'
 import { ApiError } from '../api/client'
 import { getSbomDocument, type SbomComponent, type SbomDocument } from '../api/sbom'
+import { buildWorkbook, downloadWorkbook } from '../excelExport'
+import { ExportIcon } from '../icons'
+import { sbomComponentsSheet } from '../reportSheets'
 
 type View = 'components' | 'raw'
 
@@ -76,6 +80,9 @@ export function SbomTab({ taskId }: { taskId: string }) {
   if (error) return <Alert severity="error">Could not load the SBOM document.</Alert>
   if (!doc) return <CircularProgress aria-label="Loading SBOM" />
 
+  // Standalone SBOM component-table export (Story 8.27); the Raw view has no Excel export.
+  const exportExcel = () => downloadWorkbook(buildWorkbook([sbomComponentsSheet(doc)]), 'sbom-components.xlsx')
+
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -96,6 +103,11 @@ export function SbomTab({ taskId }: { taskId: string }) {
 
       {view === 'components' ? (
         <>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
+            <Button size="small" variant="outlined" onClick={exportExcel} startIcon={<ExportIcon />}>
+              Export to Excel
+            </Button>
+          </Box>
           {metadataRows.length > 0 && (
             <Box
               component="dl"

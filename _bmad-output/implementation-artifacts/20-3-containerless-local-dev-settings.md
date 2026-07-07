@@ -1,6 +1,6 @@
 # Story 20.3: Containerless Local Dev Settings
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -47,17 +47,17 @@ so that the whole stack runs on macOS or Windows with no Postgres, Redis, MinIO,
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Local dev settings module (AC: #1, #2)** — Extend `config/settings/local.py` (or add a
+- [x] **Task 1 — Local dev settings module (AC: #1, #2)** — Extend `config/settings/local.py` (or add a
   documented sibling) so it inherits the SQLite + filesystem + console-log base defaults and provides the home
   for the Story 20.4 Celery block. Do **not** define a `DATABASES`/`STORAGES` swap — the base defaults are the
   containerless defaults.
-- [ ] **Task 2 — Entry-point audit (AC: #3)** — Confirm `manage.py`, `celery_app.py`, and pytest resolve to
+- [x] **Task 2 — Entry-point audit (AC: #3)** — Confirm `manage.py`, `celery_app.py`, and pytest resolve to
   `config.settings.local`; document that `wsgi`/`asgi` (production-defaulting) belong to the container/prod
   path only.
-- [ ] **Task 3 — Containerless env example (AC: #4)** — Add `.env.local.example` (or a clearly separated
+- [x] **Task 3 — Containerless env example (AC: #4)** — Add `.env.local.example` (or a clearly separated
   section) with `DJANGO_SETTINGS_MODULE=config.settings.local`, no DB/S3/Redis endpoints, and placeholders for
   the local Celery filesystem vars from 20.4.
-- [ ] **Task 4 — Test + gate (AC: #5)** — Add a settings test asserting SQLite + FileSystemStorage under the
+- [x] **Task 4 — Test + gate (AC: #5)** — Add a settings test asserting SQLite + FileSystemStorage under the
   local module; run `pixi run ci` to green (coverage ≥90%).
 
 ## Dev Notes
@@ -102,8 +102,34 @@ swap). Prefer extending it over introducing a new module, so the many entry poin
 
 ### Agent Model Used
 
+Opus 4.8 (1M context) — claude-opus-4-8[1m].
+
 ### Debug Log References
+
+`pixi run ci` — green (pre-commit, build, mypy, ruff, full test suite ≥90% coverage).
 
 ### Completion Notes List
 
+- **Task 1** — Reused `config/settings/local.py` (per the story's decision) rather than adding a sibling. No
+  `DATABASES`/`STORAGES` swap added; the SQLite + FileSystemStorage base defaults are inherited unchanged. Added
+  a documented, commented placeholder block reserving the home for Story 20.4's containerless Celery transport
+  (no behavior change — base Redis defaults still apply, so 20.4's scope is not pulled forward).
+- **Task 2** — Audited entry points: `manage.py` (L10), `config/celery_app.py` (L14), and pytest
+  (`backend/pyproject.toml` L18) already default to `config.settings.local`; `wsgi.py`/`asgi.py` default to
+  `config.settings.production`. Documented the split in the `local.py` header comment. No code change needed.
+- **Task 3** — Added `.env.local.example`: `DJANGO_SETTINGS_MODULE=config.settings.local`, `DATABASE_URL`/`AWS_*`/
+  `REDIS_URL` intentionally unset (SQLite + filesystem defaults apply), no Postgres/Redis/MinIO endpoints, and
+  commented placeholders for the Story 20.4 filesystem Celery transport vars. Not gitignored (`.gitignore`
+  matches `.env` exactly, not `.env.*`).
+- **Task 4** — Added `backend/tests/unit/test_settings_local.py` asserting the local module resolves to the
+  SQLite engine and `FileSystemStorage`, and that no storage alias uses an S3 backend. Pure settings
+  introspection (no network/DB).
+- No new dependencies added; `django-celery-results` + the filesystem broker/worker remain Story 20.4's scope.
+
 ### File List
+
+- `backend/config/settings/local.py` (modified — containerless documentation + 20.4 Celery placeholder)
+- `backend/tests/unit/test_settings_local.py` (new — SQLite + FileSystemStorage assertions)
+- `.env.local.example` (new — containerless local env template)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (20.3 → review, 20.2 → done)
+- `_bmad-output/implementation-artifacts/20-3-containerless-local-dev-settings.md` (status + Dev Agent Record)

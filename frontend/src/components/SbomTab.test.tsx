@@ -5,18 +5,40 @@ import userEvent from '@testing-library/user-event'
 import { SbomTab } from './SbomTab'
 import { ApiError } from '../api/client'
 import { getSbomDocument } from '../api/sbom'
+import { downloadWorkbook } from '../excelExport'
 
 vi.mock('../api/sbom', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/sbom')>()
   return { ...actual, getSbomDocument: vi.fn() }
 })
+vi.mock('../excelExport', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../excelExport')>()
+  return { ...actual, downloadWorkbook: vi.fn() }
+})
 const mockGet = getSbomDocument as Mock
+const mockDownload = downloadWorkbook as Mock
 
 const DOC = {
   format: 'cyclonedx-json',
   components: [
-    { name: 'django', version: '5.2.1', type: 'library', purl: null, license: 'BSD-3-Clause', relationship: null },
-    { name: 'asgiref', version: '3.8.1', type: 'library', purl: null, license: null, relationship: null },
+    {
+      name: 'django',
+      version: '5.2.1',
+      type: 'library',
+      purl: 'pkg:pypi/django@5.2.1',
+      license: 'BSD-3-Clause',
+      relationship: null,
+      ecosystem: 'pypi',
+    },
+    {
+      name: 'asgiref',
+      version: '3.8.1',
+      type: 'library',
+      purl: 'pkg:conda/asgiref@3.8.1',
+      license: null,
+      relationship: null,
+      ecosystem: 'conda',
+    },
   ],
   raw: '{\n  "bomFormat": "CycloneDX"\n}',
 }
@@ -43,6 +65,39 @@ describe('SbomTab', () => {
     const asgirefRow = within(table).getByText('asgiref').closest('tr') as HTMLElement
     // asgiref carries license: null — its only em-dash cell is the License column.
     expect(within(asgirefRow).getByText('—')).toBeInTheDocument()
+  })
+
+  it('renders the ecosystem column (Story 8.26)', async () => {
+    mockGet.mockResolvedValue(DOC)
+    render(<SbomTab taskId="t" />)
+
+    const table = await screen.findByRole('table')
+    expect(within(table).getByRole('columnheader', { name: 'Ecosystem' })).toBeInTheDocument()
+    const djangoRow = within(table).getByText('django').closest('tr') as HTMLElement
+    expect(within(djangoRow).getByText('pypi')).toBeInTheDocument()
+    const asgirefRow = within(table).getByText('asgiref').closest('tr') as HTMLElement
+    expect(within(asgirefRow).getByText('conda')).toBeInTheDocument()
+  })
+
+  it('exports the components to Excel from the Components view (Story 8.27)', async () => {
+    mockGet.mockResolvedValue(DOC)
+    mockDownload.mockClear()
+    render(<SbomTab taskId="t" />)
+    await screen.findByRole('table')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Export to Excel' }))
+
+    expect(mockDownload).toHaveBeenCalledWith(expect.anything(), 'sbom-components.xlsx')
+  })
+
+  it('shows no Excel export in the Raw view (Story 8.27)', async () => {
+    mockGet.mockResolvedValue(DOC)
+    render(<SbomTab taskId="t" />)
+    await screen.findByRole('table')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Raw' }))
+
+    expect(screen.queryByRole('button', { name: 'Export to Excel' })).not.toBeInTheDocument()
   })
 
   it('toggles to the raw document view', async () => {

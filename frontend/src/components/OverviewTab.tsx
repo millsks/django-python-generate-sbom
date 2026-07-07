@@ -12,9 +12,10 @@ import CardContent from '@mui/material/CardContent'
 import Typography from '@mui/material/Typography'
 import type { JobStatus, ReportSummary } from '../api/jobs'
 import { getLicenses, getVersions, getVulnerabilities } from '../api/reports'
+import { getSbomDocument } from '../api/sbom'
 import { buildWorkbook, downloadWorkbook, type SheetSpec } from '../excelExport'
 import { DownloadActionIcon, ExportIcon } from '../icons'
-import { licensesSheet, versionCurrencySheet, vulnerabilitiesSheet } from '../reportSheets'
+import { licensesSheet, sbomComponentsSheet, versionCurrencySheet, vulnerabilitiesSheet } from '../reportSheets'
 
 // Tab indices in the shell's fixed order (5.1; SBOM inserted at 1 in 8.6).
 const TAB = { vulnerabilities: 2, licenses: 3, versions: 4 }
@@ -66,19 +67,21 @@ export function OverviewTab({ status, onNavigate }: { status: JobStatus; onNavig
   const anyReportAvailable =
     reportAvailable(reports.vuln) || reportAvailable(reports.license) || reportAvailable(reports.version)
 
-  // Combined workbook: fetch the three full reports and compose a sheet per report,
-  // reusing the per-tab sheet builders (Stories 8.12–8.14). A report whose phase
-  // failed rejects and its sheet is simply omitted (AC #3) — the export still
-  // succeeds for the available reports (Story 8.15).
+  // Combined workbook: fetch the SBOM document plus the three full reports and compose a
+  // sheet each, reusing the per-tab sheet builders (Stories 8.12–8.14, 8.27). The SBOM is
+  // the core artifact, so its sheet leads (Story 8.27). A source that rejects is simply
+  // omitted (AC #3) — the export still succeeds for the rest (Story 8.15).
   async function exportAll() {
     setExporting(true)
     try {
-      const [versions, vulns, licenses] = await Promise.allSettled([
+      const [sbom, versions, vulns, licenses] = await Promise.allSettled([
+        getSbomDocument(status.task_id),
         getVersions(status.task_id),
         getVulnerabilities(status.task_id),
         getLicenses(status.task_id),
       ])
       const sheets: SheetSpec[] = []
+      if (sbom.status === 'fulfilled') sheets.push(sbomComponentsSheet(sbom.value))
       if (versions.status === 'fulfilled') sheets.push(versionCurrencySheet(versions.value.packages))
       if (vulns.status === 'fulfilled') sheets.push(vulnerabilitiesSheet(vulns.value))
       if (licenses.status === 'fulfilled') sheets.push(licensesSheet(licenses.value))

@@ -12,7 +12,7 @@ from django.core.files.storage import default_storage
 from rest_framework.test import APIClient
 
 from generate_sbom.manifests.models import ManifestUpload
-from generate_sbom.sbom.document import _cyclonedx_license, _spdx_license
+from generate_sbom.sbom.document import _cyclonedx_license, _spdx_license, _spdx_purl
 from generate_sbom.sbom.generation import (
     Provenance,
     SBOMGenerationError,
@@ -79,6 +79,49 @@ def test_spdx_sets_license_concluded_and_noassertion() -> None:
     # Unknown → NOASSERTION, which the viewer treats as no license (AC #2).
     assert packages["asgiref"]["licenseConcluded"] == "NOASSERTION"
     assert _spdx_license(packages["asgiref"]) is None
+
+
+def test_cyclonedx_records_ecosystem_property_and_purl_type() -> None:
+    # Story 8.26: each component carries a package:ecosystem property and a purl whose type
+    # reflects the ecosystem — pypi and conda are distinguished (dedupe key for Story 16.3).
+    pkgs = [
+        PackageSpec(name="django", version="5.2.1", ecosystem="pypi"),
+        PackageSpec(name="numpy", version="1.26.0", ecosystem="conda"),
+    ]
+    content, _ = generate_sbom_document(pkgs, "cyclonedx-json", PROV)
+    components = {c["name"]: c for c in json.loads(content)["components"]}
+    django_props = {p["name"]: p["value"] for p in components["django"]["properties"]}
+    numpy_props = {p["name"]: p["value"] for p in components["numpy"]["properties"]}
+    assert django_props["package:ecosystem"] == "pypi"
+    assert numpy_props["package:ecosystem"] == "conda"
+    assert components["django"]["purl"] == "pkg:pypi/django@5.2.1"
+    assert components["numpy"]["purl"] == "pkg:conda/numpy@1.26.0"
+
+
+def test_spdx_purl_type_reflects_ecosystem() -> None:
+    # Story 8.26: the SPDX purl is no longer hardcoded to pypi — a conda package is pkg:conda.
+    pkgs = [
+        PackageSpec(name="django", version="5.2.1", ecosystem="pypi"),
+        PackageSpec(name="numpy", version="1.26.0", ecosystem="conda"),
+    ]
+    content, _ = generate_sbom_document(pkgs, "spdx-json", PROV)
+    purls = {p["name"]: _spdx_purl(p.get("externalRefs")) for p in json.loads(content)["packages"]}
+    assert purls["django"] == "pkg:pypi/django@5.2.1"
+    assert purls["numpy"] == "pkg:conda/numpy@1.26.0"
+
+
+def test_unknown_ecosystem_falls_back_to_pypi_without_raising() -> None:
+    # Story 8.26 AC #3: a missing/unexpected ecosystem degrades to pypi and never raises.
+    pkgs = [PackageSpec(name="mystery", version="1.0", ecosystem="")]
+    cdx, _ = generate_sbom_document(pkgs, "cyclonedx-json", PROV)
+    component = json.loads(cdx)["components"][0]
+    props = {p["name"]: p["value"] for p in component["properties"]}
+    assert props["package:ecosystem"] == "pypi"
+    assert component["purl"] == "pkg:pypi/mystery@1.0"
+    spdx, _ = generate_sbom_document(pkgs, "spdx-json", PROV)
+    pkg = next(p for p in json.loads(spdx)["packages"] if p["name"] == "mystery")
+    purl = next(r["referenceLocator"] for r in pkg["externalRefs"] if r["referenceType"] == "purl")
+    assert purl == "pkg:pypi/mystery@1.0"
 
 
 def test_cyclonedx_json_embeds_provenance() -> None:

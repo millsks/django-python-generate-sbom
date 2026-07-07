@@ -139,8 +139,8 @@ development_status:
   8-23-version-currency-pypi-latest-column: done
   8-24-fix-pypi-conda-forge-python-name-disambiguation: done
   8-25-include-license-in-sbom-document: done
-  8-26-ecosystem-field-in-sbom-document: ready-for-dev
-  8-27-export-sbom-components-to-excel: ready-for-dev
+  8-26-ecosystem-field-in-sbom-document: review
+  8-27-export-sbom-components-to-excel: review
 
   # Epic 9 — Project Management & CI/CD Workflows (ported from millsks/idp-app,
   # excluding renovate + disabled workflows). External secrets are operator-supplied.

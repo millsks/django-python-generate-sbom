@@ -10,6 +10,7 @@ export interface SbomComponent {
   purl: string | null
   license: string | null
   relationship: string | null // direct | transitive — populated by Stories 8.3/8.4
+  ecosystem: string | null // pypi | conda — populated by Story 8.26
 }
 
 // Document metadata block shown above the component table (Story 8.11). The backend reads

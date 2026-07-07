@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { licensesSheet, versionCurrencySheet, vulnerabilitiesSheet } from './reportSheets'
+import { licensesSheet, sbomComponentsSheet, versionCurrencySheet, vulnerabilitiesSheet } from './reportSheets'
+import type { SbomDocument } from './api/sbom'
+
+function makeDoc(components: SbomDocument['components']): SbomDocument {
+  return { format: 'cyclonedx-json', components, raw: '' }
+}
 
 describe('versionCurrencySheet', () => {
   it('maps version-currency entries to all UI columns with a linked package name', () => {
@@ -51,6 +56,107 @@ describe('versionCurrencySheet', () => {
     // Divergent → red-text marker the workbook builder styles; empty stays plain.
     expect(sheet.rows[0].conda_latest).toEqual({ text: '2.9.0', redText: true })
     expect(sheet.rows[1].conda_latest).toBe('8.1.0')
+  })
+})
+
+describe('sbomComponentsSheet', () => {
+  it('mirrors the Components view, including the Ecosystem column when present (Stories 8.26/8.27)', () => {
+    const sheet = sbomComponentsSheet(
+      makeDoc([
+        {
+          name: 'django',
+          version: '5.2.1',
+          type: 'library',
+          purl: 'pkg:pypi/django@5.2.1',
+          license: 'BSD-3-Clause',
+          relationship: 'direct',
+          ecosystem: 'pypi',
+        },
+        {
+          name: 'numpy',
+          version: '1.26.0',
+          type: 'library',
+          purl: 'pkg:conda/numpy@1.26.0',
+          license: null,
+          relationship: null,
+          ecosystem: 'conda',
+        },
+      ]),
+    )
+
+    expect(sheet.name).toBe('SBOM Components')
+    expect(sheet.columns.map((c) => c.header)).toEqual([
+      'Name',
+      'Version',
+      'Type',
+      'License',
+      'Relationship',
+      'Ecosystem',
+      'PURL',
+    ])
+    expect(sheet.rows[0]).toEqual({
+      name: 'django',
+      version: '5.2.1',
+      type: 'library',
+      license: 'BSD-3-Clause',
+      relationship: 'direct',
+      ecosystem: 'pypi',
+      purl: 'pkg:pypi/django@5.2.1',
+    })
+    // null license/relationship → '' (mirrors the other builders' ?? '').
+    expect(sheet.rows[1]).toMatchObject({ name: 'numpy', license: '', relationship: '', ecosystem: 'conda' })
+  })
+
+  it('omits the Ecosystem and PURL columns when no component carries them', () => {
+    const sheet = sbomComponentsSheet(
+      makeDoc([
+        { name: 'bare', version: '1.0', type: 'library', purl: null, license: 'MIT', relationship: null, ecosystem: null },
+      ]),
+    )
+
+    expect(sheet.columns.map((c) => c.header)).toEqual(['Name', 'Version', 'Type', 'License', 'Relationship'])
+    expect(sheet.rows[0]).toEqual({ name: 'bare', version: '1.0', type: 'library', license: 'MIT', relationship: '' })
+    expect(sheet.rows[0]).not.toHaveProperty('ecosystem')
+    expect(sheet.rows[0]).not.toHaveProperty('purl')
+  })
+
+  it('coerces null type/ecosystem/purl to empty strings when other rows carry those fields', () => {
+    // The Ecosystem/PURL columns are present because the first component carries them, so
+    // the second component's null values must fall through the `?? ''` guards (Story 8.27).
+    const sheet = sbomComponentsSheet(
+      makeDoc([
+        {
+          name: 'django',
+          version: '5.2.1',
+          type: 'library',
+          purl: 'pkg:pypi/django@5.2.1',
+          license: 'BSD-3-Clause',
+          relationship: 'direct',
+          ecosystem: 'pypi',
+        },
+        {
+          name: 'ghost',
+          version: '0.0',
+          type: null,
+          purl: null,
+          license: null,
+          relationship: null,
+          ecosystem: null,
+        },
+      ]),
+    )
+
+    expect(sheet.columns.map((c) => c.header)).toContain('Ecosystem')
+    expect(sheet.columns.map((c) => c.header)).toContain('PURL')
+    expect(sheet.rows[1]).toEqual({
+      name: 'ghost',
+      version: '0.0',
+      type: '',
+      license: '',
+      relationship: '',
+      ecosystem: '',
+      purl: '',
+    })
   })
 })
 

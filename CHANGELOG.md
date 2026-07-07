@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-07-06
+
+### ⚙️ Miscellaneous Tasks
+
+- **bmad**: Close Epics 6, 8, 11, 14 — stories done after merge
+- **bmad**: Reopen Epic 5 — Story 5.8 move Dependency Graph after Version Currency
+- **bmad**: Close Epic 5 — Story 5.8 done after merge
+- **bmad**: Add Epic 15 — uv/poetry/pipenv lockfile parser stories
+
+### ⭐ Features
+
+- **results**: Move Dependency Graph tab right of Version Currency
+
+### 📚 Documentation
+
+- **presentation**: Add executive overview slides and PDF for Generate SBOM project
+
 ## [0.9.0] - 2026-07-06
 
 ### ⚙️ Miscellaneous Tasks
@@ -51,6 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **bmad**: Add Story 11.19 — OpenAPI/Swagger schema completeness
 - **bmad**: Reopen Epic 8 — Story 8.25 include license in SBOM document
 - **bmad**: Reopen Epic 6 — Story 6.4 fix history manifest-format filter
+- **release**: Update CHANGELOG.md for v0.9.0
 
 ### ⭐ Features
 

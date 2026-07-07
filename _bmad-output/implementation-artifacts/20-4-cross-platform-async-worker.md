@@ -1,6 +1,6 @@
 # Story 20.4: Cross-Platform Async Worker (Filesystem Broker + DB Result Backend)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -121,8 +121,57 @@ path is OS-correct.
 
 ### Agent Model Used
 
+claude-opus-4-8[1m] (Opus 4.8, 1M context)
+
 ### Debug Log References
+
+- Real-worker drain verified locally (AC #6): a separate `celery … worker -Q pipeline
+  --pool=solo` process connected to `transport: filesystem://localhost//`, consumed a
+  `.delay()`-dispatched task, and persisted the result row in the `django_celery_results`
+  `TaskResult` table — final `state: SUCCESS`, `db status: SUCCESS`.
+- Kombu footgun: the `filesystem://` transport WRITES messages to `data_folder_out` and
+  READS from `data_folder_in`, so both MUST point at the SAME directory or a producer and a
+  consumer never meet (first drain hung at PENDING with split `in/`/`out` dirs). Also pinned
+  `control_folder` under `.celery/` — it otherwise defaults to a `control/` dir in the CWD.
 
 ### Completion Notes List
 
+- **AC #1 (filesystem broker):** `local.py` sets `CELERY_BROKER_URL = "filesystem://"` with
+  `CELERY_BROKER_TRANSPORT_OPTIONS` pointing `data_folder_in`/`data_folder_out` at a single
+  shared, git-ignored `backend/.celery/broker/messages/` dir (plus `processed_folder` and
+  `control_folder`), all built with pathlib so they resolve on Windows (no `/tmp`) and are
+  created on import.
+- **AC #2 (DB result backend, SIGN-OFF):** user approved `django-celery-results`. Added to
+  `pixi.toml` `[dependencies]` (`>=2.5`, noarch — resolves on all 4 platforms incl. win-64),
+  `django_celery_results` added to base `INSTALLED_APPS`, `local.py` sets
+  `CELERY_RESULT_BACKEND = "django-db"`. Its migrations ship in the package (`makemigrations
+  --check` → "No changes detected"; nothing to commit) and apply cleanly to local SQLite.
+- **AC #3 (Windows pool):** documented the per-OS pool requirement at the worker tasks in
+  `pixi.toml` (Unix prefork `-c 4` vs. Windows `--pool=solo`); the per-platform `[target.*]`
+  task overrides are wired by Story 20.5. Verified the worker runs under `--pool=solo`.
+- **AC #4 (portable beat):** `beat` task now uses `-s .celery/celerybeat-schedule` (cwd
+  `backend`) instead of POSIX-only `/tmp/celerybeat-schedule`; `backend/.celery/` gitignored.
+- **AC #5 (eager for tests):** new `config/settings/test.py` inherits `local` and sets
+  `CELERY_TASK_ALWAYS_EAGER`/`CELERY_TASK_EAGER_PROPAGATES = True`; pytest now points at
+  `config.settings.test`, so the unit suite never touches the filesystem broker. Five task
+  tests that inspect a captured FAILURE `.apply()` result were pinned to `throw=False`
+  (eager-propagation would otherwise re-raise out of `apply()`); `test_settings_celery.py`
+  asserts eager-on + the filesystem broker + django-db backend + prod-Redis-untouched.
+- **AC #6 (real-worker drain + gate):** see Debug Log. `pixi run ci` green (backend 96.03%
+  coverage, 394 tests; frontend 223 tests).
+- **Prod/container path untouched:** `base.py` still sets `CELERY_BROKER_URL` /
+  `CELERY_RESULT_BACKEND` to `REDIS_URL`; `production.py` unchanged. Only `local.py` (dev)
+  and the test settings diverge.
+
 ### File List
+
+- `backend/config/settings/base.py` — add `django_celery_results` to `INSTALLED_APPS`
+- `backend/config/settings/local.py` — filesystem broker + django-db result backend
+- `backend/config/settings/test.py` — NEW: eager Celery for the test path
+- `backend/pyproject.toml` — pytest `DJANGO_SETTINGS_MODULE = config.settings.test`
+- `backend/tests/unit/test_settings_celery.py` — NEW: containerless-Celery settings tests
+- `backend/tests/unit/test_pipeline_orchestration.py` — pin `throw=False` on 4 failure tests
+- `backend/tests/unit/test_sbom_generation.py` — pin `throw=False` on the phase-3 failure test
+- `pixi.toml` — add `django-celery-results`; portable beat path; per-OS worker-pool docs
+- `pixi.lock` — re-solved (django-celery-results across all 4 platforms incl. win-64)
+- `.gitignore` — ignore `backend/.celery/`

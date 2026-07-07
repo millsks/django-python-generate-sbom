@@ -15,7 +15,10 @@ dependencies = []
 packages = ["generate_sbom"]
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "config.settings.local"
+# Story 20.4: the test settings force Celery eager mode so the unit suite runs offline
+# (no Redis, no filesystem broker, no separate worker). config.settings.test inherits the
+# containerless local settings and only flips the eager flags.
+DJANGO_SETTINGS_MODULE = "config.settings.test"
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-v --tb=short"

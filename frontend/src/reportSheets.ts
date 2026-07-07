@@ -95,7 +95,7 @@ export function sbomComponentsSheet(doc: SbomDocument): SheetSpec {
     rows: components.map((c) => {
       const row: Record<string, unknown> = {
         name: c.name,
-        version: c.version ?? '',
+        version: c.version,
         type: c.type ?? '',
         license: c.license ?? '',
         relationship: c.relationship ?? '',

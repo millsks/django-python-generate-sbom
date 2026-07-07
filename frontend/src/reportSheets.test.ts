@@ -119,6 +119,45 @@ describe('sbomComponentsSheet', () => {
     expect(sheet.rows[0]).not.toHaveProperty('ecosystem')
     expect(sheet.rows[0]).not.toHaveProperty('purl')
   })
+
+  it('coerces null type/ecosystem/purl to empty strings when other rows carry those fields', () => {
+    // The Ecosystem/PURL columns are present because the first component carries them, so
+    // the second component's null values must fall through the `?? ''` guards (Story 8.27).
+    const sheet = sbomComponentsSheet(
+      makeDoc([
+        {
+          name: 'django',
+          version: '5.2.1',
+          type: 'library',
+          purl: 'pkg:pypi/django@5.2.1',
+          license: 'BSD-3-Clause',
+          relationship: 'direct',
+          ecosystem: 'pypi',
+        },
+        {
+          name: 'ghost',
+          version: '0.0',
+          type: null,
+          purl: null,
+          license: null,
+          relationship: null,
+          ecosystem: null,
+        },
+      ]),
+    )
+
+    expect(sheet.columns.map((c) => c.header)).toContain('Ecosystem')
+    expect(sheet.columns.map((c) => c.header)).toContain('PURL')
+    expect(sheet.rows[1]).toEqual({
+      name: 'ghost',
+      version: '0.0',
+      type: '',
+      license: '',
+      relationship: '',
+      ecosystem: '',
+      purl: '',
+    })
+  })
 })
 
 describe('vulnerabilitiesSheet', () => {

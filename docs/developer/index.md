@@ -5,8 +5,9 @@ and anyone extending the backend or frontend.
 
 - **[Architecture](architecture.md)** — the layered modular monolith, the async
   pipeline, and the invariants that keep it consistent.
-- **[Local Development](setup.md)** — get the full stack running with pixi and
-  Docker Compose.
+- **[Local Development](setup.md)** — get the stack running containerless with
+  `pixi run dev` on macOS or Windows (Docker Compose is the optional prod-parity
+  path).
 - **[Project Layout](project-layout.md)** — where everything lives in the monorepo.
 - **[SBOM Pipeline](pipeline.md)** — the eight-phase Celery pipeline, phase by phase.
 - **[Data Model](data-model.md)** — the core Django models and how they relate.

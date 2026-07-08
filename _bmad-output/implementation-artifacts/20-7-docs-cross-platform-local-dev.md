@@ -1,6 +1,6 @@
 # Story 20.7: Docs — Cross-Platform Local Development
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -43,14 +43,14 @@ so that I can run the stack with no Docker on either OS and understand how local
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Containerless setup (AC: #1, #3)** — Update `docs/developer/setup.md` with macOS + Windows
+- [x] **Task 1 — Containerless setup (AC: #1, #3)** — Update `docs/developer/setup.md` with macOS + Windows
   containerless steps (`pixi install` → `pixi run dev`), the local settings module, and the Windows pool /
   `runserver` / portable-path notes.
-- [ ] **Task 2 — Environment matrix (AC: #2)** — Add an environment-matrix table (local vs. OCP/prod) covering
+- [x] **Task 2 — Environment matrix (AC: #2)** — Add an environment-matrix table (local vs. OCP/prod) covering
   DB, storage, Celery broker+backend, containerization, web server, and settings module.
-- [ ] **Task 3 — Graph cleanup sweep (AC: #4)** — Confirm no residual Graphviz/pygraphviz prerequisite or
+- [x] **Task 3 — Graph cleanup sweep (AC: #4)** — Confirm no residual Graphviz/pygraphviz prerequisite or
   dependency-graph mention remains in the developer docs (paired with Story 20.1's docs edits).
-- [ ] **Task 4 — Build (AC: #5)** — Run the docs build/link check; fix any broken nav/links; confirm green.
+- [x] **Task 4 — Build (AC: #5)** — Run the docs build/link check; fix any broken nav/links; confirm green.
 
 ## Dev Notes
 
@@ -87,8 +87,38 @@ so that I can run the stack with no Docker on either OS and understand how local
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
+
+- `pixi run docs-build` (`mkdocs build --strict`) — clean, no broken links/nav from the edits.
+- `pixi run ci` — exit 0 (precommit, build, check, lint, fmt-check, security, cov, fe-lint, fe-typecheck,
+  fe-cov, fe-build, docs-build all green). Code suites unchanged; only docs edited.
 
 ### Completion Notes List
 
+- Rewrote `docs/developer/setup.md` to make containerless `pixi run dev` the primary local flow on both macOS
+  (osx-arm64) and Windows (win-64): `pixi install` → `cp .env.local.example .env` → `pixi run migrate` →
+  `pixi run dev` (honcho/Procfile launches `runserver` web + real Celery worker + beat). Documented
+  `config.settings.local` with SQLite + FileSystemStorage + `filesystem://` broker + `django-db` result
+  backend, and that no Docker/Postgres/Redis/MinIO is needed locally (AC #1).
+- Added a Windows-specifics section: `--pool=solo` worker (prefork is Unix-only; pixi selects it per platform
+  via the `[target.win-64.tasks.worker]` override), `runserver` instead of gunicorn (Unix-only), and the
+  portable git-ignored `backend/.celery/` broker + `backend/.celery/celerybeat-schedule` beat paths (AC #3).
+- Added an environment matrix table (local containerless vs. OCP/prod) covering settings module, DB, storage,
+  Celery broker + result backend, web server, worker pool, and containers; cross-linked the OpenShift guide
+  and migration guide (AC #2). Verified every documented pixi task exists in `pixi.toml`.
+- Kept the Docker Compose path documented as the optional prod-parity stack (AC #1 — primary flow is
+  containerless).
+- Graph cleanup sweep (AC #4): confirmed no residual Graphviz/pygraphviz/dependency-graph references remain in
+  `docs/` (Story 20.1 already removed them) — nothing to strip.
+- Updated `docs/developer/index.md` to describe local dev as containerless-first with Docker Compose as the
+  optional prod-parity path.
+- Docs build clean under `--strict` (AC #5).
+
 ### File List
+
+- `docs/developer/setup.md` (rewritten: containerless-first workflow, Windows specifics, environment matrix)
+- `docs/developer/index.md` (containerless-first summary line)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (20.7 → review; 20.6 → done)
+- `_bmad-output/implementation-artifacts/20-7-docs-cross-platform-local-dev.md` (status, tasks, Dev Agent Record)

@@ -344,11 +344,11 @@ development_status:
   # (containerless worker) -> 20.5 (pixi run dev) -> 20.6 (win-64 CI) -> 20.7 (docs). SIGN-OFF gates: 20.4
   # proposes django-celery-results and 20.5 proposes honcho (new deps -> user sign-off at impl time); the 20.1
   # removals (networkx/pygraphviz/graphviz) are user-approved (no add-gate).
-  epic-20: in-progress
+  epic-20: done
   20-1-retire-dependency-graph: done
   20-2-add-win-64-platform-and-verify-env: done
   20-3-containerless-local-dev-settings: done
   20-4-cross-platform-async-worker: done
   20-5-cross-platform-pixi-tasks-and-dev-runner: done
   20-6-add-win-64-to-ci: done
-  20-7-docs-cross-platform-local-dev: review
+  20-7-docs-cross-platform-local-dev: done

@@ -39,9 +39,16 @@ def pixi_config() -> dict[str, object]:
 
 
 def test_procfile_declares_web_worker_beat() -> None:
-    """The Procfile declares exactly the three local dev processes."""
+    """The Procfile declares the core backend local dev processes."""
     processes = _procfile_processes()
     assert {"web", "worker", "beat"} <= set(processes)
+
+
+def test_procfile_declares_frontend_process() -> None:
+    """The Procfile declares a frontend HMR process delegating to fe-dev (Story 20.8)."""
+    processes = _procfile_processes()
+    assert "frontend" in processes
+    assert "fe-dev" in processes["frontend"]
 
 
 def test_procfile_web_uses_runserver_not_gunicorn() -> None:
@@ -99,6 +106,14 @@ def test_win64_worker_uses_solo_pool(pixi_config: dict[str, object]) -> None:
     assert "pipeline,analysis" in win_worker["cmd"]
     assert win_worker["cwd"] == "backend"
     assert win_worker["env"]["DJANGO_SETTINGS_MODULE"] == LOCAL_SETTINGS
+
+
+def test_fe_dev_task_runs_vite(pixi_config: dict[str, object]) -> None:
+    """The fe-dev task runs the Vite dev server from frontend after fe-install (Story 20.8)."""
+    fe_dev = pixi_config["tasks"]["fe-dev"]
+    assert "npm run dev" in fe_dev["cmd"]
+    assert fe_dev["cwd"] == "frontend"
+    assert "fe-install" in fe_dev["depends-on"]
 
 
 def test_container_web_task_still_gunicorn(pixi_config: dict[str, object]) -> None:

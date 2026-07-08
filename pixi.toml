@@ -280,6 +280,16 @@ cmd = "docker compose exec web bash"
 cmd = "npm install"
 cwd = "frontend"
 
+# Vite HMR dev server (Story 20.8). Serves the SPA at http://localhost:5173 with
+# hot-module reload and proxies /api, /admin, /static to Django on :8000 (see
+# frontend/vite.config.ts). Run standalone (`pixi run fe-dev`) or via the root
+# Procfile so `pixi run dev` brings the UI up alongside the backend. Cross-platform
+# (macOS + Windows) through the pixi-provided Node runtime.
+[tasks.fe-dev]
+cmd = "npm run dev"
+cwd = "frontend"
+depends-on = ["fe-install"]
+
 [tasks.fe-lint]
 cmd = "npm run lint"
 cwd = "frontend"

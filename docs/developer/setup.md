@@ -48,18 +48,31 @@ pixi run dev          # start web + worker + beat together (containerless)
 ```
 
 `pixi run dev` runs [honcho](https://honcho.readthedocs.io) against the repo-root
-`Procfile`, launching three processes in one foreground terminal:
+`Procfile`, launching four processes in one foreground terminal:
 
 | Process | Command | What it is |
 |---|---|---|
 | `web` | `pixi run runserver` | Django's `runserver` on `:8000` (not gunicorn) |
 | `worker` | `pixi run worker` | A **real** Celery worker draining the `pipeline` + `analysis` queues |
 | `beat` | `pixi run beat` | Celery Beat scheduler for maintenance jobs |
+| `frontend` | `pixi run fe-dev` | The Vite HMR dev server on `:5173`, proxying `/api` to Django on `:8000` |
 
 honcho is pure-Python and cross-platform, so this single command behaves the same
 on macOS and Windows. `pixi run dev` sets `DJANGO_SETTINGS_MODULE=config.settings.local`
 for the whole process tree, so no child process falls back to the
 production-defaulting `wsgi.py`.
+
+**Open the app at [http://localhost:5173](http://localhost:5173)** — the Vite dev
+server serves the hot-reloading UI and proxies `/api` (and `/admin`, `/static`) to
+Django on `:8000`, so the SPA's API calls reach the real backend. Editing a file
+under `frontend/src/` reloads instantly with no rebuild. (The Django server on
+`:8000` serves the API directly; it only serves the built SPA from `frontend/dist/`
+when you have run `pixi run fe-build` — the dev server on `:5173` is the primary UI
+during development.)
+
+> **Port conflict — `:8000`.** Both `pixi run dev` and the Docker Compose
+> prod-parity stack bind port `:8000`. Do not run them at the same time — stop one
+> before starting the other (`pixi run docker-down` to stop the Compose stack).
 
 ### Running pieces individually
 
@@ -71,10 +84,13 @@ pixi run runserver          # Django runserver on :8000 (local settings)
 pixi run worker             # Celery worker: pipeline + analysis queues
 pixi run beat               # Celery Beat scheduler
 pixi run flower             # Celery monitoring UI on :5555
+pixi run fe-dev             # Vite HMR dev server on :5173 (proxies /api → :8000)
 ```
 
-The frontend dev server and build run through their own pixi tasks (`fe-*`); see
-`pixi task list`.
+`pixi run fe-dev` runs the frontend on its own — useful when the backend is already
+up (via `pixi run dev`, a container, or the individual tasks above) and you only
+want to iterate on the UI. Other frontend tasks (`fe-build`, `fe-lint`, `fe-test`,
+`fe-typecheck`, …) run through their own `fe-*` pixi tasks; see `pixi task list`.
 
 ## Windows specifics
 
@@ -90,6 +106,10 @@ things differ from Unix:
 - **`runserver`, not gunicorn.** gunicorn is a Unix-only WSGI server and is not
   installed on Windows. Local web always uses Django's `runserver` (cross-platform);
   gunicorn is used only on the containerized OCP/prod path.
+- **Frontend dev server.** `pixi run fe-dev` (and the `frontend` process in
+  `pixi run dev`) runs Vite/npm through the pixi-provided Node runtime, so the HMR
+  server on `:5173` and its `/api → :8000` proxy behave identically on macOS and
+  Windows — no separate Node/nvm install.
 - **Portable broker/beat paths.** The filesystem Celery broker and the Beat
   schedule live under a git-ignored `backend/.celery/` tree (broker messages under
   `backend/.celery/broker/`, the Beat schedule at
@@ -204,7 +224,8 @@ Configuration is environment-driven; never commit secrets or `.env` files.
 
 | Task | What it does |
 |---|---|
-| `pixi run dev` | Start the containerless stack (web + worker + beat) |
+| `pixi run dev` | Start the containerless stack (web + worker + beat + frontend HMR) |
+| `pixi run fe-dev` | Start just the Vite HMR frontend on :5173 (proxies `/api` → :8000) |
 | `pixi run migrate` | Apply database migrations |
 | `pixi run test` | Backend unit tests (fast) |
 | `pixi run test-integration` | Backend integration tests |

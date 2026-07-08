@@ -344,7 +344,7 @@ development_status:
   # (containerless worker) -> 20.5 (pixi run dev) -> 20.6 (win-64 CI) -> 20.7 (docs). SIGN-OFF gates: 20.4
   # proposes django-celery-results and 20.5 proposes honcho (new deps -> user sign-off at impl time); the 20.1
   # removals (networkx/pygraphviz/graphviz) are user-approved (no add-gate).
-  epic-20: in-progress
+  epic-20: done
   20-1-retire-dependency-graph: done
   20-2-add-win-64-platform-and-verify-env: done
   20-3-containerless-local-dev-settings: done
@@ -354,4 +354,4 @@ development_status:
   20-7-docs-cross-platform-local-dev: done
   # Reopened (dev-loop): the containerless loop served the API but no UI — no
   # fe-dev task, no vite dev proxy. 20.8 adds the Vite HMR frontend to pixi run dev.
-  20-8-frontend-local-dev-loop: review
+  20-8-frontend-local-dev-loop: done

@@ -19,6 +19,15 @@ permissions:
 # environment rather than a per-version matrix. A true multi-version matrix
 # would require separate pixi environments per Python; that is deferred (the
 # `pixi run ci` local gate remains authoritative).
+#
+# Note on the OS matrix (Story 20.6): the quality/build/coverage jobs below all
+# run on `ubuntu-latest` (the merge gate). One additional job — `unit-windows`
+# — runs the backend + frontend unit suites on `windows-latest` against the
+# `win-64` pixi environment (Story 20.2, gunicorn-free) so cross-platform
+# regressions (POSIX `/tmp` paths, the Unix-only Celery prefork pool, gunicorn
+# imports) are caught in CI rather than by a developer on Windows. It is a lean,
+# offline guard (eager Celery + SQLite via `config.settings.test`); no broker,
+# worker, or gunicorn runs on Windows.
 
 jobs:
   # --- Backend quality: ruff lint, ruff format check, mypy, bandit ---
@@ -186,3 +195,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # --- Windows cross-platform unit guard (Story 20.6) ---
+  # Additive to the Ubuntu jobs above (which remain the merge gate). Runs the
+  # backend + frontend unit suites on windows-latest against the gunicorn-free
+  # win-64 pixi environment (Story 20.2). The backend suite runs offline under
+  # config.settings.test (eager Celery + SQLite + portable paths — Stories
+  # 20.3/20.4), so the POSIX-path, Celery-pool, and gunicorn-import risks are
+  # exercised without a broker, worker, or web server.
+  unit-windows:
+    name: Windows Unit Tests
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up pixi
+        uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          pixi-version: latest
+      - name: Run backend unit tests
+        run: pixi run test
+      - name: Run frontend unit tests
+        run: pixi run fe-test

@@ -5768,3 +5768,48 @@ gunicorn, noting the settings module driving each (`config.settings.local` vs `c
 **When** this docs story lands,
 **Then** the developer docs contain no residual dependency-graph/pygraphviz/Graphviz setup instructions, and the
 docs build/link-check passes with no broken links to removed graph pages.
+
+> **Reopened (dev-loop): Story 20.8.** Epic 20 delivered the containerless **backend** loop (`pixi run dev` =
+> `runserver` + worker + beat via honcho/Procfile) but left the **frontend** out — there is no `pixi run fe-dev`
+> task, `frontend/vite.config.ts` has no dev proxy, and a fresh `pixi install → pixi run dev` serves the API but
+> **no UI** (Django only serves the SPA from `frontend/dist/` if it was built). Story 20.8 closes the gap so
+> `pixi run dev` also brings up a hot-reloading frontend, cross-platform. **No new dependency** — Vite/npm are
+> already present (no add-gate).
+
+### Story 20.8: Frontend Local Dev Loop
+
+As a developer,
+I want `pixi run dev` to also bring up a hot-reloading frontend that proxies to the backend,
+So that a fresh `pixi install → pixi run dev` serves a working UI, not just the API.
+
+**Context:** Reopens Epic 20 after 20.7. Adds a `pixi run fe-dev` task wrapping the existing `npm run dev`
+(Vite) script, a command-aware `vite.config.ts` (base `/static/` for the prod build, `/` for the dev server) with
+a `server.proxy` forwarding `/api` (+`/admin`/`/static`) to Django on `:8000`, and a `frontend` process in the
+root `Procfile` so one `pixi run dev` starts web + worker + beat + frontend HMR. Preserves the WhiteNoise-served
+build (`pixi run fe-build` output unchanged). No new dependency.
+
+**Acceptance Criteria:**
+
+**Given** the frontend has a `"dev": "vite"` script but no pixi task wraps it,
+**When** a developer runs `pixi run fe-dev`,
+**Then** a `[tasks.fe-dev]` task (`npm run dev`, `cwd = "frontend"`, `depends-on = ["fe-install"]`) starts the
+Vite HMR dev server on `:5173`.
+
+**Given** the SPA API client issues relative `/api/...` requests,
+**When** the dev server runs,
+**Then** `vite.config.ts` proxies `/api` (and `/admin`, `/static`) to `http://localhost:8000`, and `base` is
+`/static/` only for `vite build` (WhiteNoise, AD-5) and `/` for the dev server — `pixi run fe-build` output is
+unchanged.
+
+**Given** the root `Procfile` declares `web`/`worker`/`beat`,
+**When** `pixi run dev` runs,
+**Then** it also runs a `frontend` process (`pixi run fe-dev`), so one command starts web (`:8000`) + worker +
+beat + frontend (`:5173`); the UI is reachable at `http://localhost:5173` with its `/api` calls proxied to
+Django.
+
+**Given** the setup docs inaccurately claimed the frontend dev server runs through `fe-*` tasks,
+**When** this story lands,
+**Then** `docs/developer/setup.md` documents the frontend loop (the `:5173` UI, `pixi run fe-dev` standalone),
+fixes the inaccurate line, warns that `pixi run dev` and the Docker Compose stack both bind `:8000` (stop one
+first), and `backend/tests/unit/test_dev_runner_config.py` asserts the new `frontend` process + `fe-dev` task
+with `pixi run ci` green.

@@ -56,6 +56,17 @@ gunicorn = ">=22"
 [target.osx-arm64.dependencies]
 gunicorn = ">=22"
 
+# --- Per-OS worker pool override (Story 20.5) ---
+# Celery's prefork pool is Unix-only. On Windows the local `worker` task must run
+# with `--pool=solo` (single-threaded, reliable for local dev); linux/osx keep the
+# base prefork `-c 4`. This target table replaces the base `worker` task on win-64
+# only — same queues, same local settings — so honcho/`pixi run worker` are correct
+# per platform without any shared shell command.
+[target.win-64.tasks.worker]
+cmd = "celery -A config.celery_app worker -Q pipeline,analysis --pool=solo"
+cwd = "backend"
+env = { DJANGO_SETTINGS_MODULE = "config.settings.local" }
+
 [pypi-dependencies]
 generate-sbom = { path = "./backend", editable = true }
 
@@ -74,6 +85,11 @@ hatchling = ">=1.25,<2"
 responses = ">=0.25,<1"
 bandit = ">=1.7,<2"
 flower = ">=2,<3"
+# Pure-Python, cross-platform Procfile process manager (Story 20.5). Runs the
+# local web+worker+beat trio via `pixi run dev` (honcho start) on macOS AND
+# Windows — unlike foreman, it needs no Ruby and resolves on win-64. Pinned to
+# 2.x: 1.x imports the removed `pkg_resources` and breaks under setuptools >=81.
+honcho = ">=2,<3"
 mkdocs-material = ">=9.5,<10"
 mkdocstrings-python = ">=1.11,<2"
 
@@ -149,9 +165,27 @@ cwd = "backend"
 cmd = "python manage.py collectstatic --noinput"
 cwd = "backend"
 
+# Container/prod WSGI server (Unix-only). Used by the Dockerfile/OCP `web`
+# process; NEVER on the local/dev path — local uses `runserver` (see below).
 [tasks.web]
 cmd = "gunicorn config.wsgi --bind 0.0.0.0:8000 --workers 4"
 cwd = "backend"
+
+# --- Cross-platform local dev tasks (Story 20.5) — macOS + Windows, no containers ---
+# Local web = Django's `runserver` (cross-platform; gunicorn is Unix-only). Serves
+# on :8000 under local settings. Standalone (`pixi run runserver`) or via honcho.
+[tasks.runserver]
+cmd = "python manage.py runserver 0.0.0.0:8000"
+cwd = "backend"
+env = { DJANGO_SETTINGS_MODULE = "config.settings.local" }
+
+# Local combined Celery worker draining BOTH queues in one process (prefork `-c 4`,
+# Unix-only pool). Production keeps the two dedicated worker-pipeline/worker-analysis
+# tasks. On win-64 the `[target.win-64.tasks.worker]` override swaps to `--pool=solo`.
+[tasks.worker]
+cmd = "celery -A config.celery_app worker -Q pipeline,analysis -c 4"
+cwd = "backend"
+env = { DJANGO_SETTINGS_MODULE = "config.settings.local" }
 
 # Worker pool per OS (Story 20.4): the default (prefork) pool below is Unix-only. On
 # Windows (win-64) the local worker must instead use `--pool=solo` (or `--pool=threads`)
@@ -178,6 +212,14 @@ cmd = "celery -A config.celery_app flower --port=5555"
 cwd = "backend"
 
 # --- Project-wide tasks — run from the root ---
+# One-command containerless local stack (Story 20.5): honcho reads the root
+# Procfile and launches web (runserver) + worker + beat together in the
+# foreground, identically on macOS and Windows. Sets local settings for the
+# whole process tree so no child falls back to the production-defaulting wsgi.
+[tasks.dev]
+cmd = "honcho start"
+env = { DJANGO_SETTINGS_MODULE = "config.settings.local" }
+
 [tasks.bootstrap]
 cmd = "pre-commit install --install-hooks --hook-type commit-msg --hook-type pre-commit"
 

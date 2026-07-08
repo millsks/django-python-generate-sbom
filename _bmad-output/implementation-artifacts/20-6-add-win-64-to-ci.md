@@ -1,6 +1,6 @@
 # Story 20.6: Add win-64 to CI
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -83,8 +83,28 @@ verification (Story 20.5). CI's job is to catch path/pool/import regressions che
 
 ### Agent Model Used
 
+claude-opus-4-8[1m]
+
 ### Debug Log References
+
+- Validated on a real `windows-latest` GitHub Actions runner via `gh pr checks --watch` on the story PR.
 
 ### Completion Notes List
 
+- Added an additive `unit-windows` job to `.github/workflows/ci.yml` running on
+  `windows-latest` via `prefix-dev/setup-pixi@v0.8.1`, executing the backend unit
+  suite (`pixi run test`) and the frontend unit suite (`pixi run fe-test`) against
+  the gunicorn-free `win-64` pixi environment (AC #1, #3).
+- Backend unit suite runs under `config.settings.test` (inherits `config.settings.local`:
+  eager Celery, SQLite, portable `.celery/` beat path), so the POSIX-path / Celery-pool /
+  gunicorn-import risks are exercised offline with no broker, worker, or web server (AC #2).
+- Existing Ubuntu jobs left untouched; the Windows job is a required check (not
+  `continue-on-error`) per AC #4 default. Updated the `ci.yml` header note to record the
+  new win-64 cross-platform unit job (AC #4).
+- Local `pixi run ci` remains green; the Windows job runs only on GitHub Actions.
+
 ### File List
+
+- `.github/workflows/ci.yml` (modified — header note + `unit-windows` job)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (modified — 20.5 done, 20.6 review)
+- `_bmad-output/implementation-artifacts/20-6-add-win-64-to-ci.md` (modified — status + Dev Agent Record)

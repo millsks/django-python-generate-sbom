@@ -131,6 +131,8 @@ __pypackages__/
 # Celery stuff
 celerybeat-schedule
 celerybeat.pid
+# Containerless local dev (Story 20.4): filesystem broker folders + beat schedule DB.
+backend/.celery/
 
 # Redis
 *.rdb

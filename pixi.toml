@@ -20,6 +20,10 @@ django = ">=5.1"
 djangorestframework = ">=3.15"
 djangorestframework-api-key = ">=3.1"
 celery = ">=5.3"
+# Celery result backend for the containerless local dev path (Story 20.4): the `django-db`
+# backend persists task results in the local SQLite DB so local dev needs no Redis. The
+# container/prod path keeps the Redis result backend. Cross-platform (incl. win-64).
+django-celery-results = ">=2.5"
 redis-py = ">=5"
 structlog = ">=24"
 django-environ = ">=0.11"
@@ -149,6 +153,10 @@ cwd = "backend"
 cmd = "gunicorn config.wsgi --bind 0.0.0.0:8000 --workers 4"
 cwd = "backend"
 
+# Worker pool per OS (Story 20.4): the default (prefork) pool below is Unix-only. On
+# Windows (win-64) the local worker must instead use `--pool=solo` (or `--pool=threads`)
+# because prefork is not supported there. Story 20.5 wires the per-platform `[target.*]`
+# task overrides that inject `--pool=solo` on win-64 while linux/osx keep prefork `-c 4`.
 [tasks.worker-pipeline]
 cmd = "celery -A config.celery_app worker -Q pipeline -c 4"
 cwd = "backend"
@@ -157,8 +165,11 @@ cwd = "backend"
 cmd = "celery -A config.celery_app worker -Q analysis -c 4"
 cwd = "backend"
 
+# Portable beat schedule (Story 20.4): the schedule DB lives at a repo-relative,
+# git-ignored path (backend/.celery/celerybeat-schedule) — not POSIX-only `/tmp`, which
+# does not exist on Windows. cwd is `backend`, so this resolves under backend/.celery/.
 [tasks.beat]
-cmd = "celery -A config.celery_app beat -s /tmp/celerybeat-schedule"
+cmd = "celery -A config.celery_app beat -s .celery/celerybeat-schedule"
 cwd = "backend"
 
 # Celery Flower monitoring UI (http://localhost:5555).

@@ -31,6 +31,10 @@ INSTALLED_APPS = [
     "rest_framework_api_key",
     "drf_spectacular",
     "drf_spectacular_sidecar",
+    # Celery result backend for the containerless local dev path (Story 20.4): stores
+    # task results in the (SQLite) DB via `django-db` so local dev needs no Redis. The
+    # container/prod path keeps the Redis result backend (CELERY_RESULT_BACKEND below).
+    "django_celery_results",
     "generate_sbom.users",
     "generate_sbom.manifests",
     "generate_sbom.sbom",

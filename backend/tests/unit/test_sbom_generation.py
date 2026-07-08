@@ -250,7 +250,7 @@ def test_phase3_serializer_error_fails_job_no_artifact() -> None:
         patch(_NO_UPDATE),
         patch("generate_sbom.sbom.services.generate_sbom_document", side_effect=SBOMGenerationError("boom")),
     ):
-        result = generate_phase.apply(args=(_prev_from(job),))
+        result = generate_phase.apply(args=(_prev_from(job),), throw=False)
 
     assert result.failed()
     job.refresh_from_db()

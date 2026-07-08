@@ -156,7 +156,10 @@ def test_soft_timeout_marks_failed_no_artifact() -> None:
         patch(_NO_UPDATE),
         patch("generate_sbom.sbom.services.generate_sbom_document", side_effect=SoftTimeLimitExceeded()),
     ):
-        result = pipeline.generate_sbom_document.apply(args=(prev,))
+        # throw=False captures the re-raised failure into the eager result so we can
+        # inspect it directly; the test settings set CELERY_TASK_EAGER_PROPAGATES=True
+        # globally (Story 20.4), which would otherwise re-raise it out of apply().
+        result = pipeline.generate_sbom_document.apply(args=(prev,), throw=False)
 
     assert result.failed()
     job.refresh_from_db()
@@ -181,7 +184,7 @@ def test_hard_timeout_sweep_marks_failed_via_status() -> None:
 def test_persist_without_recorded_key_fails() -> None:
     job = _make_job()  # Phase 3 never ran, so no result_key was recorded.
     with patch(_NO_UPDATE):
-        result = pipeline.persist_artifacts.apply(args=(str(job.task_id),))
+        result = pipeline.persist_artifacts.apply(args=(str(job.task_id),), throw=False)
     assert result.failed()
     job.refresh_from_db()
     assert job.status == SBOMJob.Status.FAILED
@@ -206,7 +209,7 @@ def test_resolution_error_marks_failed_not_stuck() -> None:
         patch(_NO_UPDATE),
         patch("generate_sbom.sbom.services.resolve_job_packages", side_effect=ResolutionError("unsatisfiable")),
     ):
-        result = pipeline.resolve_transitive_deps.apply(args=(prev,))
+        result = pipeline.resolve_transitive_deps.apply(args=(prev,), throw=False)
 
     assert result.failed()
     job.refresh_from_db()
@@ -224,7 +227,7 @@ def test_unexpected_phase_error_falls_back_to_pipeline_error() -> None:
         patch(_NO_UPDATE),
         patch("generate_sbom.sbom.services.resolve_job_packages", side_effect=ValueError("boom")),
     ):
-        result = pipeline.resolve_transitive_deps.apply(args=(prev,))
+        result = pipeline.resolve_transitive_deps.apply(args=(prev,), throw=False)
 
     assert result.failed()
     job.refresh_from_db()

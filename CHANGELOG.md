@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.3] - 2026-07-08
+
+### ⚙️ Miscellaneous Tasks
+
+- **bmad**: Add Epic 20 — cross-platform containerless local development
+- **workflow**: Add win-64 unit-test guard job to CI (Story 20.6)
+- **bmad**: Close Epic 20 — cross-platform local dev done
+- **bmad**: Re-close Epic 20 — Story 20.8 done after merge
+- Add example environment configuration file
+
+### ⭐ Features
+
+- **config**: Containerless local dev settings + env example (Story 20.3)
+- **celery**: Cross-platform containerless async worker (Story 20.4)
+- **pixi**: Add cross-platform `pixi run dev` runner (honcho + Procfile)
+- **dev**: Serve a hot-reloading frontend from `pixi run dev` (Story 20.8)
+
+### 📚 Documentation
+
+- **developer**: Document containerless cross-platform local dev + env matrix
+
+### 📦 Build
+
+- **pixi**: Add win-64 platform and scope gunicorn per-target (Story 20.2)
+
+### 🚜 Refactor
+
+- **analysis**: Retire the dependency graph
+
 ## [0.9.2] - 2026-07-07
 
 ### ⚙️ Miscellaneous Tasks
@@ -15,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **bmad**: Close Epic 8 — Stories 8.26/8.27 done after merge
 - **bmad**: Add Epic 19 — OpenShift deployment implementation stories
 - **pre-commit**: Validate all YAML strictly, exclude only mkdocs.yml from check-yaml
+- **release**: Update CHANGELOG.md for v0.9.2
 
 ### ⭐ Features
 

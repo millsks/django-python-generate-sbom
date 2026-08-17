@@ -24,6 +24,7 @@ from inventory.manifests.detection import ManifestParseError, UnsupportedFormatE
 from .filters import JobFilterSet
 from .forms import ManifestUploadForm
 from .models import SBOMJob
+from .overview import build_metrics
 from .selectors import get_job, get_jobs
 from .services import TERMINAL_STATUSES, ConcurrencyLimitError, delete_artifacts_for_jobs, submit_job
 from .tables import JobTable
@@ -179,24 +180,97 @@ class JobRowPartialView(OrgMemberRequiredMixin, View):
         return render(request, "inventory/sbom/_job_row.html", {"table": table})
 
 
-class JobResultsView(OrgMemberRequiredMixin, View):
-    """The results page — a progress gate until the job terminates (AC #4).
+#: The five tabs, in ResultsPage.tsx's order. `sbom` was inserted at index 1 by Story 8.6 and
+#: the Dependency Graph tab was retired by Story 20.1 — this list is the record of that.
+RESULT_TABS = (
+    ("overview", "Overview"),
+    ("sbom", "SBOM"),
+    ("vulnerabilities", "Vulnerabilities"),
+    ("licenses", "Licenses"),
+    ("versions", "Version Currency"),
+)
 
-    Story 21.12 replaces what renders *behind* the gate with the tabbed results shell; this
-    story owns the gate itself, which is what 21.12 depends on.
+DEFAULT_TAB = "overview"
+
+#: Tabs that need the stored artifacts. When a job's blobs have been purged (Story 7.3) the
+#: Overview still renders from summary_stats, but these have nothing to read.
+ARTIFACT_TABS = frozenset({"sbom", "vulnerabilities", "licenses", "versions"})
+
+
+def _resolve_tab(request: HttpRequest) -> str:
+    """Return the requested tab, falling back to Overview for anything unrecognised."""
+    requested = request.GET.get("tab", DEFAULT_TAB)
+    return requested if requested in dict(RESULT_TABS) else DEFAULT_TAB
+
+
+def _tab_template(tab: str) -> str:
+    """Return the partial for a tab. The name is validated before it reaches here."""
+    return f"inventory/sbom/tabs/_{tab}.html"
+
+
+class _JobScopedView(OrgMemberRequiredMixin, View):
+    """Look a job up within the active org, 404ing identically for missing and cross-org.
+
+    AD-2: an unauthorised request must be indistinguishable from a nonexistent one — the SPA
+    showed a single message for both ("You don't have access to these results, or they don't
+    exist"), and the server-rendered path keeps that property by having one code path.
     """
 
-    def get(self, request: HttpRequest, task_id: str) -> HttpResponse:
-        """Show progress while running, or the completed view once terminal."""
+    def get_job_or_404(self, task_id: str) -> SBOMJob:
+        """Return the job, or raise Http404."""
         try:
-            job = get_job(self.org, task_id)
+            return get_job(self.org, task_id)
         except SBOMJob.DoesNotExist as exc:
             raise Http404 from exc
-        context = {"job": job, "org": self.org, "job_is_terminal": job.status in TERMINAL_STATUSES}
+
+
+class JobResultsView(_JobScopedView):
+    """The results page: a progress gate while running, the five-tab shell once finished."""
+
+    def get(self, request: HttpRequest, task_id: str) -> HttpResponse:
+        """Render the shell with the requested tab already populated.
+
+        The active tab is rendered server-side rather than fetched, so a bookmarked
+        ``?tab=licenses`` survives a refresh with no JavaScript — htmx only handles the
+        subsequent in-page switches.
+        """
+        job = self.get_job_or_404(task_id)
+        terminal = job.status in TERMINAL_STATUSES
+        active_tab = _resolve_tab(request)
+        context = {
+            "job": job,
+            "org": self.org,
+            "job_is_terminal": terminal,
+            "tabs": RESULT_TABS,
+            "active_tab": active_tab,
+            # Rendered server-side so a bookmarked ?tab= survives a refresh with no
+            # JavaScript; htmx only avoids a full reload on subsequent clicks.
+            "active_tab_template": _tab_template(active_tab),
+            "artifacts_available": bool(job.result_key),
+            "artifact_tabs": ARTIFACT_TABS,
+            "metrics": build_metrics(job.summary_stats),
+        }
         return render(request, "inventory/sbom/results.html", context)
 
 
-class JobProgressPartialView(OrgMemberRequiredMixin, View):
+class JobTabPartialView(_JobScopedView):
+    """Render one tab's content, loaded by htmx when a tab is clicked."""
+
+    def get(self, request: HttpRequest, task_id: str, tab: str) -> HttpResponse:
+        """Return the tab body, or 404 for an unrecognised tab name."""
+        if tab not in dict(RESULT_TABS):
+            raise Http404
+        job = self.get_job_or_404(task_id)
+        context = {
+            "job": job,
+            "active_tab": tab,
+            "artifacts_available": bool(job.result_key),
+            "metrics": build_metrics(job.summary_stats),
+        }
+        return render(request, _tab_template(tab), context)
+
+
+class JobProgressPartialView(_JobScopedView):
     """The results page's polled fragment.
 
     Uses the same 5-second convention as the row trigger. When the job terminates this
@@ -206,11 +280,7 @@ class JobProgressPartialView(OrgMemberRequiredMixin, View):
 
     def get(self, request: HttpRequest, task_id: str) -> HttpResponse:
         """Return the progress fragment, or ask htmx to reload once the job is done."""
-        try:
-            job = get_job(self.org, task_id)
-        except SBOMJob.DoesNotExist as exc:
-            raise Http404 from exc
-
+        job = self.get_job_or_404(task_id)
         terminal = job.status in TERMINAL_STATUSES
         response = render(request, "inventory/sbom/_job_progress.html", {"job": job, "job_is_terminal": terminal})
         if terminal:

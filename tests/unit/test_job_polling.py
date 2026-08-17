@@ -201,7 +201,9 @@ def test_the_results_page_renders_the_completed_view_once_terminal(org_client) -
 
     html = client.get(f"/results/{job.task_id}").content.decode()
 
-    assert "completed" in html.lower()
+    # Story 21.12 replaced this story's placeholder with the five-tab shell; what 21.11 owns
+    # is the transition itself, so the assertion is that the gate has opened onto the shell.
+    assert "Overview" in html
     # No trigger, because there is nothing left to wait for.
     assert EXPECTED_TRIGGER not in html
 

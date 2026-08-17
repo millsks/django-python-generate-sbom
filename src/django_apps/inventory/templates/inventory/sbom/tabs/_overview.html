@@ -1,0 +1,33 @@
+{% comment %} Overview tab (Story 5.2 → 21.12).
+
+  Every card comes from the job's summary_stats and nothing else — that column exists so this
+  tab needs no per-report fetch (NFR-2.2). A card whose phase failed reads "Unavailable"
+  rather than 0, because 0 would assert something the system cannot know (FR-6.7).
+
+  The SBOM download links straight at the API's presigned-redirect endpoint (AD-11): Django
+  issues a 303 to storage and never streams artifact bytes, so proxying it through this page
+  would break that rule.
+{% endcomment %}
+<div class="row g-3">
+  {% for metric in metrics %}
+    <div class="col-sm-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-uppercase small text-body-secondary">{{ metric.title }}</div>
+          <div class="h6 mt-1 mb-0 {% if metric.unavailable %}text-body-secondary{% endif %}">
+            {{ metric.value }}
+          </div>
+          {% if metric.tab and artifacts_available and not metric.unavailable %}
+            <a class="stretched-link small" href="?tab={{ metric.tab }}">View details</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+
+{% if artifacts_available %}
+  <div class="mt-3">
+    <a class="btn btn-sm btn-primary" href="/api/v1/sbom/result/{{ job.task_id }}/">Download SBOM</a>
+  </div>
+{% endif %}

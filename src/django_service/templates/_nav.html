@@ -10,20 +10,23 @@
   Hiding a link is PRESENTATION, never authorization: the views enforce access
   themselves (Story 21.4 adds the mixins).
 
-  Hrefs are literal paths for now, not {% url %} names, because no server-rendered page
-  exists yet — the SPA catch-all still owns these routes. Stories 21.5-21.18 replace each
-  one with a named URL as they land the corresponding view.
+  Converted destinations reverse their named URL; the rest are still literal paths owned by
+  the SPA catch-all, and each story swaps one over as it lands the view. The names are
+  resolved once at the top rather than inline, because {% include %} cannot take a
+  {% url %} expression as an argument.
 {% endcomment %}
+{% url 'ui-members' as members_url %}
+{% url 'ui-organization' as organization_url %}
 <nav class="nav flex-column nav-pills gap-1" aria-label="Main navigation">
   {% include "_nav_item.html" with url="/" label="Home" icon="house-door" %}
   {% include "_nav_item.html" with url="/upload" label="Upload" icon="cloud-arrow-up" %}
   {% include "_nav_item.html" with url="/history" label="History" icon="clock-history" %}
   {% if is_org_admin %}
-    {% include "_nav_item.html" with url="/members" label="Members" icon="people" %}
+    {% include "_nav_item.html" with url=members_url label="Members" icon="people" %}
   {% endif %}
   {% include "_nav_item.html" with url="/keys" label="API Keys" icon="key" %}
   {% if is_org_admin %}
-    {% include "_nav_item.html" with url="/organization" label="Organization" icon="building" %}
+    {% include "_nav_item.html" with url=organization_url label="Organization" icon="building" %}
   {% endif %}
   {% if is_global_admin %}
     {% include "_nav_item.html" with url="/platform/global-admins" label="Global Admins" icon="shield-lock" %}

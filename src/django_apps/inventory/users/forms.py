@@ -102,3 +102,54 @@ class RegistrationForm(forms.Form):
                 # the field the user has to change.
                 self.add_error("password", exc)
         return cleaned
+
+
+class CreateOrgForm(forms.Form):
+    """Create an organisation. Global admins only (Story 2.12).
+
+    The creator becomes the new org's admin, and every other global admin is provisioned
+    into it by ``create_org`` (Story 2.8) — so this form carries no admin field. Story 2.12
+    deliberately *reversed* self-service org creation, which is why the gate is
+    ``GlobalAdminRequiredMixin`` and not merely "org admin".
+    """
+
+    name = forms.CharField(
+        max_length=255,
+        label="Organization name",
+        widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Acme Corp"}),
+    )
+
+
+class AddExistingMemberForm(forms.Form):
+    """Add a user who has already registered, by email (Story 2.7).
+
+    Deliberately separate from :class:`CreateMemberUserForm`. Story 2.7 does not auto-create
+    an account — an unknown email is an error, not a silent registration — and Story 2.10 was
+    reopened specifically to restore the *other* flow. Merging them would re-create the bug
+    both stories exist to fix.
+    """
+
+    email = forms.EmailField(
+        label="Email of an existing user",
+        widget=forms.EmailInput(attrs={"placeholder": "person@example.com", "autocomplete": "off"}),
+    )
+
+
+class CreateMemberUserForm(forms.Form):
+    """Provision a brand-new account and add it to the org (Story 2.10, FR-1.3).
+
+    There is no transactional email anywhere in this system, so the admin sets a temporary
+    password and shares it out-of-band. The minimum length matches the API serializer so the
+    two entry points cannot drift.
+    """
+
+    email = forms.EmailField(
+        label="Email for the new account",
+        widget=forms.EmailInput(attrs={"placeholder": "newcomer@example.com", "autocomplete": "off"}),
+    )
+    temp_password = forms.CharField(
+        min_length=8,
+        label="Temporary password",
+        widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}),
+        help_text="Shown once after creation. Share it with the new member out of band.",
+    )

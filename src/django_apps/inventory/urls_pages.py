@@ -16,10 +16,37 @@ Every path added here must also be added to the SPA catch-all's negative lookahe
 
 from django.urls import path
 
-from inventory.users.pages import LoginPageView, LogoutPageView, RegisterPageView
+from inventory.users.pages import (
+    CreateOrgView,
+    LeaveOrgView,
+    LoginPageView,
+    LogoutPageView,
+    MemberAddExistingView,
+    MemberCreateUserView,
+    MemberDemoteView,
+    MemberPromoteView,
+    MemberRemoveView,
+    MembersView,
+    OrganizationHubView,
+    RegisterPageView,
+)
 
 urlpatterns = [
+    # Story 21.5 — authentication
     path("login", LoginPageView.as_view(), name="ui-login"),
     path("register", RegisterPageView.as_view(), name="ui-register"),
     path("logout", LogoutPageView.as_view(), name="ui-logout"),
+    # Story 21.6 — organisation administration
+    path("organization", OrganizationHubView.as_view(), name="ui-organization"),
+    path("organization/create", CreateOrgView.as_view(), name="ui-org-create"),
+    path("organization/leave", LeaveOrgView.as_view(), name="ui-org-leave"),
+    # Story 21.6 — members. Each mutation gets its own POST endpoint rather than one view
+    # switching on an `action` field, so the URL itself says what happened and each is
+    # independently gated and testable.
+    path("members", MembersView.as_view(), name="ui-members"),
+    path("members/add", MemberAddExistingView.as_view(), name="ui-member-add"),
+    path("members/create", MemberCreateUserView.as_view(), name="ui-member-create"),
+    path("members/remove", MemberRemoveView.as_view(), name="ui-member-remove"),
+    path("members/promote", MemberPromoteView.as_view(), name="ui-member-promote"),
+    path("members/demote", MemberDemoteView.as_view(), name="ui-member-demote"),
 ]

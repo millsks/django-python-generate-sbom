@@ -412,7 +412,7 @@ development_status:
   21-3-server-rendered-ui-foundation: review
   21-4-access-control-mixins-and-org-context: review
   21-5-authentication-pages: review
-  21-6-organization-and-member-management-pages: ready-for-dev
+  21-6-organization-and-member-management-pages: review
   21-7-api-key-management-page: ready-for-dev
   21-8-global-administration-page: ready-for-dev
   21-9-manifest-upload-and-job-submission-page: ready-for-dev

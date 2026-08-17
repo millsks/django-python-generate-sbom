@@ -66,5 +66,8 @@ if settings.API_DOCS_ENABLED:
 # navigation stays on the SPA while a fresh request for those URLs gets the Django page.
 # That coexistence is intentional for the duration of the epic.
 urlpatterns += [
-    re_path(r"^(?!api/|health/|static/|admin/|ui/|login|register|logout).*$", SpaView.as_view()),
+    re_path(
+        r"^(?!api/|health/|static/|admin/|ui/|login|register|logout|organization|members).*$",
+        SpaView.as_view(),
+    ),
 ]

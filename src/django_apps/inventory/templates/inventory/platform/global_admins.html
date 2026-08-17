@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% load crispy_forms_tags %}
+{% comment %} Platform-admin management (Story 13.1), converted from GlobalAdminsPage.tsx.
+
+  This grants the HIGHEST privilege in the system, so the control is the view's
+  GlobalAdminRequiredMixin — never the hidden nav item. Story 2.17 exists precisely because
+  admin-only pages were once enforced in the nav alone; AC #2 tests that this page 403s for an
+  org admin who types the URL.
+
+  Revoking is confirmed inline because it is a privilege change with side effects: the service
+  also demotes the person to member in every non-admin org.
+{% endcomment %}
+
+{% block title %}Global admins · {{ product_name_short }}{% endblock %}
+
+{% block content %}
+  <h1 class="h3">Global admins</h1>
+  <p class="text-body-secondary">
+    Platform administrators. They belong to every organization and can create new ones.
+  </p>
+
+  <div class="table-responsive mt-4">
+    <table class="table align-middle">
+      <caption class="visually-hidden">Current global administrators</caption>
+      <thead>
+        <tr>
+          <th scope="col">Email</th>
+          <th scope="col" class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for admin in global_admins %}
+          <tr>
+            <td>
+              {{ admin.email }}
+              {% if admin.pk == current_user_id %}<span class="badge text-bg-secondary ms-1">You</span>{% endif %}
+            </td>
+            <td class="text-end">
+              {% comment %} Self-revocation is offered on purpose: only the LAST global admin
+                is blocked, and that guard lives in the service. {% endcomment %}
+              <form method="post" action="{% url 'ui-global-admin-revoke' %}" class="d-inline"
+                    onsubmit="return confirm('Revoke global admin from {{ admin.email|escapejs }}? They will be demoted to member of every organization.');">
+                {% csrf_token %}
+                <input type="hidden" name="user_id" value="{{ admin.pk }}">
+                <button type="submit" class="btn btn-sm btn-outline-danger">Revoke</button>
+              </form>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="2" class="text-body-secondary">No global admins.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="row mt-2">
+    <div class="col-12 col-md-7 col-lg-5">
+      <div class="card">
+        <div class="card-body">
+          <h2 class="card-title h6">Grant global admin</h2>
+          <p class="card-text small text-body-secondary">
+            The person must already have an account. This grants full platform access.
+          </p>
+          <form method="post" action="{% url 'ui-global-admin-grant' %}" novalidate>
+            {% csrf_token %}
+            {{ grant_form|crispy }}
+            <button type="submit" class="btn btn-primary btn-sm">Grant global admin</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

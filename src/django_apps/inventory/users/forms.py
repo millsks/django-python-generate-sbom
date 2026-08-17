@@ -169,3 +169,17 @@ class CreateApiKeyForm(forms.Form):
         help_text="A label to recognise this key by, e.g. \u201cCI pipeline\u201d.",
         widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "CI pipeline"}),
     )
+
+
+class GrantGlobalAdminForm(forms.Form):
+    """Grant the global-admin flag to a registered user, by email (Story 13.1).
+
+    Like the add-existing-member flow (Story 2.7) there is deliberately **no auto-create**:
+    an unknown email is an error. Auto-registering an account here would mean creating a user
+    and handing it the highest privilege in the system in a single unreviewed step.
+    """
+
+    email = forms.EmailField(
+        label="Email of a registered user",
+        widget=forms.EmailInput(attrs={"autofocus": True, "placeholder": "person@example.com", "autocomplete": "off"}),
+    )

@@ -31,6 +31,7 @@ from inventory.users.forms import (
     CreateApiKeyForm,
     CreateMemberUserForm,
     CreateOrgForm,
+    GrantGlobalAdminForm,
     LoginForm,
     RegistrationForm,
 )
@@ -43,11 +44,14 @@ from inventory.users.services import (
     create_member_user,
     create_org,
     demote_admin_to_member,
+    grant_global_admin_by_email,
     leave_org,
+    list_global_admins,
     promote_member_to_admin,
     register_user,
     remove_member,
     revoke_api_key,
+    revoke_global_admin,
 )
 
 #: Where login sends a user who arrived without a `next` (the SPA's DEFAULT_AFTER_LOGIN).
@@ -440,3 +444,83 @@ class ApiKeyRevokeView(OrgAdminRequiredMixin, View):
         else:
             messages.error(request, KEY_NOT_FOUND)
         return HttpResponseRedirect(reverse("ui-keys"))
+
+
+# --- Platform administration (Story 21.8) -------------------------------------------------
+
+GLOBAL_ADMINS_TEMPLATE = "inventory/platform/global_admins.html"
+
+#: Used when a revoke targets someone who is not on the tier. Identical whether the user does
+#: not exist or simply is not a global admin — there is nothing to disclose either way.
+NOT_A_GLOBAL_ADMIN = "That user is not a global admin."
+
+
+def _global_admins_context(request: HttpRequest, form: GrantGlobalAdminForm | None = None) -> dict[str, Any]:
+    """Build the platform-admin page context, defaulting to a blank grant form."""
+    return {
+        "global_admins": list_global_admins(),
+        "grant_form": form or GrantGlobalAdminForm(),
+        "current_user_id": request.user.pk,
+    }
+
+
+class GlobalAdminsView(GlobalAdminRequiredMixin, TemplateView):
+    """List the platform-admin tier (Story 13.1).
+
+    Gated by ``GlobalAdminRequiredMixin`` — which requires **no active org**, deliberately:
+    the ADMIN org is not a workspace (Story 2.18), so a global admin typically has no active
+    org at all and an org-scoped gate would lock them out of their own page.
+    """
+
+    template_name = GLOBAL_ADMINS_TEMPLATE
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Provide the current tier and a blank grant form."""
+        context = super().get_context_data(**kwargs)
+        context.update(_global_admins_context(self.request))
+        return context
+
+
+class GlobalAdminGrantView(GlobalAdminRequiredMixin, View):
+    """Grant global admin to a registered user, by email."""
+
+    def post(self, request: HttpRequest) -> HttpResponseBase:
+        """Grant the flag, or redisplay the page with the form's error."""
+        form = GrantGlobalAdminForm(request.POST)
+        if form.is_valid():
+            try:
+                user = grant_global_admin_by_email(form.cleaned_data["email"])
+            except MembershipError as exc:
+                form.add_error("email", exc.message)
+            else:
+                messages.success(request, f"{user.email} is now a global admin.")
+                return HttpResponseRedirect(reverse("ui-global-admins"))
+        return render(request, GLOBAL_ADMINS_TEMPLATE, _global_admins_context(request, form))
+
+
+class GlobalAdminRevokeView(GlobalAdminRequiredMixin, View):
+    """Revoke the global-admin flag (Story 13.1)."""
+
+    def post(self, request: HttpRequest) -> HttpResponse:
+        """Revoke, unless it would empty the tier.
+
+        Self-revocation is allowed and intentional — only the *last* global admin is blocked,
+        by ``LastGlobalAdminError`` inside the service. Nothing here re-implements that check.
+        """
+        raw_id = request.POST.get("user_id", "")
+        target = None
+        if raw_id.isdigit():
+            # Resolved from the tier itself, so this endpoint can only ever act on someone
+            # who is already a global admin.
+            target = next((admin for admin in list_global_admins() if admin.pk == int(raw_id)), None)
+        if target is None:
+            messages.error(request, NOT_A_GLOBAL_ADMIN)
+            return HttpResponseRedirect(reverse("ui-global-admins"))
+
+        try:
+            revoke_global_admin(target)
+        except MembershipError as exc:
+            messages.error(request, exc.message)
+        else:
+            messages.success(request, f"{target.email} is no longer a global admin.")
+        return HttpResponseRedirect(reverse("ui-global-admins"))

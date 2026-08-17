@@ -18,6 +18,7 @@
 {% url 'ui-members' as members_url %}
 {% url 'ui-organization' as organization_url %}
 {% url 'ui-keys' as keys_url %}
+{% url 'ui-global-admins' as global_admins_url %}
 <nav class="nav flex-column nav-pills gap-1" aria-label="Main navigation">
   {% include "_nav_item.html" with url="/" label="Home" icon="house-door" %}
   {% include "_nav_item.html" with url="/upload" label="Upload" icon="cloud-arrow-up" %}
@@ -30,6 +31,6 @@
     {% include "_nav_item.html" with url=organization_url label="Organization" icon="building" %}
   {% endif %}
   {% if is_global_admin %}
-    {% include "_nav_item.html" with url="/platform/global-admins" label="Global Admins" icon="shield-lock" %}
+    {% include "_nav_item.html" with url=global_admins_url label="Global Admins" icon="shield-lock" %}
   {% endif %}
 </nav>

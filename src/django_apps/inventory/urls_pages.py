@@ -21,6 +21,9 @@ from inventory.users.pages import (
     ApiKeyRevokeView,
     ApiKeysView,
     CreateOrgView,
+    GlobalAdminGrantView,
+    GlobalAdminRevokeView,
+    GlobalAdminsView,
     LeaveOrgView,
     LoginPageView,
     LogoutPageView,
@@ -57,4 +60,9 @@ urlpatterns = [
     path("keys", ApiKeysView.as_view(), name="ui-keys"),
     path("keys/create", ApiKeyCreateView.as_view(), name="ui-key-create"),
     path("keys/revoke", ApiKeyRevokeView.as_view(), name="ui-key-revoke"),
+    # Story 21.8 — platform administration. Global-admin gated, and NOT org-scoped: the
+    # ADMIN org is not a workspace (Story 2.18), so a global admin often has no active org.
+    path("platform/global-admins", GlobalAdminsView.as_view(), name="ui-global-admins"),
+    path("platform/global-admins/grant", GlobalAdminGrantView.as_view(), name="ui-global-admin-grant"),
+    path("platform/global-admins/revoke", GlobalAdminRevokeView.as_view(), name="ui-global-admin-revoke"),
 ]

@@ -12,7 +12,7 @@ class _ScopedThing(OrgScopedModel):
     name = models.CharField(max_length=50)
 
     class Meta:
-        app_label = "users"
+        app_label = "inventory"
 
 
 def test_for_org_filters_by_org_id() -> None:

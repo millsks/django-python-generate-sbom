@@ -3,7 +3,8 @@
 import pytest
 from rest_framework.test import APIClient
 
-from inventory.users.models import Org, OrgMembership, User
+from django_service.users.models import User
+from inventory.users.models import Org, OrgMembership
 from inventory.users.services import (
     AdminOrgProtectedError,
     create_org,

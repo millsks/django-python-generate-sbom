@@ -3,7 +3,7 @@
 import pytest
 from django.core.management import call_command
 
-from inventory.users.models import User
+from django_service.users.models import User
 from inventory.users.services import get_the_admin_org, is_global_admin
 
 

@@ -4,7 +4,8 @@ import pytest
 from django.core.management import call_command
 from rest_framework.test import APIClient
 
-from inventory.users.models import Org, OrgMembership, User
+from django_service.users.models import User
+from inventory.users.models import Org, OrgMembership
 from inventory.users.services import (
     create_org,
     get_the_admin_org,

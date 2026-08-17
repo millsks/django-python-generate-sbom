@@ -11,8 +11,9 @@ from typing import Any
 import structlog
 from django.core.management.base import BaseCommand
 
-from ... import services
-from ...models import Org, User
+from inventory.common.users import user_model
+from inventory.users import services
+from inventory.users.models import Org
 
 logger = structlog.get_logger()
 
@@ -28,6 +29,6 @@ class Command(BaseCommand):
             slug=services.ADMIN_ORG_SLUG,
             defaults={"name": services.ADMIN_ORG_NAME, "is_admin_org": True},
         )
-        for user in User.objects.filter(is_superuser=True):
+        for user in user_model().objects.filter(is_superuser=True):
             services.grant_global_admin(user)
         logger.info("bootstrap_admin_org_complete")

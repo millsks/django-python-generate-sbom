@@ -20,7 +20,7 @@ class SBOMJob(OrgScopedModel):
         FAILED = "FAILED", "Failed"
 
     task_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    manifest = models.ForeignKey("manifests.ManifestUpload", on_delete=models.CASCADE, related_name="jobs")
+    manifest = models.ForeignKey("inventory.ManifestUpload", on_delete=models.CASCADE, related_name="jobs")
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

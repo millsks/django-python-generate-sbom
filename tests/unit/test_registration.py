@@ -4,7 +4,8 @@ import pytest
 from django.db import IntegrityError
 from rest_framework.test import APIClient
 
-from inventory.users.models import Org, User
+from django_service.users.models import User
+from inventory.users.models import Org
 from inventory.users.services import register_user
 
 

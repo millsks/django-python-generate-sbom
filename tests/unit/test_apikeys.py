@@ -3,7 +3,8 @@
 import pytest
 from rest_framework.test import APIClient
 
-from inventory.users.models import OrgApiKey, User
+from django_service.users.models import User
+from inventory.users.models import OrgApiKey
 from inventory.users.services import create_org, register_user
 
 

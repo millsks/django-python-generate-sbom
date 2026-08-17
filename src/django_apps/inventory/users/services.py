@@ -9,7 +9,9 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
-from .models import Org, OrgApiKey, OrgMembership, User
+from inventory.common.users import UserT, create_user, user_model, user_ref
+
+from .models import Org, OrgApiKey, OrgMembership
 
 MAX_ACTIVE_API_KEYS = 10
 
@@ -24,25 +26,32 @@ def get_the_admin_org() -> Org | None:
     return Org.objects.filter(is_admin_org=True).first()
 
 
-def is_global_admin(user: User) -> bool:
+def is_global_admin(user: UserT) -> bool:
     """Return True if ``user`` is a member of the ADMIN org (a global admin)."""
     admin_org = get_the_admin_org()
-    return admin_org is not None and OrgMembership.objects.filter(org=admin_org, user=user).exists()
+    return admin_org is not None and OrgMembership.objects.filter(org=admin_org, user=user_ref(user)).exists()
 
 
-def _global_admins() -> list[User]:
+def _global_admins() -> list[UserT]:
     """Return every global admin (member of the ADMIN org)."""
     admin_org = get_the_admin_org()
-    return [] if admin_org is None else list(User.objects.filter(org_memberships__org=admin_org))
+    if admin_org is None:
+        return []
+    # Queried from OrgMembership, not from the user model: the reverse accessor
+    # (`org_memberships`) belongs to the HOST's user class, which the app must not assume
+    # (Story 21.2). The app owns OrgMembership, so this direction is always valid.
+    return [m.user for m in OrgMembership.objects.filter(org=admin_org).select_related("user")]
 
 
 def _provision_global_admins(org: Org) -> None:
     """Make every global admin a full ADMIN of ``org`` (idempotent)."""
     for user in _global_admins():
-        OrgMembership.objects.update_or_create(org=org, user=user, defaults={"role": OrgMembership.Role.ADMIN})
+        OrgMembership.objects.update_or_create(
+            org=org, user=user_ref(user), defaults={"role": OrgMembership.Role.ADMIN}
+        )
 
 
-def grant_global_admin(user: User) -> None:
+def grant_global_admin(user: UserT) -> None:
     """Add ``user`` to the ADMIN org and back-fill them as admin of every org.
 
     Returns early if the ADMIN org has not been seeded yet (Story 2.8). Adding a
@@ -52,18 +61,21 @@ def grant_global_admin(user: User) -> None:
     admin_org = get_the_admin_org()
     if admin_org is None:
         return
-    OrgMembership.objects.get_or_create(org=admin_org, user=user, defaults={"role": OrgMembership.Role.ADMIN})
+    OrgMembership.objects.get_or_create(org=admin_org, user=user_ref(user), defaults={"role": OrgMembership.Role.ADMIN})
     for org in Org.objects.filter(is_admin_org=False):
-        OrgMembership.objects.update_or_create(org=org, user=user, defaults={"role": OrgMembership.Role.ADMIN})
+        OrgMembership.objects.update_or_create(
+            org=org, user=user_ref(user), defaults={"role": OrgMembership.Role.ADMIN}
+        )
     logger.info("global_admin_granted", user_id=user.pk)
 
 
-def list_global_admins() -> list[User]:
+def list_global_admins() -> list[UserT]:
     """Return the current global admins (ADMIN-org members), ordered by email (Story 13.1)."""
     admin_org = get_the_admin_org()
     if admin_org is None:
         return []
-    return list(User.objects.filter(org_memberships__org=admin_org).order_by("email"))
+    memberships = OrgMembership.objects.filter(org=admin_org).select_related("user").order_by("user__email")
+    return [m.user for m in memberships]
 
 
 def _unique_org_slug(name: str) -> str:
@@ -77,26 +89,26 @@ def _unique_org_slug(name: str) -> str:
     return slug
 
 
-def create_org(name: str, admin_user: User) -> Org:
+def create_org(name: str, admin_user: UserT) -> Org:
     """Create an org with ``admin_user`` as its sole admin.
 
     Shared by create-additional-org (Story 2.3/2.5). Every global admin is
     auto-added as an admin of the new org (Story 2.8, AC #2a).
     """
     org = Org.objects.create(name=name, slug=_unique_org_slug(name))
-    OrgMembership.objects.create(org=org, user=admin_user, role=OrgMembership.Role.ADMIN)
+    OrgMembership.objects.create(org=org, user=user_ref(admin_user), role=OrgMembership.Role.ADMIN)
     _provision_global_admins(org)
     return org
 
 
 @transaction.atomic
-def register_user(email: str, password: str) -> User:
+def register_user(email: str, password: str) -> UserT:
     """Register a new user, creating the account only (Story 2.6).
 
     A new user starts with **zero** orgs — no personal org is created. A failure
     (e.g. a duplicate email) rolls back so no partial User row is left behind.
     """
-    user = User.objects.create_user(email=email, password=password)
+    user = create_user(email=email, password=password)
     logger.info("user_registered", user_id=user.pk)
     return user
 
@@ -175,13 +187,13 @@ class ApiKeyLimitError(MembershipError):
     message = "This org has reached the maximum of 10 active API keys."
 
 
-def grant_global_admin_by_email(email: str) -> User:
+def grant_global_admin_by_email(email: str) -> UserT:
     """Grant global admin to a registered user looked up by email (Story 13.1).
 
     Raises ``NoSuchUserError`` if no registered user matches the email — there is
     no auto-create, mirroring the add-existing-member flow (Story 2.7).
     """
-    user = User.objects.filter(email__iexact=email).first()
+    user = user_model().objects.filter(email__iexact=email).first()
     if user is None:
         raise NoSuchUserError
     grant_global_admin(user)
@@ -189,7 +201,7 @@ def grant_global_admin_by_email(email: str) -> User:
 
 
 @transaction.atomic
-def revoke_global_admin(user: User) -> None:
+def revoke_global_admin(user: UserT) -> None:
     """Revoke ``user``'s global-admin status (Story 13.1).
 
     Removes them from the ADMIN org AND demotes their role to ``member`` in every
@@ -201,12 +213,12 @@ def revoke_global_admin(user: User) -> None:
     admin_org = get_the_admin_org()
     if admin_org is None:
         return
-    if not OrgMembership.objects.filter(org=admin_org, user=user).exists():
+    if not OrgMembership.objects.filter(org=admin_org, user=user_ref(user)).exists():
         return
-    if not OrgMembership.objects.filter(org=admin_org).exclude(user=user).exists():
+    if not OrgMembership.objects.filter(org=admin_org).exclude(user=user_ref(user)).exists():
         raise LastGlobalAdminError
-    OrgMembership.objects.filter(org=admin_org, user=user).delete()
-    OrgMembership.objects.filter(org__is_admin_org=False, user=user, role=OrgMembership.Role.ADMIN).update(
+    OrgMembership.objects.filter(org=admin_org, user=user_ref(user)).delete()
+    OrgMembership.objects.filter(org__is_admin_org=False, user=user_ref(user), role=OrgMembership.Role.ADMIN).update(
         role=OrgMembership.Role.MEMBER
     )
     logger.info("global_admin_revoked", user_id=user.pk)
@@ -238,23 +250,23 @@ def revoke_api_key(org: Org, key_id: str) -> bool:
     return True
 
 
-def _is_sole_admin(org: Org, user: User) -> bool:
+def _is_sole_admin(org: Org, user: UserT) -> bool:
     """Return True if ``user`` is the only admin of ``org``.
 
     Global admins are real ADMIN memberships (Story 2.8), so when one is present
     a normal admin is *not* the sole admin and may leave or be removed.
     """
     admins = OrgMembership.objects.filter(org=org, role=OrgMembership.Role.ADMIN)
-    return admins.count() == 1 and admins.filter(user=user).exists()
+    return admins.count() == 1 and admins.filter(user=user_ref(user)).exists()
 
 
-def _is_last_member(org: Org, user: User) -> bool:
+def _is_last_member(org: Org, user: UserT) -> bool:
     """Return True if ``user`` is the only remaining member of ``org``."""
     members = OrgMembership.objects.filter(org=org)
-    return members.count() == 1 and members.filter(user=user).exists()
+    return members.count() == 1 and members.filter(user=user_ref(user)).exists()
 
 
-def _guard_membership_removal(org: Org, user: User) -> None:
+def _guard_membership_removal(org: Org, user: UserT) -> None:
     """Reject a removal/leave that would violate a membership invariant (Story 2.9).
 
     The rules, in priority order:
@@ -279,7 +291,7 @@ def _guard_membership_removal(org: Org, user: User) -> None:
         raise LastAdminError
 
 
-def create_member(org: Org, email: str, role: str = OrgMembership.Role.MEMBER) -> User:
+def create_member(org: Org, email: str, role: str = OrgMembership.Role.MEMBER) -> UserT:
     """Add an existing user to ``org`` by email (Story 2.7, FR-1.3).
 
     Looks the user up by email (case-insensitive). If no registered user
@@ -287,18 +299,18 @@ def create_member(org: Org, email: str, role: str = OrgMembership.Role.MEMBER) -
     only add someone who has already registered. Raises ``AlreadyMemberError``
     if they already belong to ``org``.
     """
-    user = User.objects.filter(email__iexact=email).first()
+    user = user_model().objects.filter(email__iexact=email).first()
     if user is None:
         raise NoSuchUserError
-    if OrgMembership.objects.filter(org=org, user=user).exists():
+    if OrgMembership.objects.filter(org=org, user=user_ref(user)).exists():
         raise AlreadyMemberError
-    OrgMembership.objects.create(org=org, user=user, role=role)
+    OrgMembership.objects.create(org=org, user=user_ref(user), role=role)
     logger.info("member_added", org_id=org.pk, user_id=user.pk, role=role)
     return user
 
 
 @transaction.atomic
-def create_member_user(org: Org, email: str, temp_password: str, role: str = OrgMembership.Role.MEMBER) -> User:
+def create_member_user(org: Org, email: str, temp_password: str, role: str = OrgMembership.Role.MEMBER) -> UserT:
     """Create a brand-new user and add them to ``org`` in one step (Story 2.10).
 
     Distinct from ``create_member`` (add-existing, Story 2.7): this provisions a new
@@ -307,22 +319,22 @@ def create_member_user(org: Org, email: str, temp_password: str, role: str = Org
     registered so the admin uses "add existing" instead of silently duplicating.
     The plaintext password is never logged.
     """
-    if User.objects.filter(email__iexact=email).exists():
+    if user_model().objects.filter(email__iexact=email).exists():
         raise EmailTakenError
-    user = User.objects.create_user(email=email, password=temp_password)
-    OrgMembership.objects.create(org=org, user=user, role=role)
+    user = create_user(email=email, password=temp_password)
+    OrgMembership.objects.create(org=org, user=user_ref(user), role=role)
     logger.info("member_created", org_id=org.pk, user_id=user.pk, role=role)
     return user
 
 
-def remove_member(org: Org, user: User) -> None:
+def remove_member(org: Org, user: UserT) -> None:
     """Remove ``user`` from ``org``, enforcing the Story 2.9 edge rules (FR-1.4).
 
     Empty-org behavior: a normal org is never auto-deleted or left memberless —
     the last-admin guard keeps at least one admin, and global admins (when
     seeded) co-own it. The ADMIN org is protected from losing its last member.
     """
-    membership = OrgMembership.objects.filter(org=org, user=user).first()
+    membership = OrgMembership.objects.filter(org=org, user=user_ref(user)).first()
     if membership is None:
         raise NotAMemberError
     _guard_membership_removal(org, user)
@@ -330,7 +342,7 @@ def remove_member(org: Org, user: User) -> None:
     logger.info("member_removed", org_id=org.pk, user_id=user.pk)
 
 
-def promote_member_to_admin(org: Org, target: User) -> None:
+def promote_member_to_admin(org: Org, target: UserT) -> None:
     """Promote ``target`` to admin of ``org`` (Story 2.16, replaces the old transfer).
 
     This *adds* an admin — an org may have any number of admins — and demotes no
@@ -341,7 +353,7 @@ def promote_member_to_admin(org: Org, target: User) -> None:
     Raises ``NotAMemberError`` if ``target`` does not belong to ``org``; a no-op
     (idempotent) if they are already an admin.
     """
-    membership = OrgMembership.objects.filter(org=org, user=target).first()
+    membership = OrgMembership.objects.filter(org=org, user=user_ref(target)).first()
     if membership is None:
         raise NotAMemberError
     if membership.role != OrgMembership.Role.ADMIN:
@@ -350,7 +362,7 @@ def promote_member_to_admin(org: Org, target: User) -> None:
     logger.info("member_promoted_to_admin", org_id=org.pk, user_id=target.pk)
 
 
-def demote_admin_to_member(org: Org, target: User) -> None:
+def demote_admin_to_member(org: Org, target: UserT) -> None:
     """Demote ``target`` from admin back to member of ``org`` (Story 2.20).
 
     The inverse of ``promote_member_to_admin``: it affects ``target``'s role in
@@ -360,7 +372,7 @@ def demote_admin_to_member(org: Org, target: User) -> None:
     (``LastAdminError``). Raises ``NotAMemberError`` if ``target`` does not belong
     to ``org``; a no-op (idempotent) if they are already a member.
     """
-    membership = OrgMembership.objects.filter(org=org, user=target).first()
+    membership = OrgMembership.objects.filter(org=org, user=user_ref(target)).first()
     if membership is None:
         raise NotAMemberError
     if is_global_admin(target):
@@ -373,14 +385,14 @@ def demote_admin_to_member(org: Org, target: User) -> None:
     logger.info("admin_demoted_to_member", org_id=org.pk, user_id=target.pk)
 
 
-def leave_org(org: Org, user: User) -> None:
+def leave_org(org: Org, user: UserT) -> None:
     """Remove the caller's own membership, enforcing the Story 2.9 edge rules (FR-1.7).
 
     Mirrors ``remove_member``: a sole admin cannot leave, the last member of the
     ADMIN org cannot leave, and a global admin cannot leave a single normal org
     (they belong to every org).
     """
-    membership = OrgMembership.objects.filter(org=org, user=user).first()
+    membership = OrgMembership.objects.filter(org=org, user=user_ref(user)).first()
     if membership is None:
         raise NotAMemberError
     _guard_membership_removal(org, user)

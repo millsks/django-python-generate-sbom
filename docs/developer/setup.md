@@ -37,15 +37,44 @@ cp .env.local.example .env    # copy on macOS/Linux; use `copy` on Windows cmd
 `.env.local.example` is pre-wired for containerless dev: it sets
 `DJANGO_SETTINGS_MODULE=config.settings.local` and deliberately leaves
 `DATABASE_URL`, `AWS_*`, and `REDIS_URL` **unset** so the base defaults apply —
-SQLite at `backend/db.sqlite3` and `FileSystemStorage` at `backend/media/`. `.env`
-is git-ignored; never commit secrets.
+SQLite at `db.sqlite3` and `FileSystemStorage` at `media/`, both at the repository
+root. `.env` is git-ignored; never commit secrets.
 
 ## Running the stack — `pixi run dev`
 
 ```sh
-pixi run migrate      # apply database migrations (creates backend/db.sqlite3)
+pixi run migrate      # apply database migrations (creates ./db.sqlite3)
 pixi run dev          # start web + worker + beat together (containerless)
 ```
+
+### A fresh database is required as of Story 21.2
+
+Story 21.2 collapsed the four Django apps (`users`, `manifests`, `sbom`, `analysis`)
+into a single `inventory` app and **rewrote migration history from scratch**. Django
+identifies a model as `<app_label>.<ModelName>`, so changing the labels changed the
+identity of every model, every foreign-key target, and every `ContentType` row — and the
+tables moved with them (`users_org` is now `inventory_org`, `sbom_sbomjob` is now
+`inventory_sbomjob`, and so on).
+
+There is **no migration path** from a pre-21.2 database. Any local database created
+before that story is unusable and must be recreated:
+
+```sh
+rm db.sqlite3                  # discard the pre-21.2 database (no upgrade path)
+pixi run migrate               # rebuild the schema from the new initial migrations
+pixi run seed-superuser        # recreate the superuser + ADMIN org (env-driven)
+```
+
+`seed-superuser` reads `DJANGO_SUPERUSER_EMAIL` and `DJANGO_SUPERUSER_PASSWORD`, and is
+idempotent. The ADMIN org itself is seeded by the `inventory.0002_seed_admin_org` data
+migration, so `pixi run migrate` alone is enough to get a working ADMIN org.
+
+This was a deliberate, signed-off trade: at `version = 0.1.0` with nothing deployed, a
+fresh database was judged far less risky than hand-authoring `SeparateDatabaseAndState`
+state operations for ~10 models across four app labels plus a `ContentType` data
+migration. The one thing that did **not** change is `AUTH_USER_MODEL`, which is still
+`"users.User"` — the dissolved app freed the `users` label and `django_service.users`
+re-took it.
 
 `pixi run dev` runs [honcho](https://honcho.readthedocs.io) against the repo-root
 `Procfile`, launching four processes in one foreground terminal:

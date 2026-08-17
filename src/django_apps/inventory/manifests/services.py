@@ -8,7 +8,8 @@ from typing import IO
 import structlog
 from django.core.files.base import ContentFile
 
-from inventory.users.models import Org, User
+from inventory.common.users import UserT, user_ref
+from inventory.users.models import Org
 
 from .detection import detect_format, validate_parseable
 from .models import ManifestUpload
@@ -18,7 +19,7 @@ logger = structlog.get_logger()
 
 def upload_manifest(
     org: Org,
-    user: User | None,
+    user: UserT | None,
     *,
     file_obj: IO[bytes],
     application_id: str,
@@ -42,7 +43,7 @@ def upload_manifest(
 
     upload = ManifestUpload(
         org=org,
-        user=user,
+        user=user_ref(user),
         detected_format=fmt,
         original_filename=filename,
         application_id=application_id,

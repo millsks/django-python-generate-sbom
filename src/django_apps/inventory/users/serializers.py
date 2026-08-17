@@ -6,11 +6,12 @@ from typing import Any
 
 from rest_framework import serializers
 
+from inventory.common.users import UserT, user_model
+
 from . import services
-from .models import User
 
 
-class RegistrationSerializer(serializers.Serializer[User]):
+class RegistrationSerializer(serializers.Serializer[UserT]):
     """Validates registration input and creates the user (zero orgs, Story 2.6)."""
 
     email = serializers.EmailField()
@@ -18,11 +19,11 @@ class RegistrationSerializer(serializers.Serializer[User]):
 
     def validate_email(self, value: str) -> str:
         """Reject an email that is already registered (case-insensitive)."""
-        if User.objects.filter(email__iexact=value).exists():
+        if user_model().objects.filter(email__iexact=value).exists():
             raise serializers.ValidationError("A user with this email already exists.")
         return value
 
-    def create(self, validated_data: dict[str, str]) -> User:
+    def create(self, validated_data: dict[str, str]) -> UserT:
         """Create the user account (no org — Story 2.6)."""
         return services.register_user(
             email=validated_data["email"],
@@ -30,45 +31,45 @@ class RegistrationSerializer(serializers.Serializer[User]):
         )
 
 
-class LoginSerializer(serializers.Serializer[User]):
+class LoginSerializer(serializers.Serializer[UserT]):
     """Validates the shape of a login request."""
 
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
 
 
-class CreateOrgSerializer(serializers.Serializer[User]):
+class CreateOrgSerializer(serializers.Serializer[UserT]):
     """Validates the create-org request."""
 
     name = serializers.CharField(max_length=255)
 
 
-class AddMemberSerializer(serializers.Serializer[User]):
+class AddMemberSerializer(serializers.Serializer[UserT]):
     """Validates the add-existing-user-by-email request (Story 2.7)."""
 
     email = serializers.EmailField()
 
 
-class CreateMemberUserSerializer(serializers.Serializer[User]):
+class CreateMemberUserSerializer(serializers.Serializer[UserT]):
     """Validates the create-new-user-and-add request (Story 2.10)."""
 
     email = serializers.EmailField()
     temp_password = serializers.CharField(write_only=True, min_length=8)
 
 
-class UserIdSerializer(serializers.Serializer[User]):
+class UserIdSerializer(serializers.Serializer[UserT]):
     """Validates a request that targets a user by id (promote-admin, grant-global-admin)."""
 
     user_id = serializers.IntegerField()
 
 
-class CreateKeySerializer(serializers.Serializer[User]):
+class CreateKeySerializer(serializers.Serializer[UserT]):
     """Validates the create-API-key request."""
 
     name = serializers.CharField(max_length=100)
 
 
-class OrgSwitchSerializer(serializers.Serializer[User]):
+class OrgSwitchSerializer(serializers.Serializer[UserT]):
     """Validates the switch-active-org request (Story 11.19)."""
 
     slug = serializers.SlugField()

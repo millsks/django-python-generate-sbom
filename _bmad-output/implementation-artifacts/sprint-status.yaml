@@ -408,7 +408,7 @@ development_status:
   # merges, and do not let a dev agent pick either up meanwhile. Epic 15 is backend-only and unaffected.
   epic-21: backlog
   21-1-restructure-to-src-layout: review
-  21-2-collapse-apps-into-inventory-and-establish-django-service: ready-for-dev
+  21-2-collapse-apps-into-inventory-and-establish-django-service: review
   21-3-server-rendered-ui-foundation: ready-for-dev
   21-4-access-control-mixins-and-org-context: ready-for-dev
   21-5-authentication-pages: ready-for-dev

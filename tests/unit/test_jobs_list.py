@@ -6,11 +6,12 @@ import pytest
 from django.core.files.base import ContentFile
 from rest_framework.test import APIClient
 
+from django_service.users.models import User
 from inventory.manifests.models import ManifestUpload
 from inventory.sbom.models import SBOMJob
 from inventory.sbom.selectors import get_jobs
 from inventory.sbom.serializers import JobListSerializer
-from inventory.users.models import Org, User
+from inventory.users.models import Org
 from inventory.users.services import create_org, register_user
 
 

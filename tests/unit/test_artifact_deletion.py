@@ -7,10 +7,11 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from rest_framework.test import APIClient
 
+from django_service.users.models import User
 from inventory.analysis.models import AnalysisReport
 from inventory.manifests.models import ManifestUpload
 from inventory.sbom.models import SBOMJob
-from inventory.users.models import Org, OrgMembership, User
+from inventory.users.models import Org, OrgMembership
 from inventory.users.services import create_org, register_user
 
 pytestmark = pytest.mark.django_db

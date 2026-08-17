@@ -15,8 +15,10 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from inventory.common.users import UserT, user_model
+
 from .auth import SESSION_ACTIVE_ORG, get_admin_org, get_request_org, set_active_org_by_slug
-from .models import OrgApiKey, OrgMembership, User
+from .models import OrgApiKey, OrgMembership
 from .selectors import get_api_keys, get_org_members, get_user_orgs
 from .serializers import (
     AddMemberSerializer,
@@ -146,7 +148,7 @@ class AuthMeView(APIView):
         single source of truth for gating admin-only nav, routes, and affordances —
         so the client never has to probe an admin-only endpoint to learn its role.
         """
-        user = cast(User, request.user)
+        user = cast(UserT, request.user)
         return Response(
             {
                 "id": user.pk,
@@ -168,7 +170,7 @@ class GlobalAdminsView(APIView):
     @extend_schema(responses={200: GlobalAdminsResponseSerializer, 403: ErrorResponseSerializer})
     def get(self, request: Request) -> Response:
         """List current global admins (id + email); 403 unless the caller is one."""
-        if not is_global_admin(cast(User, request.user)):
+        if not is_global_admin(cast(UserT, request.user)):
             return Response(_NOT_GLOBAL_ADMIN, status=status.HTTP_403_FORBIDDEN)
         data = [{"user_id": u.pk, "email": u.email} for u in list_global_admins()]
         return Response({"global_admins": data})
@@ -179,7 +181,7 @@ class GlobalAdminsView(APIView):
     )
     def post(self, request: Request) -> Response:
         """Grant global admin to a registered user by email; 403 unless the caller is one."""
-        if not is_global_admin(cast(User, request.user)):
+        if not is_global_admin(cast(UserT, request.user)):
             return Response(_NOT_GLOBAL_ADMIN, status=status.HTTP_403_FORBIDDEN)
         serializer = AddMemberSerializer(data=request.data)
         if not serializer.is_valid():
@@ -210,9 +212,9 @@ class GlobalAdminDetailView(APIView):
     )
     def delete(self, request: Request, user_id: int) -> Response:
         """Revoke the target's global-admin status; 403 unless the caller is one."""
-        if not is_global_admin(cast(User, request.user)):
+        if not is_global_admin(cast(UserT, request.user)):
             return Response(_NOT_GLOBAL_ADMIN, status=status.HTTP_403_FORBIDDEN)
-        target = User.objects.filter(pk=user_id).first()
+        target = user_model().objects.filter(pk=user_id).first()
         if target is None:
             return Response(
                 {"error": "That user does not exist.", "code": "not_found"},
@@ -286,7 +288,7 @@ class OrgListView(APIView):
         active_slug = active.slug if active is not None else None
         data = [
             {"slug": org.slug, "name": org.name, "active": org.slug == active_slug}
-            for org in get_user_orgs(cast(User, request.user))
+            for org in get_user_orgs(cast(UserT, request.user))
         ]
         return Response(data)
 
@@ -332,7 +334,7 @@ class CreateOrgView(APIView):
     )
     def post(self, request: Request) -> Response:
         """Create the org (global-admin only); 403 for anyone else (Story 2.12)."""
-        user = cast(User, request.user)
+        user = cast(UserT, request.user)
         if not is_global_admin(user):
             return Response(_NOT_GLOBAL_ADMIN, status=status.HTTP_403_FORBIDDEN)
         serializer = CreateOrgSerializer(data=request.data)
@@ -423,7 +425,7 @@ class MemberDetailView(APIView):
         org = get_admin_org(request)
         if org is None:
             return Response(_NOT_ADMIN, status=status.HTTP_403_FORBIDDEN)
-        target = User.objects.filter(pk=user_id).first()
+        target = user_model().objects.filter(pk=user_id).first()
         if target is None:
             return Response(
                 {"error": "That user is not a member of this org.", "code": "not_a_member"},
@@ -461,7 +463,7 @@ class PromoteAdminView(APIView):
         serializer = UserIdSerializer(data=request.data)
         if not serializer.is_valid():
             return _validation_error(serializer.errors)
-        target = User.objects.filter(pk=serializer.validated_data["user_id"]).first()
+        target = user_model().objects.filter(pk=serializer.validated_data["user_id"]).first()
         if target is None:
             return Response(
                 {"error": "That user is not a member of this org.", "code": "not_a_member"},
@@ -499,7 +501,7 @@ class DemoteAdminView(APIView):
         serializer = UserIdSerializer(data=request.data)
         if not serializer.is_valid():
             return _validation_error(serializer.errors)
-        target = User.objects.filter(pk=serializer.validated_data["user_id"]).first()
+        target = user_model().objects.filter(pk=serializer.validated_data["user_id"]).first()
         if target is None:
             return Response(
                 {"error": "That user is not a member of this org.", "code": "not_a_member"},
@@ -529,7 +531,7 @@ class LeaveOrgView(APIView):
         if org is None:
             return Response(_NO_ACTIVE_ORG, status=status.HTTP_404_NOT_FOUND)
         try:
-            leave_org(org, cast(User, request.user))
+            leave_org(org, cast(UserT, request.user))
         except MembershipError as exc:
             return _membership_error(exc)
         request.session.pop(SESSION_ACTIVE_ORG, None)

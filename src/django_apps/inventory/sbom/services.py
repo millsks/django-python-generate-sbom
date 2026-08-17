@@ -17,8 +17,9 @@ from django.core.files.storage import default_storage
 from django.db.models import QuerySet
 from django.utils import timezone
 
+from inventory.common.users import UserT, user_ref
 from inventory.manifests.models import ManifestUpload
-from inventory.users.models import Org, User
+from inventory.users.models import Org
 
 from .generation import (
     Provenance,
@@ -60,12 +61,12 @@ OUTPUT_FORMAT_MAP = {
 DEFAULT_OUTPUT_FORMAT = "cdx-json"
 
 
-def create_job(org: Org, manifest: ManifestUpload, user: User | None, output_format: str) -> SBOMJob:
+def create_job(org: Org, manifest: ManifestUpload, user: UserT | None, output_format: str) -> SBOMJob:
     """Create a PENDING job (the view's initial status write; AD-12)."""
     return SBOMJob.objects.create(
         org=org,
         manifest=manifest,
-        user=user,
+        user=user_ref(user),
         output_format=output_format,
         status=SBOMJob.Status.PENDING,
     )

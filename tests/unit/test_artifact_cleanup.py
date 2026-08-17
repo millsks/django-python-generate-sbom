@@ -9,12 +9,13 @@ from django.core.files.storage import default_storage
 from django.test import override_settings
 from django.utils import timezone
 
+from django_service.users.models import User
 from inventory.analysis.models import AnalysisReport
 from inventory.manifests.models import ManifestUpload
 from inventory.sbom.models import SBOMJob
 from inventory.sbom.services import delete_job_artifacts, finalize_job, purge_expired_artifacts
 from inventory.tasks.maintenance import purge_expired_artifacts as purge_task
-from inventory.users.models import Org, User
+from inventory.users.models import Org
 from inventory.users.services import create_org, register_user
 
 pytestmark = pytest.mark.django_db

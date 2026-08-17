@@ -4,17 +4,19 @@ from __future__ import annotations
 
 from django.db.models import QuerySet
 
-from .models import Org, OrgApiKey, OrgMembership, User
+from inventory.common.users import UserT, user_ref
+
+from .models import Org, OrgApiKey, OrgMembership
 
 
-def get_user_orgs(user: User) -> QuerySet[Org]:
+def get_user_orgs(user: UserT) -> QuerySet[Org]:
     """Return the non-ADMIN orgs the user belongs to, ordered by name.
 
     The system ADMIN org (``is_admin_org=True``, Story 2.8) is excluded — it is a
     meta org, not a switchable workspace (Story 2.12), so it never appears in the
     org switcher / ``OrgListView`` even for a global admin (a member of every org).
     """
-    return Org.objects.filter(memberships__user=user, is_admin_org=False).order_by("name")
+    return Org.objects.filter(memberships__user=user_ref(user), is_admin_org=False).order_by("name")
 
 
 def get_org_members(org: Org) -> QuerySet[OrgMembership]:

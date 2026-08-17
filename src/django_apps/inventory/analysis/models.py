@@ -18,7 +18,7 @@ class AnalysisReport(models.Model):
         LICENSE = "license", "License"
         VERSION = "version", "Version currency"
 
-    job = models.ForeignKey("sbom.SBOMJob", on_delete=models.CASCADE, related_name="reports")
+    job = models.ForeignKey("inventory.SBOMJob", on_delete=models.CASCADE, related_name="reports")
     report_type = models.CharField(max_length=10, choices=ReportType.choices)
     artifact_key = models.CharField(max_length=500, null=True, blank=True)
     summary = models.JSONField(default=dict)

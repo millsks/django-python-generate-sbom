@@ -3,8 +3,8 @@
 import pytest
 from rest_framework.test import APIClient
 
+from django_service.users.models import User
 from inventory.users.auth import SESSION_ACTIVE_ORG
-from inventory.users.models import User
 from inventory.users.services import create_org, get_the_admin_org, register_user
 
 

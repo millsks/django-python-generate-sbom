@@ -1,69 +1,21 @@
-"""User and organization models.
+"""Organization, membership, and API-key models.
 
-Story 2.1 introduces the email-based custom ``User`` and the ``OrgMembership``
-link, and builds on the minimal ``Org`` created in Story 1.3 (which anchors
-``OrgScopedModel``'s FK). ``Org`` is the tenant root and is NOT org-scoped.
+Story 2.1 introduced these alongside the email-based ``User``, building on the minimal
+``Org`` created in Story 1.3 (which anchors ``OrgScopedModel``'s FK). ``Org`` is the
+tenant root and is NOT org-scoped.
+
+Story 21.2 moved the concrete ``User`` OUT of this module to
+``django_service.users`` — the host project owns user identity. These models reach it
+through ``settings.AUTH_USER_MODEL`` only; see ``inventory.common.users``.
 """
 
 from __future__ import annotations
 
 from typing import ClassVar
 
-from django.contrib.auth.models import AbstractUser
-from django.contrib.auth.models import UserManager as DjangoUserManager
+from django.conf import settings
 from django.db import models
 from rest_framework_api_key.models import AbstractAPIKey, BaseAPIKeyManager
-
-
-class UserManager(DjangoUserManager["User"]):
-    """Manager for the email-based User model (no username)."""
-
-    def create_user(  # type: ignore[override]
-        self, email: str, password: str | None = None, **extra_fields: object
-    ) -> User:
-        """Create and save a user identified by email."""
-        if not email:
-            raise ValueError("Users must have an email address.")
-        email = self.normalize_email(email)
-        user = self.model(email=email, **extra_fields)
-        user.set_password(password)
-        user.save(using=self._db)
-        return user
-
-    def create_superuser(  # type: ignore[override]
-        self, email: str, password: str | None = None, **extra_fields: object
-    ) -> User:
-        """Create and save a superuser and make them a global admin.
-
-        After the user is created, ``services.grant_global_admin`` seeds them
-        into the ADMIN org (Story 2.8). It returns early if the ADMIN org does
-        not yet exist (e.g. migrations have not run), so this is safe at any
-        point in the migration lifecycle. The import is deferred to avoid a
-        circular import between ``models`` and ``services``.
-        """
-        extra_fields.setdefault("is_staff", True)
-        extra_fields.setdefault("is_superuser", True)
-        user = self.create_user(email, password, **extra_fields)
-        from . import services
-
-        services.grant_global_admin(user)
-        return user
-
-
-class User(AbstractUser):
-    """A person with an account; email is the unique login identifier."""
-
-    username = None  # type: ignore[assignment]
-    email = models.EmailField(unique=True)
-
-    USERNAME_FIELD = "email"
-    REQUIRED_FIELDS: ClassVar[list[str]] = []
-
-    objects = UserManager()  # type: ignore[misc]
-
-    def __str__(self) -> str:
-        """Return the user's email."""
-        return self.email
 
 
 class Org(models.Model):
@@ -94,7 +46,9 @@ class OrgMembership(models.Model):
         MEMBER = "member", "Member"
 
     org = models.ForeignKey(Org, on_delete=models.CASCADE, related_name="memberships")
-    user = models.ForeignKey("users.User", on_delete=models.CASCADE, related_name="org_memberships")
+    # settings.AUTH_USER_MODEL, not "users.User": the app must not name the host's app
+    # label. Django treats this as a swappable dependency and resolves it lazily.
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="org_memberships")
     role = models.CharField(max_length=10, choices=Role.choices)
     created_at = models.DateTimeField(auto_now_add=True)
 

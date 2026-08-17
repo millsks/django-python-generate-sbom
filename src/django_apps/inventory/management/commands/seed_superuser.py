@@ -14,7 +14,7 @@ from typing import Any
 import structlog
 from django.core.management.base import BaseCommand
 
-from ...models import User
+from inventory.common.users import create_superuser, user_model
 
 logger = structlog.get_logger()
 
@@ -31,8 +31,8 @@ class Command(BaseCommand):
         if not email or not password:
             logger.info("seed_superuser_skipped", reason="env_not_set")
             return
-        if User.objects.filter(email__iexact=email).exists():
+        if user_model().objects.filter(email__iexact=email).exists():
             logger.info("seed_superuser_skipped", reason="already_exists", email=email)
             return
-        User.objects.create_superuser(email=email, password=password)
+        create_superuser(email=email, password=password)
         logger.info("seed_superuser_created", email=email)

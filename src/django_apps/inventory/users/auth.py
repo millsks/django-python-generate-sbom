@@ -12,7 +12,9 @@ from typing import cast
 
 from rest_framework.request import Request
 
-from .models import Org, OrgApiKey, OrgMembership, User
+from inventory.common.users import UserT, user_ref
+
+from .models import Org, OrgApiKey, OrgMembership
 
 SESSION_ACTIVE_ORG = "active_org_id"
 
@@ -31,7 +33,7 @@ def get_request_org(request: Request) -> Org | None:
         return None
     user = request.user
 
-    memberships = OrgMembership.objects.filter(user=user).select_related("org")
+    memberships = OrgMembership.objects.filter(user=user_ref(user)).select_related("org")
     active_id = request.session.get(SESSION_ACTIVE_ORG)
     if active_id is not None:
         # Exclude the system ADMIN org even when it is pinned in the session (Story 2.18):
@@ -53,8 +55,8 @@ def get_request_org(request: Request) -> Org | None:
 
 def set_active_org_by_slug(request: Request, slug: str) -> Org | None:
     """Set the active org by slug if the user is a member; else return None."""
-    user = cast(User, request.user)
-    membership = OrgMembership.objects.filter(user=user, org__slug=slug).select_related("org").first()
+    user = cast(UserT, request.user)
+    membership = OrgMembership.objects.filter(user=user_ref(user), org__slug=slug).select_related("org").first()
     if membership is None:
         return None
     request.session[SESSION_ACTIVE_ORG] = membership.org_id
@@ -70,6 +72,6 @@ def get_admin_org(request: Request) -> Org | None:
     org = get_request_org(request)
     if org is None:
         return None
-    user = cast(User, request.user)
-    is_admin = OrgMembership.objects.filter(org=org, user=user, role=OrgMembership.Role.ADMIN).exists()
+    user = cast(UserT, request.user)
+    is_admin = OrgMembership.objects.filter(org=org, user=user_ref(user), role=OrgMembership.Role.ADMIN).exists()
     return org if is_admin else None

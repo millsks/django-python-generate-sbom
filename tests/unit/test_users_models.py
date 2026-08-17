@@ -4,7 +4,8 @@ import pytest
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 
-from inventory.users.models import Org, OrgMembership, User
+from django_service.users.models import User
+from inventory.users.models import Org, OrgMembership
 
 
 @pytest.mark.django_db

@@ -49,12 +49,18 @@ INSTALLED_APPS = [
     # task results in the (SQLite) DB via `django-db` so local dev needs no Redis. The
     # container/prod path keeps the Redis result backend (CELERY_RESULT_BACKEND below).
     "django_celery_results",
-    "inventory.users",
-    "inventory.manifests",
-    "inventory.sbom",
-    "inventory.analysis",
+    # Host project: owns the concrete User under the `users` label (Story 21.2).
+    # Listed BEFORE the app so the swappable user model is registered first.
+    "django_service.users",
+    # The one reusable app, imported unqualified from the src/django_apps path root.
+    # Replaces the former four labels (users/manifests/sbom/analysis), which are now
+    # plain subpackages of `inventory` rather than separate Django apps.
+    "inventory",
 ]
 
+# UNCHANGED as a string, deliberately: dissolving the old `users` app freed the label and
+# django_service.users re-took it, so there is no swappable-model migration to reconcile
+# and no third-party migration referencing this setting has to change (Story 21.2).
 AUTH_USER_MODEL = "users.User"
 
 REST_FRAMEWORK = {

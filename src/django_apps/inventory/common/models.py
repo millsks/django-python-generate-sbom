@@ -41,7 +41,8 @@ OrgScopedManager = models.Manager.from_queryset(OrgScopedQuerySet)
 class OrgScopedModel(models.Model):
     """Abstract base giving a model an ``org`` FK and org-scoped manager."""
 
-    org = models.ForeignKey("users.Org", on_delete=models.CASCADE, related_name="+")
+    # Label is "inventory" since Story 21.2 collapsed the four app labels into one.
+    org = models.ForeignKey("inventory.Org", on_delete=models.CASCADE, related_name="+")
 
     objects = OrgScopedManager()
 

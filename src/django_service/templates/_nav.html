@@ -17,6 +17,7 @@
 {% endcomment %}
 {% url 'ui-members' as members_url %}
 {% url 'ui-organization' as organization_url %}
+{% url 'ui-keys' as keys_url %}
 <nav class="nav flex-column nav-pills gap-1" aria-label="Main navigation">
   {% include "_nav_item.html" with url="/" label="Home" icon="house-door" %}
   {% include "_nav_item.html" with url="/upload" label="Upload" icon="cloud-arrow-up" %}
@@ -24,7 +25,7 @@
   {% if is_org_admin %}
     {% include "_nav_item.html" with url=members_url label="Members" icon="people" %}
   {% endif %}
-  {% include "_nav_item.html" with url="/keys" label="API Keys" icon="key" %}
+  {% include "_nav_item.html" with url=keys_url label="API Keys" icon="key" %}
   {% if is_org_admin %}
     {% include "_nav_item.html" with url=organization_url label="Organization" icon="building" %}
   {% endif %}

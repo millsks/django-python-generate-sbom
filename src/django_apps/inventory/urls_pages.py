@@ -17,6 +17,9 @@ Every path added here must also be added to the SPA catch-all's negative lookahe
 from django.urls import path
 
 from inventory.users.pages import (
+    ApiKeyCreateView,
+    ApiKeyRevokeView,
+    ApiKeysView,
     CreateOrgView,
     LeaveOrgView,
     LoginPageView,
@@ -49,4 +52,9 @@ urlpatterns = [
     path("members/remove", MemberRemoveView.as_view(), name="ui-member-remove"),
     path("members/promote", MemberPromoteView.as_view(), name="ui-member-promote"),
     path("members/demote", MemberDemoteView.as_view(), name="ui-member-demote"),
+    # Story 21.7 — API keys. Listing is member-level; create and revoke are admin-only,
+    # matching the DRF endpoints exactly.
+    path("keys", ApiKeysView.as_view(), name="ui-keys"),
+    path("keys/create", ApiKeyCreateView.as_view(), name="ui-key-create"),
+    path("keys/revoke", ApiKeyRevokeView.as_view(), name="ui-key-revoke"),
 ]

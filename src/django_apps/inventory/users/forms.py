@@ -153,3 +153,19 @@ class CreateMemberUserForm(forms.Form):
         widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}),
         help_text="Shown once after creation. Share it with the new member out of band.",
     )
+
+
+class CreateApiKeyForm(forms.Form):
+    """Name a new API key (Story 2.4).
+
+    Name only — the key material is generated and hashed by
+    ``djangorestframework-api-key`` (AD-8). ``max_length`` matches the DRF serializer so the
+    HTML and API entry points cannot drift.
+    """
+
+    name = forms.CharField(
+        max_length=100,
+        label="Key name",
+        help_text="A label to recognise this key by, e.g. \u201cCI pipeline\u201d.",
+        widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "CI pipeline"}),
+    )

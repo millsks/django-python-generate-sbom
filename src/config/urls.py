@@ -67,7 +67,7 @@ if settings.API_DOCS_ENABLED:
 # That coexistence is intentional for the duration of the epic.
 urlpatterns += [
     re_path(
-        r"^(?!api/|health/|static/|admin/|ui/|login|register|logout|organization|members).*$",
+        r"^(?!api/|health/|static/|admin/|ui/|login|register|logout|organization|members|keys).*$",
         SpaView.as_view(),
     ),
 ]

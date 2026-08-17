@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% load crispy_forms_tags %}
+{% comment %} API key management (Story 2.4), converted from KeysPage.tsx.
+
+  Viewable by any member; create and revoke are admin-only — the SPA page's own comment says
+  so, and the DRF endpoints agree. The admin controls are hidden for non-admins here, but the
+  VIEWS enforce it: ApiKeyCreateView and ApiKeyRevokeView are gated by OrgAdminRequiredMixin.
+
+  Only the prefix is ever shown. The full key exists solely on the creation response — only a
+  hash is stored (AD-8, NFR-3.3), so there is nothing to re-display.
+
+  Revoked keys drop out of the list: get_api_keys() filters them, matching what the SPA showed.
+{% endcomment %}
+
+{% block title %}API keys · {{ product_name_short }}{% endblock %}
+
+{% block content %}
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <div>
+      <h1 class="h3 mb-0">API keys</h1>
+      <p class="text-body-secondary mb-0">{{ org.name }}</p>
+    </div>
+  </div>
+
+  <div class="table-responsive mt-4">
+    <table class="table align-middle">
+      <caption class="visually-hidden">Active API keys for {{ org.name }}</caption>
+      <thead>
+        <tr>
+          <th scope="col">Name</th>
+          <th scope="col">Prefix</th>
+          <th scope="col">Created</th>
+          <th scope="col">Last used</th>
+          {% if is_org_admin %}<th scope="col" class="text-end">Actions</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for key in keys %}
+          <tr>
+            <td>{{ key.name }}</td>
+            <td><code>{{ key.prefix }}&hellip;</code></td>
+            <td>{{ key.created|date:"Y-m-d" }}</td>
+            <td>{% if key.last_used_at %}{{ key.last_used_at|date:"Y-m-d" }}{% else %}<span class="text-body-secondary">never</span>{% endif %}</td>
+            {% if is_org_admin %}
+              <td class="text-end">
+                <form method="post" action="{% url 'ui-key-revoke' %}" class="d-inline"
+                      onsubmit="return confirm('Revoke {{ key.name|escapejs }}? Anything using this key stops working immediately.');">
+                  {% csrf_token %}
+                  <input type="hidden" name="key_id" value="{{ key.pk }}">
+                  <button type="submit" class="btn btn-sm btn-outline-danger">Revoke</button>
+                </form>
+              </td>
+            {% endif %}
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="{% if is_org_admin %}5{% else %}4{% endif %}" class="text-body-secondary">
+              No active API keys.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if is_org_admin %}
+    <div class="row mt-2">
+      <div class="col-12 col-md-7 col-lg-5">
+        <div class="card">
+          <div class="card-body">
+            <h2 class="card-title h6">Create a key</h2>
+            <p class="card-text small text-body-secondary">
+              The key is shown once, immediately after creation. It cannot be retrieved later.
+            </p>
+            <form method="post" action="{% url 'ui-key-create' %}" novalidate>
+              {% csrf_token %}
+              {{ create_form|crispy }}
+              <button type="submit" class="btn btn-primary btn-sm">Create key</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% else %}
+    <p class="small text-body-secondary">
+      Only an organization admin can create or revoke keys.
+    </p>
+  {% endif %}
+{% endblock %}

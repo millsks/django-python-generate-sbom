@@ -28,15 +28,17 @@ from inventory.common.users import UserT, user_ref
 from inventory.users.auth import SESSION_ACTIVE_ORG, set_active_org_by_slug
 from inventory.users.forms import (
     AddExistingMemberForm,
+    CreateApiKeyForm,
     CreateMemberUserForm,
     CreateOrgForm,
     LoginForm,
     RegistrationForm,
 )
 from inventory.users.models import Org, OrgMembership
-from inventory.users.selectors import get_org_members
+from inventory.users.selectors import get_api_keys, get_org_members
 from inventory.users.services import (
     MembershipError,
+    create_api_key,
     create_member,
     create_member_user,
     create_org,
@@ -45,6 +47,7 @@ from inventory.users.services import (
     promote_member_to_admin,
     register_user,
     remove_member,
+    revoke_api_key,
 )
 
 #: Where login sends a user who arrived without a `next` (the SPA's DEFAULT_AFTER_LOGIN).
@@ -361,3 +364,79 @@ class LeaveOrgView(OrgMemberRequiredMixin, View):
         request.session.pop(SESSION_ACTIVE_ORG, None)
         messages.success(request, f"You have left {org_name}.")
         return HttpResponseRedirect(DEFAULT_AFTER_LOGIN)
+
+
+# --- API keys (Story 21.7) ----------------------------------------------------------------
+
+KEYS_TEMPLATE = "inventory/keys/list.html"
+
+#: Shown for a revoke that matches nothing. Deliberately identical whether the key never
+#: existed or belongs to another org (AC #4, AD-2) — a distinction would confirm existence.
+KEY_NOT_FOUND = "API key not found."
+
+
+def _keys_context(request: HttpRequest, org: Org, form: CreateApiKeyForm | None = None) -> dict[str, Any]:
+    """Build the keys-page context, defaulting to a blank create form."""
+    return {
+        "keys": get_api_keys(org),
+        "org": org,
+        "create_form": form or CreateApiKeyForm(),
+    }
+
+
+class ApiKeysView(OrgMemberRequiredMixin, TemplateView):
+    """List the active org's API keys.
+
+    Gated on **membership**, not admin: ``KeysPage.tsx`` says so explicitly — "API Keys is
+    viewable by any member; admin flag (create/revoke) comes from useAuth" — and the DRF
+    ``KeysView.get`` matches. Only the create and revoke actions are admin-only.
+    """
+
+    template_name = KEYS_TEMPLATE
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Provide the org's active keys and a blank create form."""
+        context = super().get_context_data(**kwargs)
+        context.update(_keys_context(self.request, self.org))
+        return context
+
+
+class ApiKeyCreateView(OrgAdminRequiredMixin, View):
+    """Create a key and reveal the plaintext exactly once (AC #2, NFR-3.3)."""
+
+    def post(self, request: HttpRequest) -> HttpResponseBase:
+        """Create the key, rendering the plaintext on this response and nowhere else."""
+        form = CreateApiKeyForm(request.POST)
+        if form.is_valid():
+            try:
+                api_key, plaintext = create_api_key(self.org, name=form.cleaned_data["name"])
+            except MembershipError as exc:
+                # The 10-active-key limit (FR-2.2) arrives here as ApiKeyLimitError.
+                form.add_error("name", exc.message)
+            else:
+                # RENDERED, never redirected. Only a HASH is stored (AD-8), so a key not
+                # captured now is permanently unrecoverable — and stashing the plaintext in
+                # the session to survive a redirect would put a live credential in the
+                # session store. The story calls this a correctness constraint, not polish.
+                return render(
+                    request,
+                    "inventory/keys/key_created.html",
+                    {"api_key": api_key, "plaintext": plaintext, "org": self.org},
+                )
+        return render(request, KEYS_TEMPLATE, _keys_context(request, self.org, form))
+
+
+class ApiKeyRevokeView(OrgAdminRequiredMixin, View):
+    """Soft-revoke a key belonging to the active org (FR-2.3)."""
+
+    def post(self, request: HttpRequest) -> HttpResponse:
+        """Revoke, reporting the same message whether the key is absent or another org's."""
+        key_id = request.POST.get("key_id", "")
+        # revoke_api_key scopes the lookup to `org`, so a key belonging to a different org
+        # simply does not match — the wrong-org and never-existed cases are the same code
+        # path and produce the same message (AC #4).
+        if revoke_api_key(self.org, key_id):
+            messages.success(request, "API key revoked.")
+        else:
+            messages.error(request, KEY_NOT_FOUND)
+        return HttpResponseRedirect(reverse("ui-keys"))

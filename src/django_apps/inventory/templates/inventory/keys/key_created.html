@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% comment %} One-time key reveal (Story 21.7, AC #2).
+
+  `OrgApiKey` stores only a HASH (AD-8, NFR-3.3), so this is the single moment the plaintext
+  exists outside the caller's hands. Rendered directly from the POST — never redirected to,
+  never placed in the session, never logged (create_api_key logs only the prefix).
+{% endcomment %}
+
+{% block title %}API key created · {{ product_name_short }}{% endblock %}
+
+{% block content %}
+  <div class="row justify-content-center py-3">
+    <div class="col-12 col-md-9 col-lg-7">
+      <h1 class="h4">API key created</h1>
+      <p class="text-body-secondary">
+        <strong>{{ api_key.name }}</strong> for {{ org.name }}.
+      </p>
+
+      <div class="alert alert-warning" role="alert">
+        <p class="mb-2">
+          <strong>Copy this key now. It cannot be shown again</strong> &mdash; only a hash is
+          stored, so there is no way to recover it later. Losing it means creating a new key.
+        </p>
+        <p class="mb-0"><code class="user-select-all text-break">{{ plaintext }}</code></p>
+      </div>
+
+      <p class="small text-body-secondary">
+        Send it as <code>Authorization: Api-Key &lt;key&gt;</code>. From now on only the
+        prefix <code>{{ api_key.prefix }}&hellip;</code> is shown.
+      </p>
+
+      <a class="btn btn-primary" href="{% url 'ui-keys' %}">Back to API keys</a>
+    </div>
+  </div>
+{% endblock %}

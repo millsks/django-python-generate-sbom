@@ -1,0 +1,31 @@
+{% load static %}
+{% comment %} The seven navigation destinations, in the Story 2.15 / 10.8 order that SideNav.tsx
+  established: Home first, then Upload, History, the admin-only Members, API Keys, the
+  admin-only Organization last, and Global Admins for the global-admin tier.
+
+  Included twice by base.html — once for the md+ sidebar and once for the mobile
+  offcanvas — so the two can never drift apart.
+
+  `is_org_admin` / `is_global_admin` come from django_service.context_processors.ui.
+  Hiding a link is PRESENTATION, never authorization: the views enforce access
+  themselves (Story 21.4 adds the mixins).
+
+  Hrefs are literal paths for now, not {% url %} names, because no server-rendered page
+  exists yet — the SPA catch-all still owns these routes. Stories 21.5-21.18 replace each
+  one with a named URL as they land the corresponding view.
+{% endcomment %}
+<nav class="nav flex-column nav-pills gap-1" aria-label="Main navigation">
+  {% include "_nav_item.html" with url="/" label="Home" icon="house-door" %}
+  {% include "_nav_item.html" with url="/upload" label="Upload" icon="cloud-arrow-up" %}
+  {% include "_nav_item.html" with url="/history" label="History" icon="clock-history" %}
+  {% if is_org_admin %}
+    {% include "_nav_item.html" with url="/members" label="Members" icon="people" %}
+  {% endif %}
+  {% include "_nav_item.html" with url="/keys" label="API Keys" icon="key" %}
+  {% if is_org_admin %}
+    {% include "_nav_item.html" with url="/organization" label="Organization" icon="building" %}
+  {% endif %}
+  {% if is_global_admin %}
+    {% include "_nav_item.html" with url="/platform/global-admins" label="Global Admins" icon="shield-lock" %}
+  {% endif %}
+</nav>

@@ -49,6 +49,14 @@ INSTALLED_APPS = [
     # task results in the (SQLite) DB via `django-db` so local dev needs no Redis. The
     # container/prod path keeps the Redis result backend (CELERY_RESULT_BACKEND below).
     "django_celery_results",
+    # --- Server-rendered UI stack (Story 21.3) ---
+    # crispy_forms renders forms as Bootstrap markup; crispy_bootstrap5 is the pack it
+    # needs (crispy ships none of its own). django_tables2 + django_filters give
+    # server-rendered sortable/paginated/filterable tables.
+    "crispy_forms",
+    "crispy_bootstrap5",
+    "django_tables2",
+    "django_filters",
     # Host project: owns the concrete User under the `users` label (Story 21.2).
     # Listed BEFORE the app so the swappable user model is registered first.
     "django_service.users",
@@ -111,16 +119,25 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = "config.urls"
 
+# TWO template roots, deliberately (Story 21.3):
+#   DIRS      -> the project SHELL (base.html + error pages). Host chrome, owned by
+#                django_service.
+#   APP_DIRS  -> page templates under src/django_apps/inventory/templates/inventory/.
+# Keeping them apart is what lets the app's templates travel to another host later; it
+# costs nothing now.
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [APPS_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                # Product name (two forms) + role-gated navigation state, so no template
+                # hardcodes either string or recomputes the role gates (Story 21.3).
+                "django_service.context_processors.ui",
             ],
         },
     },
@@ -164,10 +181,40 @@ STORAGES = {
 # present so `check` / collectstatic don't warn before the frontend is built.
 # BASE_DIR is now the repo root itself (Story 21.1), so no `.parent` hop here.
 FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
-STATICFILES_DIRS = [FRONTEND_DIST] if FRONTEND_DIST.exists() else []
 SPA_INDEX_FILE = FRONTEND_DIST / "index.html"
 
+# Project-wide static: the vendored Bootstrap/htmx assets and the icon sprite live under
+# django_service (Story 21.3). App static resolves separately through
+# AppDirectoriesFinder at src/django_apps/inventory/static/inventory/.
+# The SPA's built bundle is appended only while it exists (Story 21.19 removes it), so
+# `collectstatic` and `check` do not warn on a tree that has not been built yet.
+STATICFILES_DIRS = [APPS_DIR / "static"]
+if FRONTEND_DIST.exists():
+    STATICFILES_DIRS.append(FRONTEND_DIST)
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# --- Server-rendered UI configuration (Story 21.3) ---
+CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
+CRISPY_TEMPLATE_PACK = "bootstrap5"
+# django-tables2 defaults to its own plain template; point it at the Bootstrap 5 one so
+# every table rendered from 21.10 onward matches the rest of the UI without per-table config.
+DJANGO_TABLES2_TEMPLATE = "django_tables2/bootstrap5.html"
+
+# --- Product name: defined ONCE, in two forms (Story 21.3, AC #4) ---
+# Carries over the rule Story 12.6 established for the SPA's APP_NAME: the name is a
+# single source, never a literal in a template. Two forms because the header brand and a
+# per-page <title> suffix want the short one while documents and the landing page want
+# the full one. Exposed to templates by django_service.context_processors.ui.
+PRODUCT_NAME = "Python Inventory Supply Lens"
+PRODUCT_NAME_SHORT = "Supply Lens"
+
+# Footer + header chrome values, mirroring the SPA's config.ts so the server-rendered
+# shell reproduces it (Story 12.3 footer, Story 11.8 header links, Story 11.20 API docs
+# link). Env-overridable exactly as the Vite VITE_* equivalents were.
+PRODUCT_VERSION = env.str("PRODUCT_VERSION", default="0.1.0")
+REPO_URL = env.str("REPO_URL", default="https://github.com/millsks/django-python-generate-sbom")
+DOCS_URL = env.str("DOCS_URL", default="https://millsks.github.io/django-python-generate-sbom/")
 
 # --- Redis / Celery (AD-4, AD-6) ---
 REDIS_URL = env.str("REDIS_URL", default="redis://localhost:6379/0")

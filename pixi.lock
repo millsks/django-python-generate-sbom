@@ -99,15 +99,19 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/click-plugins-1.1.1.2-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/click-repl-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/crispy-bootstrap5-2026.3-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cyclonedx-python-lib-11.11.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/defusedxml-0.7.1-pyhd8ed1ab_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/distlib-0.4.3-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-6.0.6-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-celery-results-2.5.1-pyh29332c3_2.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/django-crispy-forms-2.6-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-environ-0.14.0-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/django-filter-26.1-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-storages-1.14.6-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-5.2.9-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-ext-6.0.6-pyhcf101f3_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/django-tables2-3.0.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-3.17.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-api-key-3.1.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-stubs-3.16.9-pyhcf101f3_0.conda
@@ -307,15 +311,19 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/click-plugins-1.1.1.2-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/click-repl-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/crispy-bootstrap5-2026.3-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cyclonedx-python-lib-11.11.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/defusedxml-0.7.1-pyhd8ed1ab_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/distlib-0.4.3-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-6.0.6-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-celery-results-2.5.1-pyh29332c3_2.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/django-crispy-forms-2.6-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-environ-0.14.0-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/django-filter-26.1-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-storages-1.14.6-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-5.2.9-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-ext-6.0.6-pyhcf101f3_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/django-tables2-3.0.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-3.17.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-api-key-3.1.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-stubs-3.16.9-pyhcf101f3_0.conda
@@ -449,15 +457,19 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/click-plugins-1.1.1.2-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/click-repl-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/crispy-bootstrap5-2026.3-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cyclonedx-python-lib-11.11.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/defusedxml-0.7.1-pyhd8ed1ab_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/distlib-0.4.3-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-6.0.6-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-celery-results-2.5.1-pyh29332c3_2.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/django-crispy-forms-2.6-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-environ-0.14.0-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/django-filter-26.1-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-storages-1.14.6-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-5.2.9-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-ext-6.0.6-pyhcf101f3_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/django-tables2-3.0.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-3.17.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-api-key-3.1.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-stubs-3.16.9-pyhcf101f3_0.conda
@@ -650,15 +662,19 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/click-plugins-1.1.1.2-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/click-repl-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/crispy-bootstrap5-2026.3-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cyclonedx-python-lib-11.11.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/defusedxml-0.7.1-pyhd8ed1ab_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/distlib-0.4.3-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-6.0.7-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-celery-results-2.5.1-pyh29332c3_2.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/django-crispy-forms-2.6-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-environ-0.14.0-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/django-filter-26.1-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-storages-1.14.6-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-5.2.9-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/django-stubs-ext-6.0.6-pyhcf101f3_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/django-tables2-3.0.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-3.17.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-api-key-3.1.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-stubs-3.16.9-pyhcf101f3_0.conda
@@ -3239,6 +3255,21 @@ packages:
   run_exports: {}
   size: 27011
   timestamp: 1733218222191
+- conda: https://conda.anaconda.org/conda-forge/noarch/crispy-bootstrap5-2026.3-pyhcf101f3_0.conda
+  sha256: 6375db927e40396f7a959f4f625d4181830c58da2b5be0127720ab97cf252d71
+  md5: 1c51bee309c35af31f83ce0ca27d8a7a
+  depends:
+  - python >=3.10,<4.0
+  - django-crispy-forms >=2.3
+  - django >=4.2
+  - python
+  license: MIT
+  license_family: MIT
+  purls:
+  - pkg:pypi/crispy-bootstrap5?source=hash-mapping
+  run_exports: {}
+  size: 20973
+  timestamp: 1777644597535
 - conda: https://conda.anaconda.org/conda-forge/noarch/cyclonedx-python-lib-11.11.0-pyhcf101f3_0.conda
   sha256: 8a1063a7a25fabee8d8bebc15a2b9ef1865258a4f471a87843328c1254d11f7d
   md5: f6f4fd8bb03965ca2f5b13204ba119d6
@@ -3324,6 +3355,19 @@ packages:
   run_exports: {}
   size: 32064
   timestamp: 1737569481405
+- conda: https://conda.anaconda.org/conda-forge/noarch/django-crispy-forms-2.6-pyhd8ed1ab_0.conda
+  sha256: eebf9e1764668adeb6c375680f321df6d914bbc555931102bdee287a370cdd3d
+  md5: 508723181d63a82d02be0016a67f26b3
+  depends:
+  - django >=2.2
+  - python >=3.5
+  license: MIT
+  license_family: MIT
+  purls:
+  - pkg:pypi/django-crispy-forms?source=hash-mapping
+  run_exports: {}
+  size: 31994
+  timestamp: 1772364407079
 - conda: https://conda.anaconda.org/conda-forge/noarch/django-environ-0.14.0-pyhd8ed1ab_0.conda
   sha256: 43d65b256c87ef563a1542284451390a88a03f70c877a657971b08490d3a8ac4
   md5: f8ca3b24bd72a72d90b14a16ebdc0dbd
@@ -3337,6 +3381,20 @@ packages:
   run_exports: {}
   size: 26258
   timestamp: 1781829116726
+- conda: https://conda.anaconda.org/conda-forge/noarch/django-filter-26.1-pyhc364b38_0.conda
+  sha256: 54b12b803bccb0cdc2cdf0b80ae355503075e79db964d6589b5ed89f93d9796b
+  md5: 93a6e66eaf6351544126980ec317807f
+  depends:
+  - python >=3.10
+  - django >=5.2
+  - python
+  license: BSD-3-Clause
+  license_family: BSD
+  purls:
+  - pkg:pypi/django-filter?source=hash-mapping
+  run_exports: {}
+  size: 59275
+  timestamp: 1783860348479
 - conda: https://conda.anaconda.org/conda-forge/noarch/django-storages-1.14.6-pyhd8ed1ab_0.conda
   sha256: 6b2c7b5a9b1a54cdf112b23f5cc9ea188a2ca9c9adfa2c01a7c80ce5cf685f2d
   md5: 1add7ec715925a2bfe7b733dd7359e12
@@ -3388,6 +3446,19 @@ packages:
   run_exports: {}
   size: 15693
   timestamp: 1782230617917
+- conda: https://conda.anaconda.org/conda-forge/noarch/django-tables2-3.0.0-pyhd8ed1ab_0.conda
+  sha256: 85bfff06f6042563bdeb045b74d360116614a4401d88f2382baec5962052f65c
+  md5: 05fcb67821a069b668abec3fe439bc8b
+  depends:
+  - django >=4.2
+  - python >=3.10
+  license: BSD-2-Clause
+  license_family: BSD
+  purls:
+  - pkg:pypi/django-tables2?source=hash-mapping
+  run_exports: {}
+  size: 66712
+  timestamp: 1777561143522
 - conda: https://conda.anaconda.org/conda-forge/noarch/djangorestframework-3.17.1-pyhd8ed1ab_0.conda
   sha256: f4ffa67ccccbaff521c26e982e58c0beb63d7c270248ba5ca4d703e8caf62b99
   md5: 0b89843127297ad8ef3ff538858fc1f9

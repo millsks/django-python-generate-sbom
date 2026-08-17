@@ -5,8 +5,15 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
+      # The vendored third-party releases (Story 21.3) must stay byte-identical to
+      # upstream so they can be verified against the published artifact — see
+      # src/django_service/static/VENDOR.md. Appending a newline or trimming whitespace
+      # would silently break that. Our own app.css / theme.js / icons.svg are NOT
+      # excluded; only the files we did not author.
       - id: trailing-whitespace
+        exclude: &vendored ^src/django_service/static/(css/bootstrap\.min\.css|js/(bootstrap\.bundle|htmx)\.min\.js)$
       - id: end-of-file-fixer
+        exclude: *vendored
       - id: check-yaml
         # mkdocs.yml uses a pymdownx python-name YAML tag (mermaid custom_fence)
         # that the default safe loader cannot construct, so it is excluded here.
@@ -19,6 +26,7 @@ repos:
       - id: check-case-conflict
       - id: debug-statements
       - id: mixed-line-ending
+        exclude: *vendored
   - repo: https://github.com/millsks/conventional-commit-hook
     rev: v0.1.1
     hooks:

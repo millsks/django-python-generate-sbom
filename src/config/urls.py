@@ -9,11 +9,21 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path, re_path
 
+from django_service.views import ShellPreviewView
 from inventory.common.views import SpaView, health
 
 urlpatterns = [
     path("health/", health, name="health"),
     path("admin/", admin.site.urls),
+    # Story 21.3: the server-rendered shell, mounted under a TEMPORARY prefix.
+    #
+    # The SPA catch-all below still owns every real page path (/upload, /history, ...)
+    # for the whole of Epic 21, so the shell needs somewhere it will not be shadowed —
+    # hence `ui/`, which is also added to the catch-all's negative lookahead.
+    #
+    # Stories 21.5-21.18 claim the real paths one at a time as each page is converted,
+    # and Story 21.19 removes the SPA and this prefix along with it.
+    path("ui/", ShellPreviewView.as_view(), name="shell-preview"),
     path("api/v1/", include("inventory.users.urls")),
     path("api/v1/", include("inventory.manifests.urls")),
     path("api/v1/", include("inventory.sbom.urls")),
@@ -35,7 +45,9 @@ if settings.API_DOCS_ENABLED:
         path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
     ]
 
-# The SPA catch-all must remain last so it never shadows the routes above.
+# The SPA catch-all must remain last so it never shadows the routes above. `ui/` joins the
+# exclusion list for the server-rendered shell (Story 21.3); it goes away with the SPA in
+# Story 21.19.
 urlpatterns += [
-    re_path(r"^(?!api/|health/|static/|admin/).*$", SpaView.as_view()),
+    re_path(r"^(?!api/|health/|static/|admin/|ui/).*$", SpaView.as_view()),
 ]

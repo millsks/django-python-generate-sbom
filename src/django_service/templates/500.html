@@ -1,0 +1,44 @@
+{% load static %}<!doctype html>
+{% comment %} The 500 page is deliberately STANDALONE — it does not extend base.html.
+
+  Django's `server_error` handler renders this template with an EMPTY context: no
+  context processors run, so `product_name_short`, `user`, and the navigation flags would
+  all be blank, and the shell would render with an empty brand and no nav. Worse, the
+  shell touching the database (the nav role gates query OrgMembership) is exactly the
+  wrong thing to attempt on a page that exists because something already failed.
+
+  The `static` template tag is safe here — it is a tag, not a context variable — so the
+  page still gets the vendored stylesheet and the theme.
+
+  The product name is intentionally absent rather than hardcoded (AC #4: no literal
+  duplication), which is why this page is branded only by the favicon and its wording.
+{% endcomment %}
+<html lang="en" data-bs-theme="light">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('theme-mode');
+          var mode = (stored === 'light' || stored === 'dark')
+            ? stored
+            : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          document.documentElement.setAttribute('data-bs-theme', mode);
+        } catch (e) { /* keep the default */ }
+      })();
+    </script>
+    <title>Server error</title>
+    <link rel="icon" href="{% static 'images/favicon.svg' %}" type="image/svg+xml">
+    <link rel="stylesheet" href="{% static 'css/bootstrap.min.css' %}">
+  </head>
+  <body class="d-flex align-items-center justify-content-center min-vh-100">
+    <main class="text-center px-3">
+      <h1 class="display-6">Something went wrong</h1>
+      <p class="lead text-body-secondary mx-auto" style="max-width: 42rem;">
+        The server hit an unexpected error. The problem has been logged; please try again.
+      </p>
+      <a class="btn btn-primary mt-3" href="/">Back to home</a>
+    </main>
+  </body>
+</html>

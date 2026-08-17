@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% comment %} Error page (Story 21.3). Extends the shell so an error still shows the header, nav, and
+  footer instead of dropping the user onto a bare Django page.
+
+  500.html is the exception and is standalone — see the comment in that file: Django
+  renders it with an empty context, so the shell cannot work there. 403/404/403_csrf are
+  rendered through the normal request path with context processors intact. {% endcomment %}
+
+{% block title %}403 — Session expired{% endblock %}
+
+{% block content %}
+  <div class="py-5 text-center">
+    <h1 class="display-6">Session expired</h1>
+    <p class="lead text-body-secondary mx-auto" style="max-width: 42rem;">
+      Your session expired or the form was stale, so the request was rejected for your safety. Reload the page and submit it again.
+    </p>
+    <a class="btn btn-primary mt-3" href="/">Back to home</a>
+  </div>
+{% endblock %}

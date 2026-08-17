@@ -5,7 +5,7 @@
 #   in-progress    — dev-story implementation underway
 #   review         — implementation complete, awaiting code-review
 #   done           — merged and verified
-last_updated: 2026-07-08
+last_updated: 2026-08-16
 
 development_status:
   epic-1: done
@@ -355,3 +355,78 @@ development_status:
   # Reopened (dev-loop): the containerless loop served the API but no UI — no
   # fe-dev task, no vite dev proxy. 20.8 adds the Vite HMR frontend to pixi run dev.
   20-8-frontend-local-dev-loop: done
+
+  # Epic 21 — Server-Rendered Django UI & the Reusable `inventory` App. Replaces the React 19 + MUI 9 SPA
+  # (frontend/, 4578 non-test lines, 39 vitest files, 10 routes) with server-rendered Django views/forms, AND
+  # restructures the repo to a src/ layout copied from the django-15-factor-base reference application:
+  # src/config/ (settings, urls, wsgi/asgi, celery), src/django_service/ (HOST project — the concrete `users`
+  # app plus project-wide templates/static/media, APPS_DIR), src/django_apps/ (a PATH ROOT with no __init__.py),
+  # and tests/ + manage.py + pyproject.toml at the repo root. The four apps (users/manifests/sbom/analysis)
+  # collapse into ONE app at src/django_apps/inventory/, installed and imported UNQUALIFIED as `inventory`
+  # (reference AD-6) via hatchling sources = ["src", "src/django_apps"] — note the reference's named trap: the
+  # sources mapping is sorted ascending and the FIRST matching prefix wins, so "src" shadows "src/django_apps";
+  # Story 21.1 verifies the built wheel rather than assuming.
+  # AUTH_USER_MODEL = "users.User" is UNCHANGED — collapsing the old users app frees the `users` label and the
+  # concrete User re-takes it at src/django_service/users/, which removes a lot of migration churn.
+  # Stack: django-crispy-forms + crispy-bootstrap5, django-tables2 + django-filter, htmx, Bootstrap 5.3 +
+  # Bootstrap Icons; Excel export moves client-side exceljs -> server-side openpyxl (which is what allows Node
+  # to be removed at all). /api/v1/ and the OrgApiKey contract (AD-8) are UNCHANGED.
+  # RENAME (sbom -> inventory): L1 app package + label (21.2), L4 distribution identity (21.22), L6 product copy
+  # + docs (21.21). DELIBERATELY NOT renamed: the domain models (SBOMJob, ManifestUpload, AnalysisReport keep
+  # their names) and the /api/v1/ paths + DRF field names — "SBOM" is a CycloneDX standards term, not branding,
+  # and renaming the API would break API-key consumers. L5 (GitHub repo, docs-site URL, SonarCloud project key,
+  # Codecov) is OUT OF SCOPE by product-owner decision — note a SonarCloud projectKey cannot be renamed without
+  # permanently losing historical analysis.
+  # PLUGGABILITY IS DEFERRED. The intent is that src/django_apps/inventory/ eventually drops into any
+  # django-15-factor-base platform. This epic takes only the FREE structural steps (path root, unqualified
+  # import name, app-internal templates/static, namespaced URLs, settings.AUTH_USER_MODEL). Four known gaps are
+  # recorded in the epic preamble for a later epic: (1) base.py:52 DEFAULT_AUTHENTICATION_CLASSES and
+  # (2) base.py:55 DEFAULT_PERMISSION_CLASSES hold app classes — reference AD-8 refuses global-default keys
+  # outright; (3) base.py:12 `config` directly imports the app's configure_structlog — reference AD-4 forbids
+  # it; (4) production.py:42 STORAGES["default"] is an app-owned backend, off AD-8's contributable surface.
+  # Also deferred: contribution module, component.toml, src/config/startup composition,
+  # django_service.__api_version__, the navigation registry as data, and the adoption gate test. MIDDLEWARE is
+  # already clean.
+  # PRODUCT DISPLAY NAME (settled): "Python Inventory Supply Lens", replacing APP_NAME = 'Generate SBOM'. It
+  # lands in base.html in 21.3, NOT in the 21.21 docs sweep. Two forms, defined in ONE place (the Story 12.6
+  # rule): full name for mkdocs site_name / README / landing-page <title> / first mention in docs; short form
+  # "Supply Lens" for the header brand and per-page <title> suffixes. The distribution name renamed in 21.22
+  # derives from it (e.g. python-inventory-supply-lens); the Python IMPORT name of the app stays `inventory`.
+  # CUTOVER: big-bang on a long-lived branch — NOT shippable at every commit; merges once, when 21.23 is green.
+  # The SPA stays in place for the whole epic so partially-converted routes still resolve; it goes in 21.19.
+  # ORDER: 21.1 -> 21.2 (restructure first — moving files after the templates exist means moving them twice)
+  # -> 21.3/21.4 (base template + access mixins every later page depends on) -> 21.5-21.18 (pages)
+  # -> 21.19-21.23 (retire React, rename, reconcile, close out).
+  # SIGN-OFF gates: 21.2 rewrites migration history and REQUIRES A FRESH DATABASE (evidence none is at risk:
+  # Epic 19 is entirely ready-for-dev, nothing is deployed; version = 0.1.0). 21.3 proposes five new deps
+  # (django-crispy-forms, crispy-bootstrap5, django-tables2, django-filter, vendored htmx) and 21.17 proposes
+  # openpyxl — each PROPOSES and does not add until approved (Control Constraints §7). The removals (nodejs +
+  # all npm packages) are covered by the full-replacement decision and carry no add-gate.
+  # ⚠ PLANNING CONFLICT: Epic 16 (16-1..16-4) and Story 17-5-frontend-sso-login are ready-for-dev and specify
+  # REACT implementations (16-1 alone cites frontend/src or .tsx 13 times). This epic invalidates those plans.
+  # Epic 21 deliberately does NOT absorb them — run bmad-correct-course on Epic 16 and Story 17.5 once 21
+  # merges, and do not let a dev agent pick either up meanwhile. Epic 15 is backend-only and unaffected.
+  epic-21: backlog
+  21-1-restructure-to-src-layout: ready-for-dev
+  21-2-collapse-apps-into-inventory-and-establish-django-service: ready-for-dev
+  21-3-server-rendered-ui-foundation: ready-for-dev
+  21-4-access-control-mixins-and-org-context: ready-for-dev
+  21-5-authentication-pages: ready-for-dev
+  21-6-organization-and-member-management-pages: ready-for-dev
+  21-7-api-key-management-page: ready-for-dev
+  21-8-global-administration-page: ready-for-dev
+  21-9-manifest-upload-and-job-submission-page: ready-for-dev
+  21-10-job-history-table: ready-for-dev
+  21-11-live-job-progress-via-htmx-polling: ready-for-dev
+  21-12-results-page-shell-and-overview-tab: ready-for-dev
+  21-13-sbom-viewer-tab: ready-for-dev
+  21-14-vulnerabilities-tab: ready-for-dev
+  21-15-licenses-tab: ready-for-dev
+  21-16-version-currency-tab: ready-for-dev
+  21-17-server-side-excel-export: ready-for-dev
+  21-18-landing-page-and-visual-identity: ready-for-dev
+  21-19-retire-react-spa-and-node-toolchain: ready-for-dev
+  21-20-architecture-reconciliation: ready-for-dev
+  21-21-documentation-reconciliation-and-product-copy-rename: ready-for-dev
+  21-22-distribution-identity-rename: ready-for-dev
+  21-23-test-parity-audit-and-epic-closeout: ready-for-dev

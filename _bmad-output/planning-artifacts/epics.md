@@ -4,6 +4,11 @@ inputDocuments:
   - _bmad-output/planning-artifacts/prds/prd-django-python-generate-sbom-2026-07-03/prd.md
   - _bmad-output/planning-artifacts/prds/prd-django-python-generate-sbom-2026-07-03/addendum.md
   - _bmad-output/planning-artifacts/architecture/architecture-django-python-generate-sbom-2026-07-03/ARCHITECTURE-SPINE.md
+  # Epic 21 (brownfield) grounds its acceptance criteria in the repository itself,
+  # per the house style established by Epics 19-20.
+  - frontend/src/ (React SPA surface being replaced)
+  - backend/ (Django apps being collapsed into django_apps/sbom/)
+  - pixi.toml, Dockerfile, .github/workflows/ci.yml (build + CI integration points)
 ---
 
 # django-python-generate-sbom - Epic Breakdown
@@ -5813,3 +5818,1024 @@ Django.
 fixes the inaccurate line, warns that `pixi run dev` and the Docker Compose stack both bind `:8000` (stop one
 first), and `backend/tests/unit/test_dev_runner_config.py` asserts the new `frontend` process + `fe-dev` task
 with `pixi run ci` green.
+
+---
+
+## Epic 21: Server-Rendered Django UI & the Reusable `inventory` App
+
+Today the web UI is a React 19 + MUI 9 SPA (`frontend/`) that talks to Django only through `/api/v1/`
+(**AD-5**). This epic **replaces it entirely with server-rendered Django views, forms, and templates**, and in
+the same pass **restructures the repository to a `src/` layout and collapses the four Django apps into one app
+at `src/django_apps/inventory/`**. After this epic the project has one language, one toolchain, one test suite,
+and no Node runtime. Every capability delivered by Epics 2–13 is re-delivered on the new stack at feature
+parity — no FRs are added, none are dropped.
+
+The `/api/v1/` REST surface and the `OrgApiKey` contract (**AD-8**) are **unchanged**. Programmatic access is
+unaffected by this epic; only the *web UI's* consumption of the API goes away, replaced by direct service-layer
+calls (**AD-3**).
+
+**Fixed decisions (architecture consult with the product owner):**
+- **Full replacement, not hybrid.** `frontend/` is deleted; Node, npm, Vite, vitest, and oxlint leave the
+  toolchain. There is no coexistence period and no feature flag.
+- **Stack:** **django-crispy-forms + crispy-bootstrap5** (form rendering), **django-tables2 + django-filter**
+  (the sortable/filterable/paginated tables that make up most of the SPA), **htmx** (live polling, tab loading,
+  modals, bulk actions), **Bootstrap 5.3** (incl. `data-bs-theme` for the light/dark toggle), **Bootstrap
+  Icons** (replacing `@mui/icons-material`). Django Unicorn was considered and rejected — htmx plus a few lines
+  of vanilla JS covers every interaction here without a second state model.
+- **Excel export moves server-side** to **openpyxl**. The four client-side sheet builders are reimplemented as a
+  Django service at output parity (hyperlinks and red-font warning cells included). This is what allows Node to
+  be removed at all.
+- **Cutover is big-bang on a long-lived branch.** The app is not expected to be shippable at every commit inside
+  this epic; the branch merges once, when Story 21.23 is green.
+- **`src/` layout, copied from the `django-15-factor-base` reference application.** The repository becomes
+  `src/config/` (settings, urls, wsgi, asgi, celery_app), `src/django_service/` (the **host project** package —
+  the concrete `users` app plus project-wide `templates/`, `static/`, `media/`), `src/django_apps/` (apps), and
+  `tests/` at the repository root beside `manage.py` and `pyproject.toml`. `BASE_DIR` is four `parent` hops
+  from `src/config/settings/base.py`, and `APPS_DIR = BASE_DIR / "src" / "django_service"` drives
+  `TEMPLATES["DIRS"]`, `STATICFILES_DIRS`, `MEDIA_ROOT`, and `FIXTURE_DIRS`. This reverses the project's
+  original `backend/<project_slug>/` deviation. **AD-13 is amended** accordingly.
+- **One app, `src/django_apps/inventory/`, importable as `inventory`.** The `users`, `manifests`, `sbom`, and
+  `analysis` app labels collapse into a single `inventory` label; `common/` and `tasks/` become submodules of
+  it. Following the reference's AD-6, `src/django_apps/` is a **path root, not a package** — it carries no
+  `__init__.py`, and the app installs and imports as `inventory`, unqualified. Templates and static live inside
+  the app (`src/django_apps/inventory/templates/inventory/`, `.../static/inventory/`).
+- **The app is named `inventory`; what it produces is still an SBOM.** The rename covers the app package and
+  label (L1), the distribution identity (L4 — Story 21.22), and the user-facing product copy and docs (L6 —
+  Story 21.21). It **deliberately does not** rename the domain models: `SBOMJob`, `ManifestUpload`,
+  `AnalysisReport`, and every DRF field name stay exactly as they are, because "SBOM" is a standards term
+  (CycloneDX), not branding. `/api/v1/` paths and payload field names are **frozen** — renaming them would be a
+  breaking change for API-key consumers and belongs to a hypothetical v2, not to this epic.
+- **`AUTH_USER_MODEL = "users.User"` is unchanged.** Collapsing the old `users` app into `inventory` frees the
+  `users` label, and the concrete email-login `User` re-takes it at `src/django_service/users/`. App code
+  references `settings.AUTH_USER_MODEL` / `get_user_model()` and never the concrete class (**AD-17**), but the
+  setting's *value* never moves — which removes a large amount of otherwise-unavoidable migration churn.
+- **Pluggability is deferred.** `inventory` is an ordinary Django app in this epic. See *Deferred —
+  pluggability* below for the four known gaps and why they are not being closed now.
+
+**Grounded facts this epic must honor (verified against the repo):**
+- **Scale of the replacement:** `frontend/src/` is **4,578 non-test lines** plus **3,643 test lines across 39
+  vitest files**. `frontend/src/App.tsx` declares **10 routes** across **9 pages** and **14 components**:
+  `/`, `/register`, `/login`, `/organization`, `/members`, `/keys`, `/upload`, `/results/:taskId`, `/history`,
+  `/platform/global-admins`.
+- **Session auth and CSRF already work.** `backend/config/settings/base.py:46-58` lists
+  `SessionAuthentication` alongside `OrgApiKeyAuthentication`; `frontend/src/api/client.ts` already sends
+  `credentials: 'include'` and an `X-CSRFToken` header read from the `csrftoken` cookie. Server-rendered forms
+  need **no** auth rework — `{% csrf_token %}` is the same mechanism.
+- **The Django template engine is already configured** (`base.py:94-107`) with `APP_DIRS: True` and
+  `DIRS: []`, and the `request`/`auth`/`messages` context processors are already present. WhiteNoise is already
+  in `MIDDLEWARE` (`base.py:83`) with `STATIC_URL`/`STATIC_ROOT` set (`base.py:128-129`).
+- **The AD-5 coupling to remove** is exactly three things: `FRONTEND_DIST` / `STATICFILES_DIRS`
+  (`base.py:143-146`), `SpaView` (`backend/generate_sbom/common/views.py`), and the catch-all
+  `re_path(r"^(?!api/|health/|static/|admin/).*$")` at `backend/config/urls.py:38`.
+- **Apps and migrations:** `INSTALLED_APPS` (`base.py:38-41`) carries the four app labels;
+  `AUTH_USER_MODEL = "users.User"` (`base.py:44`). There are **11 migration files** — `users` 0001–0004
+  (including the `0004_seed_admin_org` **data** migration), `manifests` 0001–0002, `sbom` 0001, `analysis`
+  0001–0002. Collapsing four labels into one changes the app label of **every** model, which is a migration
+  **rewrite**, not a rename.
+- **No production database exists.** Epic 19 (OpenShift deployment) is entirely `ready-for-dev` — stories
+  19-1 through 19-8 are unimplemented — and `pyproject.toml` declares `version = "0.1.0"`. There is no deployed
+  environment holding data that a squash would strand.
+- **Packaging/config coupled to `backend/`:** `backend/pyproject.toml` sets hatchling
+  `packages = ["generate_sbom"]` (L15), `pythonpath = ["."]` (L23), ruff `src` (L31) and `known-first-party`
+  (L50), django-stubs `django_settings_module` (L60), and coverage `source = ["generate_sbom"]` (L73). **24**
+  pixi tasks carry `cwd = "backend"`.
+- **Hatchling `sources` prefix shadowing — a named trap.** The reference application documents that hatchling
+  normalises `[tool.hatch.build.targets.wheel] sources` into a mapping, sorts it **ascending**, and applies the
+  **first matching prefix**. `"src"` sorts before `"src/django_apps"` and would shadow it, leaving the app
+  importable as `django_apps.inventory` rather than `inventory`. The reference is explicit that this "has to be
+  verified against the built wheel, not assumed" — hence the wheel-inspection AC in Story 21.1.
+- **The `sbom` naming footprint:** **154 files** contain "sbom" (case-insensitive, excluding `.git`,
+  `node_modules`, `site/`, `dist/`, `.pixi/`, `_bmad*`). Identity is carried in `pixi.toml:8`
+  (`name = "django-python-generate-sbom"`), `backend/pyproject.toml` (`name = "generate-sbom"`),
+  `frontend/src/config.ts:3` (`APP_NAME = 'Generate SBOM'`), `mkdocs.yml:3-7`
+  (`site_name`/`site_description`/`site_url`/`repo_url`/`repo_name`), `sonar-project.properties:10,17`,
+  four `.env*.example` files, `docker-compose.yml`, `cliff.toml`, `.vscode/settings.json`, and
+  `.github/workflows/release.yml`.
+- **Node/frontend footprint to remove:** `pixi.toml:18` (`nodejs = ">=20"`) and eight `fe-*` tasks
+  (`fe-install`, `fe-dev`, `fe-lint`, `fe-build`, `fe-test`, `fe-typecheck`, `fe-security`, `fe-cov`); the
+  `frontend:` line in `Procfile` (Story 20.8); the `COPY frontend/` + `pixi run fe-build` steps in `Dockerfile`;
+  CI jobs `frontend-quality` (`ci.yml:75`), `frontend-test` (`:90`), `frontend-build` (`:126`) plus the `needs:`
+  arrays at `:143` and `:164` and the Windows job at `:201`; `fe-security` in `maintenance.yml:48`; the
+  `frontend` flag and component in `codecov.yml`; and six `frontend/` references in
+  `sonar-project.properties` (`:21`, `:22`, `:29`, `:30`, `:33`, `:43`).
+- **Behaviour that must be reproduced exactly:** 5s polling (`POLL_MS = 5000`,
+  `frontend/src/hooks/useJobStatus.ts`) stopping at terminal status; history `PAGE_SIZE = 25` with `All`-plus-
+  backend-codes filter lists (`HistoryPage.tsx:49-53`); the five results tabs in order Overview, SBOM,
+  Vulnerabilities, Licenses, Version Currency (`ResultsPage.tsx:26-32`); the four licence tiers as
+  collapsed-when-empty accordions; version-currency `CURRENCY_RANK` ordering (`VersionsTab.tsx:28`); the four
+  Excel sheet builders (`reportSheets.ts:12,49,79,112`) and the `RED_ARGB = 'FFD32F2F'` warning colour; the
+  seven role-gated nav items (`SideNav.tsx:44-51`); and the `theme-mode` localStorage key.
+- **The service layer already exists** and is what the new views call: `users/urls.py` alone exposes 21 routes
+  backed by `services.py`/`selectors.py` per the established file-role convention.
+
+> **⚠ SIGN-OFF GATES.** **Story 21.2** rewrites migration history and **requires a fresh database** — the
+> product owner must confirm at implementation time that no environment holds data worth preserving (the
+> evidence above says none does). **Story 21.3** proposes **five new dependencies** (`django-crispy-forms`,
+> `crispy-bootstrap5`, `django-tables2`, `django-filter`, plus the vendored htmx asset) and **Story 21.17**
+> proposes **`openpyxl`** — each story *proposes* and does not add until approved (Control Constraints §7).
+> The dependency **removals** (`nodejs` and all npm packages) are already covered by the full-replacement
+> decision and carry no add-gate.
+
+**Product display name — settled.** `APP_NAME = 'Generate SBOM'` (`frontend/src/config.ts:3`) is replaced by
+**"Python Inventory Supply Lens"**. The name appears nowhere in the repository today, so there is no existing
+usage to stay consistent with. It first lands in **Story 21.3** (`base.html` header brand), not in the Story
+21.21 docs sweep. Because the full name is long for a header brand and a browser tab, the stories adopt a
+two-form convention: the **full name** for `mkdocs.yml` `site_name`, `README.md`, the `<title>` of the landing
+page, and any first-mention in docs; the **short form "Supply Lens"** for the header brand and per-page
+`<title>` suffixes. Both forms are defined in one place so they are never duplicated as literals — the same
+rule Story 12.6 established for `APP_NAME`. The distribution/package identity renamed in Story 21.22 derives
+from the name (for example `python-inventory-supply-lens`), while the *Python import* name of the app remains
+`inventory`.
+
+> **⚠ PLANNING CONFLICT — Epics 16 and 17.5.** Epic 16 (`16-1` … `16-4`) and Story `17-5-frontend-sso-login`
+> are `ready-for-dev` and specify **React** implementations (`16-1` alone cites `frontend/src`/`.tsx` 13 times).
+> This epic invalidates those implementation plans. Epic 21 deliberately does **not** absorb them. Once 21
+> merges, run `bmad-correct-course` on Epic 16 and Story 17.5 to re-author them against Django views/forms.
+> Epic 15 (lockfile parsers) is backend-only and unaffected.
+
+**Deferred — pluggability into a `django-15-factor-base` platform.** The intent is that
+`src/django_apps/inventory/` eventually drops into any platform built on that reference application. This epic
+takes the structural steps that are **free** — the path root with no `__init__.py`, the unqualified `inventory`
+import name (reference AD-6), app-internal templates and static, namespaced URLs, and
+`settings.AUTH_USER_MODEL` — but does **not** implement the contribution contract. Four gaps are known and
+recorded here so a later epic inherits the analysis rather than redoing it:
+
+| # | Current state | Reference rule violated | Fix when pluggability is taken up |
+|---|---|---|---|
+| 1 | `base.py:52` — `DEFAULT_AUTHENTICATION_CLASSES` contains `…users.authentication.OrgApiKeyAuthentication` | **AD-8** — global-default keys are refused whether or not the base already sets them | Move to per-view `authentication_classes` |
+| 2 | `base.py:55` — `DEFAULT_PERMISSION_CLASSES` = `…users.authentication.HasSessionOrApiKey` | **AD-8** — same | Move to per-view `permission_classes` |
+| 3 | `base.py:12` — `config` imports `generate_sbom.common.logging.configure_structlog` | **AD-4** — `config` reaches tenant apps only through settings composition, never by direct import | `configure_structlog` moves to `django_service` |
+| 4 | `production.py:42` — `STORAGES["default"]` = `…common.storage.PublicEndpointS3Storage` | **AD-8** — not on the enumerated contributable surface | Storage backend moves to `django_service` or is host-configured |
+
+Also deferred with it: the declared contribution module, `component.toml` adoption entries, the
+`src/config/startup/` composition step, `django_service.__api_version__` with a declared supported range
+(reference AD-5), the navigation registry as contributed **data** rather than template markup (reference AD-8),
+and the adoption gate test. `MIDDLEWARE` is already clean — no app-owned entries — so it needs no work.
+
+**ORDER:** **21.1 → 21.2 → 21.3 → 21.4 → 21.5 → … → 21.23.** Phase A (21.1–21.2) restructures the repository
+first because moving files *after* the templates exist means moving them twice. Phase B (21.3–21.4) establishes
+the base template and access-control mixins that every subsequent page depends on. Phases C–F build the pages.
+Phase G (21.18–21.23) retires React and completes the rename **last**, because the SPA catch-all at
+`backend/config/urls.py:38` must not be removed until every route has a Django owner, and the documentation
+sweep should describe the UI that exists rather than the one being built.
+
+### Story 21.1: Restructure the Repository to a `src/` Layout
+
+As a developer,
+I want the Django project restructured into `src/config`, `src/django_service`, and `src/django_apps` with
+`tests/` at the repository root,
+so that the layout matches the `django-15-factor-base` reference application and the reusable app has a
+natural, graduation-ready home.
+
+**Context:** **FIRST story of Epic 21.** Everything else builds on the new layout — moving files *after* the
+Django templates exist would mean moving them twice. Deliberately **mechanical**: no app labels change, no
+models move, no migrations are touched, and the React SPA keeps working end to end. Story 21.2 does the risky
+part. Reverses the project's original `backend/<project_slug>/` scaffold deviation.
+
+**Acceptance Criteria:**
+
+1. **The tree matches the reference layout.**
+   Given `manage.py`, `pyproject.toml`, `config/`, `generate_sbom/`, and `tests/` all live under `backend/`,
+   when the tree is restructured, then `src/config/` holds the settings/urls/wsgi/asgi/celery_app package,
+   `src/django_service/` exists as the host-project package, `src/django_apps/` exists as a path root,
+   `generate_sbom/` is relocated to `src/django_apps/inventory/` as a **straight move** (the four app labels
+   are collapsed in Story 21.2 and must **not** be pulled forward), and `tests/`, `manage.py`, and
+   `pyproject.toml` sit at the repository root.
+2. **`src/django_apps/` is a path root, not a package, and the app imports unqualified.**
+   Given the reference's AD-6, when the layout lands, then `src/django_apps/` contains **no** `__init__.py`,
+   `[tool.hatch.build.targets.wheel]` declares `only-include = ["src"]` and
+   `sources = ["src", "src/django_apps"]`, and the app is importable and installable as **`inventory`** —
+   unqualified — rather than `django_apps.inventory`.
+3. **The hatchling prefix-shadowing trap is verified, not assumed.**
+   Given hatchling normalises `sources` into a mapping, sorts it ascending, and applies the first matching
+   prefix — so `"src"` shadows `"src/django_apps"` — when the wheel is built, then a test **inspects the built
+   wheel's top-level entries** and asserts `config`, `django_service`, and `inventory` are all present at the
+   wheel root, failing if the app landed as `django_apps/inventory`.
+4. **`BASE_DIR` and `APPS_DIR` resolve correctly.**
+   Given `config/settings/base.py:15` computes `BASE_DIR` with three `parent` hops (today = `backend/`), when
+   the settings move to `src/config/settings/`, then `BASE_DIR` uses **four** hops to reach the repository
+   root, `APPS_DIR = BASE_DIR / "src" / "django_service"` is introduced, and `STATIC_ROOT`, `MEDIA_ROOT`, the
+   default SQLite path, and the celerybeat schedule path all resolve to their intended locations — verified by
+   an explicit test, not by inspection.
+5. **`pyproject.toml` is repointed at the new layout.**
+   Given it sets `packages = ["generate_sbom"]` (L15), `pythonpath = ["."]` (L23), ruff `src` (L31) and
+   `known-first-party` (L50), django-stubs `django_settings_module` (L60), and coverage `source` (L73), when
+   the move lands, then every one of those resolves against `src/`, `known-first-party` becomes
+   `["config", "django_service", "inventory", "tests"]`, and coverage measures `src/**`.
+6. **Every pixi task works without `cwd = "backend"`.**
+   Given **24** tasks carry `cwd = "backend"`, when the move lands, then each drops it (or targets the new
+   root), and `pixi run test`, `check`, `lint`, `cov`, `build`, `migrate`, `runserver`, `worker`, `beat`,
+   `collectstatic`, and `dev` all still work.
+7. **Build, CI, and quality tooling follow the move.**
+   Given `Dockerfile` does `COPY backend/ backend/` (and the backend is an **editable** install whose source
+   must be present before `pixi install --locked`), when the move lands, then `Dockerfile`,
+   `.github/workflows/ci.yml`, `sonar-project.properties` (`:21`, `:22`, `:28`, `:30`, `:33`), and
+   `codecov.yml` all reference the new paths and the editable-install ordering still holds.
+8. **The React SPA is unaffected.**
+   Given this story does not touch the frontend, when it lands, then `FRONTEND_DIST` / `STATICFILES_DIRS` /
+   `SPA_INDEX_FILE` still resolve to `frontend/dist/`, `pixi run fe-build` still works, WhiteNoise still serves
+   the SPA, and every SPA route still loads.
+9. **Gate green with no behavioural test changes.**
+   Given the move is mechanical, when `pixi run ci` runs, then it exits 0 with coverage ≥90% and **no** test
+   assertion changed except for import paths — any behavioural change is a signal the story overreached.
+
+### Story 21.2: Collapse Four Apps into `inventory` and Establish `django_service`
+
+As a developer,
+I want the four Django apps merged into one `inventory` app with the concrete `User` model owned by
+`src/django_service/users/`,
+so that the project ships a single cohesive app that references `settings.AUTH_USER_MODEL` rather than owning
+user identity itself.
+
+**Context:** The single largest story in the epic, and deliberately not split: collapsing the app labels and
+relocating the concrete `User` both rewrite migration history, and doing them separately would cost two
+squashes. Carries the fresh-database sign-off gate.
+
+**Acceptance Criteria:**
+
+1. **The four app labels collapse into one.**
+   Given `INSTALLED_APPS` (`base.py:38-41`) lists `users`, `manifests`, `sbom`, and `analysis`, when they are
+   collapsed, then a single `inventory` app remains at `src/django_apps/inventory/`, with the former apps plus
+   `common` and `tasks` as submodules, organised so the established file-role convention still holds
+   (`views.py` = DRF views only, `services.py` = mutations, `selectors.py` = reads).
+2. **`django_service` owns the concrete `User`, and `AUTH_USER_MODEL` does not change.**
+   Given collapsing the old `users` app frees the `users` label, when the host package is established, then
+   `src/django_service/users/` holds the concrete email-login `User` under the **same** `users` label, so
+   `AUTH_USER_MODEL = "users.User"` (`base.py:44`) is **unchanged**, and **no** module inside
+   `src/django_apps/inventory/` imports the concrete `User` class — every reference goes through
+   `settings.AUTH_USER_MODEL` (model FKs) or `get_user_model()` (runtime).
+3. **Domain models keep their names.**
+   Given the rename is of the *app*, not the *domain*, when the collapse lands, then `SBOMJob`,
+   `ManifestUpload`, `AnalysisReport`, `Org`, `OrgMembership`, and `OrgApiKey` all keep their class names,
+   `OrgApiKey` still extends `AbstractAPIKey` (**AD-8** intact), and no DRF serializer field name changes.
+4. **Org models stay in the app.**
+   Given `Org`, `OrgMembership`, and `OrgApiKey` are domain models the app owns, when the split lands, then all
+   three remain inside `inventory` with their `User` FKs pointing at `settings.AUTH_USER_MODEL`.
+5. **Migration history is rewritten to a single initial set.**
+   Given the 11 existing migrations span four app labels including the `users.0004_seed_admin_org` **data**
+   migration, when history is rewritten, then `src/django_apps/inventory/migrations/0001_initial.py` and
+   `src/django_service/users/migrations/0001_initial.py` are the only migration files, the admin-org seeding
+   behaviour from `0004_seed_admin_org` is preserved, `manage.py makemigrations --check --dry-run` reports no
+   drift, and the **fresh database** requirement is documented in `docs/developer/setup.md` **with the product
+   owner's recorded sign-off**.
+6. **The API is byte-identical.**
+   Given every import path and every test changes, when the story completes, then `/api/v1/` responds
+   identically — no URL, payload, or status-code change on any of the 21 `users` routes or the
+   manifests/sbom/analysis routes — the React SPA still functions unchanged against it, `tests/` mirrors the new
+   structure, and `pixi run ci` exits 0 with coverage ≥90%.
+
+### Story 21.3: Server-Rendered UI Foundation
+
+As a developer,
+I want a base template, CSS framework, form renderer, and htmx wired into the project,
+so that every subsequent page story writes only its own template and view instead of re-solving layout,
+styling, and asset delivery.
+
+**Context:** Introduces the five UI dependencies (sign-off gate). Delivers the shell only — the app shell,
+navigation, footer, and theme toggle that `Layout.tsx`, `SideNav.tsx`, and `ThemeModeProvider.tsx` provide
+today. No business page is converted here. **This story is where the new product display name first appears**
+(see the open item above).
+
+**Acceptance Criteria:**
+
+1. **The UI dependencies are proposed and configured.**
+   Given the project has no UI dependencies today, when the foundation lands, then the story **proposes**
+   `django-crispy-forms`, `crispy-bootstrap5`, `django-tables2`, and `django-filter` (conda-forge first per the
+   toolchain standard) plus a **vendored** htmx asset, adds them only after explicit approval, and configures
+   `CRISPY_ALLOWED_TEMPLATE_PACKS`/`CRISPY_TEMPLATE_PACK` for `bootstrap5`.
+2. **Two template roots, matching the reference application.**
+   Given `TEMPLATES` currently has `DIRS: []` and `APP_DIRS: True` (`base.py:94-107`), when templates are
+   added, then `DIRS` becomes `[APPS_DIR / "templates"]` holding the **project shell** (`base.html` plus
+   `403.html`, `403_csrf.html`, `404.html`, `500.html`), `APP_DIRS: True` is retained so
+   `src/django_apps/inventory/templates/inventory/` resolves for app pages, project-wide static lives at
+   `APPS_DIR / "static"` via `STATICFILES_DIRS`, and app static lives at
+   `src/django_apps/inventory/static/inventory/`.
+3. **All assets are served locally.**
+   Given the project self-hosts its OpenAPI assets via drf-spectacular-sidecar, when Bootstrap, Bootstrap
+   Icons, and htmx are added, then all three are served from local static with **no external CDN reference**.
+4. **The app shell reproduces the SPA layout.**
+   Given `Layout.tsx` and `SideNav.tsx` render a header, footer, and seven role-gated nav items
+   (`SideNav.tsx:44-51`), when `base.html` is written, then it provides the same header, footer, and side
+   navigation (Home, Upload, History, Members, API Keys, Organization, Global Admins) with the same role
+   gating, a `{% block title %}` reproducing the per-page document titles, the new product display name as the
+   header brand, and the Django `messages` framework rendered as dismissible alerts.
+5. **The theme toggle survives.**
+   Given `ThemeModeProvider.tsx` persists a `light`/`dark` choice under the `theme-mode` localStorage key and
+   falls back to the OS preference, when the toggle is reimplemented, then it drives Bootstrap 5.3
+   `data-bs-theme`, honours `prefers-color-scheme` when unset, persists under the same `theme-mode` key, and
+   applies with no flash of unstyled content on first paint.
+6. **Gate green.**
+   Given no page has been converted yet, when the story completes, then the shell is reachable at a temporary
+   route that does not collide with the SPA catch-all, unit tests cover the nav role gating and the theme
+   default, and `pixi run ci` exits 0.
+
+### Story 21.4: Access-Control Mixins and Active-Org Context
+
+As a security-conscious developer,
+I want route protection and active-org resolution enforced server-side,
+So that access decisions stop depending on client-side route guards that a user can bypass by editing
+JavaScript.
+
+**Context:** Replaces `ProtectedRoute`, `OrgRoute`, `AdminRoute`, `GlobalAdminRoute`, `OrgSwitcher`,
+`NoOrgState`, and the `AuthProvider` context in one story, because every page story after this depends on them.
+
+**Acceptance Criteria:**
+
+**Given** four React route guards gate pages client-side,
+**When** they are replaced,
+**Then** `LoginRequiredMixin` plus custom `UserPassesTestMixin` subclasses (org-member, org-admin,
+global-admin) enforce the same rules server-side, an unauthenticated request **redirects to login preserving
+the intended destination**, and an authorised-but-wrong-role request returns 403 rather than a redirect.
+
+**Given** `AuthProvider` supplies `activeOrg`, `isAdmin`, and `isGlobalAdmin` to every component,
+**When** the equivalent is built,
+**Then** a context processor exposes the same three values to every template, sourced from the existing
+`get_request_org` helper so the session-based active-org resolution is **shared with** — not duplicated
+from — the API path.
+
+**Given** `OrgSwitcher.tsx` posts to `/orgs/switch/` and a zero-org user sees `NoOrgState`,
+**When** they are reimplemented,
+**Then** the switcher is a POST form (CSRF-protected) in the app shell that calls the existing org-switch
+service directly, and a user with zero org memberships sees the same "no organisation" state on every
+org-scoped page instead of an error.
+
+**Given** access control is the highest-risk conversion in the epic,
+**When** the story completes,
+**Then** unit tests assert every mixin against all four principal types (anonymous, member, org admin, global
+admin) **including cross-org denial** (a member of org A requesting org B's resource gets 403/404 with no
+existence leak, per AD-2), and `pixi run ci` exits 0.
+
+### Story 21.5: Authentication Pages
+
+As a user,
+I want to register, log in, and log out through server-rendered pages,
+So that I can access the application without a JavaScript framework.
+
+**Context:** Replaces `LoginPage.tsx`, `RegisterPage.tsx`, and the account menu, preserving the behaviours
+Epic 10 added (Stories 10.2, 10.3, 10.4, 10.6). No SSO button — Epic 17 is unimplemented.
+
+**Acceptance Criteria:**
+
+**Given** `LoginPage.tsx` and `RegisterPage.tsx` post to `/auth/login/` and `/auth/register/`,
+**When** they are converted,
+**Then** Django `Form` classes rendered through crispy replace them, calling the existing auth services
+directly, and validation errors render inline against the offending field rather than as a single banner.
+
+**Given** registration currently redirects to login on success (Story 10.3) and login autofocuses the email
+field (10.4) and submits on Enter (10.6),
+**When** the pages are converted,
+**Then** all three behaviours are preserved — including the post-login redirect to the originally requested
+page, defaulting to the index (Story 10.2's `DEFAULT_AFTER_LOGIN = '/'`).
+
+**Given** a logged-in user needs to see who they are and sign out (Story 10.5),
+**When** the shell renders,
+**Then** the account menu shows the authenticated user's email and a CSRF-protected logout POST that ends the
+session and redirects to the index.
+
+**Given** authentication must not regress,
+**When** the story completes,
+**Then** tests cover successful and failed login, duplicate-email registration, the redirect-to-intended-
+destination path, and logout session invalidation, and `pixi run ci` exits 0.
+
+### Story 21.6: Organization and Member Management Pages
+
+As an org admin,
+I want to manage my organisation and its members through server-rendered pages,
+So that I can add, remove, and re-role members without the SPA.
+
+**Acceptance Criteria:**
+
+**Given** `OrganizationPage.tsx` is an admin hub linking to members, keys, and org creation (Story 2.11),
+**When** it is converted,
+**Then** an admin-gated page presents the same destinations, and org creation (previously `CreateOrgDialog.tsx`)
+is a crispy form that makes the creating user the new org's admin (FR-1.2).
+
+**Given** `MembersPage.tsx` supports adding a member by email plus temporary password, removing a member, and
+promoting/demoting admin,
+**When** it is converted,
+**Then** each action is a CSRF-protected POST calling the existing member services, the created member's
+credentials are displayed once for out-of-band sharing (FR-1.3), and destructive actions require confirmation.
+
+**Given** an org must always retain at least one admin (FR-1.5),
+**When** the last admin attempts self-demotion or removal,
+**Then** the server rejects it with a form error and the membership is unchanged.
+
+**Given** a non-owner member can leave an org without deleting it (FR-1.7),
+**When** they do so,
+**Then** the org survives, their access ends immediately, and they land on the zero-org state if it was their
+only membership.
+
+**Given** membership changes are authorisation-critical,
+**When** the story completes,
+**Then** tests cover add, remove, promote, demote, last-admin protection, leave-org, and non-admin denial, and
+`pixi run ci` exits 0.
+
+### Story 21.7: API Key Management Page
+
+As an org member,
+I want to create and revoke API keys through a server-rendered page,
+So that I can obtain programmatic credentials without the SPA.
+
+**Acceptance Criteria:**
+
+**Given** `KeysPage.tsx` lists keys and creates them via `/keys/`,
+**When** it is converted,
+**Then** an org-scoped page lists the active keys with their `last_used_at`, and creation is a crispy form
+calling the existing key service.
+
+**Given** a generated key is shown exactly once and never retrievable again (AD-8, NFR-3.3),
+**When** a key is created,
+**Then** the plaintext key is displayed once on the result page with an explicit warning, is **not** written to
+the session, any log, or any subsequent page render, and only the prefix appears in the list thereafter.
+
+**Given** revocation is destructive,
+**When** a user revokes a key,
+**Then** a confirmation step precedes it, revocation is a CSRF-protected POST, and the revoked key
+immediately fails authentication on `/api/v1/`.
+
+**Given** keys are org-scoped (AD-2),
+**When** the story completes,
+**Then** tests assert a member of org A cannot see or revoke org B's keys, the one-time reveal is asserted, and
+`pixi run ci` exits 0.
+
+### Story 21.8: Global Administration Page
+
+As a global administrator,
+I want to manage global admins through a server-rendered page,
+So that platform administration survives the SPA removal.
+
+**Acceptance Criteria:**
+
+**Given** `GlobalAdminsPage.tsx` is gated by `GlobalAdminRoute` and backed by `/admin/global-admins/`,
+**When** it is converted,
+**Then** the page is gated by the global-admin mixin from Story 21.4, lists current global admins, and grants
+or revokes the flag via CSRF-protected POSTs to the existing services.
+
+**Given** global admin is the highest privilege in the system (Story 13.1, AD-14),
+**When** a non-global-admin requests the page by URL,
+**Then** they receive 403 and the page contents never render.
+
+**Given** the platform must not be left without an administrator,
+**When** the last global admin attempts to revoke their own flag,
+**Then** the server rejects it with a form error.
+
+**Given** privilege escalation is the risk here,
+**When** the story completes,
+**Then** tests cover grant, revoke, last-admin protection, and denial for anonymous/member/org-admin
+principals, and `pixi run ci` exits 0.
+
+### Story 21.9: Manifest Upload and Job Submission Page
+
+As a user,
+I want to upload a manifest and start an SBOM job from a server-rendered form,
+So that I can generate SBOMs without the SPA.
+
+**Acceptance Criteria:**
+
+**Given** `UploadPage.tsx` posts a file plus Application ID, Component name, Repository URL, Source branch
+(default `main`), and Output format,
+**When** it is converted,
+**Then** a Django `Form` with a `FileField` and the same five fields — rendered `enctype="multipart/form-data"`
+through crispy — replaces it, with the output-format choices sourced from the backend's canonical list rather
+than a hand-kept copy.
+
+**Given** the upload path enforces validation and a per-org concurrency gate (NFR-3.4, AD-7),
+**When** a submission is rejected for file type, size, or the concurrency limit,
+**Then** the reason renders as a form error on the re-displayed page — the concurrency rejection specifically
+telling the user to retry later — and no job is created.
+
+**Given** a successful submission currently navigates to `/results/{task_id}`,
+**When** the form succeeds,
+**Then** the view redirects to the results URL for the new task (POST-redirect-GET, so a refresh cannot double-
+submit) and dispatch still goes through `delay_on_commit()` (AD-10) with the initial `PENDING` status set by the
+view (AD-12).
+
+**Given** a user with no active org cannot submit,
+**When** they reach the page,
+**Then** they see the zero-org state from Story 21.4 instead of the form.
+
+**Given** upload is the primary user journey,
+**When** the story completes,
+**Then** tests cover a valid upload end-to-end, each rejection path, and the zero-org state, and `pixi run ci`
+exits 0.
+
+### Story 21.10: Job History Table
+
+As a user,
+I want a filterable, paginated table of my organisation's SBOM jobs,
+So that I can find and act on past jobs without the SPA.
+
+**Context:** Replaces `HistoryPage.tsx` (380 lines, the largest page in the SPA) minus its live polling, which
+Story 21.11 adds. This is the story that proves django-tables2 + django-filter can carry the four report tables
+that follow.
+
+**Acceptance Criteria:**
+
+**Given** `HistoryPage.tsx` renders columns Submitted, Manifest, Format, Output, Status, Elapsed, Results,
+**When** it is converted,
+**Then** a django-tables2 table renders the same columns with the same status badges and elapsed-time
+formatting, ordered newest-first, and each row links to its results page.
+
+**Given** the SPA paginates at `PAGE_SIZE = 25` and filters by status (`All`/`In Progress`/`Completed`/
+`Failed`) and manifest format (`All` plus every canonical backend format code, `HistoryPage.tsx:49-53`),
+**When** filtering is converted,
+**Then** a django-filter `FilterSet` provides both filters with page size 25, the format choices are still
+derived from the backend's canonical list so the dropdown cannot offer a value the backend rejects (Story 6.4),
+and changing a filter resets to page 1 while remaining bookmarkable via querystring.
+
+**Given** jobs whose artifacts were purged keep their metadata (Story 7.3),
+**When** such a job renders,
+**Then** it shows the "Artifacts removed" indicator with its expiry date and its delete control is disabled.
+
+**Given** artifacts can be deleted per-job, for a selection, or org-wide by an admin (FR-8.2, Story 7.2),
+**When** the actions are converted,
+**Then** row checkboxes drive a "Delete selected" POST, the org-wide "Delete all artifacts" action is visible
+only to org admins, each is preceded by a confirmation naming exactly what will be removed, and in every case
+the job records survive while only the artifact files are deleted.
+
+**Given** the table is org-scoped (AD-2),
+**When** the story completes,
+**Then** tests cover pagination, both filters, the empty state, the expired-artifact state, single/bulk/org
+delete, non-admin denial of the org-wide delete, and cross-org invisibility, and `pixi run ci` exits 0.
+
+### Story 21.11: Live Job Progress via htmx Polling
+
+As a user,
+I want in-progress jobs to update themselves on screen,
+So that I can watch a job's phase and percentage without reloading the page.
+
+**Context:** Replaces the `useJobStatus` hook, which is the SPA's only real-time mechanism. Both its consumers
+— in-progress history rows and the results-page gate — are converted here.
+
+**Acceptance Criteria:**
+
+**Given** `useJobStatus` polls `GET /sbom/status/{taskId}/` every 5s and stops at a terminal status
+(`POLL_MS = 5000`),
+**When** it is converted,
+**Then** a partial-rendering view polled by htmx at the same 5-second interval replaces it, reading status
+through the existing selector rather than over HTTP (AD-1), and **polling stops** once the job reaches a
+terminal state — verified by asserting no further requests are issued.
+
+**Given** in-progress history rows show the current phase, percentage, and a progress bar (Story 6.2),
+**When** a row polls,
+**Then** only that row's partial is swapped, terminal rows never poll at all, and a row that completes or fails
+during polling swaps to its final state in place — including the failure reason for a failed job.
+
+**Given** a still-running job's elapsed time ticks from `created_at` (Story 6.3),
+**When** the row refreshes,
+**Then** elapsed time updates with each poll and freezes at the recorded duration once the job finishes.
+
+**Given** the results page gates on job completion,
+**When** a user opens results for a running job,
+**Then** they see the phase and progress bar, the page polls at the same interval, and it renders the full
+results view once the job reaches a terminal state.
+
+**Given** polling drives load against the app,
+**When** the story completes,
+**Then** tests assert the terminal-state stop condition, the per-row swap, and the results-page transition, and
+`pixi run ci` exits 0.
+
+### Story 21.12: Results Page Shell and Overview Tab
+
+As a user,
+I want a shareable results page with an Overview of my SBOM job,
+So that I can see summary metrics and reach the detail views.
+
+**Acceptance Criteria:**
+
+**Given** `ResultsPage.tsx:26-32` declares five tabs in the order Overview, SBOM, Vulnerabilities, Licenses,
+Version Currency,
+**When** the shell is converted,
+**Then** the same five tabs render in the same order at the same shareable `/results/<task_id>` URL, the active
+tab is reflected in the URL so a tab is bookmarkable and survives refresh, and tab content loads via htmx.
+
+**Given** results are org-scoped and a cross-org or unknown task must not leak existence (AD-2),
+**When** an unauthorised user requests a results URL,
+**Then** they receive the same response as for a non-existent task, with no distinction between the two.
+
+**Given** `OverviewTab.tsx` renders summary cards entirely from the job's `summary_stats` with no per-report
+fetch (NFR-2.2),
+**When** it is converted,
+**Then** the same metrics render from the same single source, each card deep-links to its detail tab, and the
+SBOM download is available.
+
+**Given** a metric backed by a failed analysis phase must not show a misleading zero (FR-6.7),
+**When** a phase has failed,
+**Then** that metric renders "Unavailable" and the rest of the Overview still renders.
+
+**Given** a completed job whose artifacts were purged retains only its summary (Story 7.3),
+**When** its results page is opened,
+**Then** the retention warning and the Overview render, and the detail tabs and downloads are unavailable
+rather than erroring.
+
+**Given** results are the core read path,
+**When** the story completes,
+**Then** tests cover the tab shell, cross-org denial, the failed-phase metric, and the purged-artifact state,
+and `pixi run ci` exits 0.
+
+### Story 21.13: SBOM Viewer Tab
+
+As a user,
+I want to read the generated SBOM in the browser,
+So that I do not have to download it to inspect it.
+
+**Acceptance Criteria:**
+
+**Given** `SbomTab.tsx` offers a structured component table and a raw document view behind a toggle (Story 8.6),
+**When** it is converted,
+**Then** both views are available behind the same toggle, defaulting to the component table, reading the
+document from the existing inline endpoint's underlying selector.
+
+**Given** the component table is sortable and shows ecosystem and direct/transitive information (Stories 8.8,
+8.26),
+**When** it is converted,
+**Then** sorting is server-side via querystring on the same columns, and the ecosystem and direct/transitive
+data still render.
+
+**Given** a raw SBOM document can be large,
+**When** the raw view renders,
+**Then** it is served without blocking the rest of the page and without loading the entire document into the
+tab's initial payload.
+
+**Given** an unavailable or expired artifact must not read as an error (Story 7.3),
+**When** the document is missing,
+**Then** the tab shows the retention notice.
+
+**Given** the viewer is read-only,
+**When** the story completes,
+**Then** tests cover both views, sorting, and the unavailable state, and `pixi run ci` exits 0.
+
+### Story 21.14: Vulnerabilities Tab
+
+As a user,
+I want a sortable, severity-filterable table of vulnerable packages,
+So that I can triage my dependencies' security findings.
+
+**Acceptance Criteria:**
+
+**Given** `VulnerabilitiesTab.tsx` renders a sortable, severity-filterable table with CVE links (Story 5.3),
+**When** it is converted,
+**Then** a django-tables2 table with a django-filter severity filter renders the same columns, severity
+ordering, and outbound advisory links, with sorting and filtering carried in the querystring.
+
+**Given** a clean scan must show an explicit zero-state rather than an empty table (Story 5.3),
+**When** no vulnerabilities were found,
+**Then** the tab states that the scan found none, distinguishing it from "no data".
+
+**Given** an analysis phase can fail while others succeed (FR-6.7),
+**When** the vulnerability phase has failed,
+**Then** the tab shows the shared failure notice with the recorded reason instead of an empty or zero result.
+
+**Given** severity triage is the point of the tab,
+**When** the story completes,
+**Then** tests cover sorting, severity filtering, the zero-state, and the failed-phase notice, and
+`pixi run ci` exits 0.
+
+### Story 21.15: Licenses Tab
+
+As a user,
+I want packages grouped into legal-risk tiers,
+So that I can assess licence compliance at a glance.
+
+**Acceptance Criteria:**
+
+**Given** `LicensesTab.tsx` groups packages into four legal-risk tiers in the backend's descending-attention
+order (Story 5.4),
+**When** it is converted,
+**Then** the same four tiers render in the same order, each as a collapsible section, with the same per-tier
+counts.
+
+**Given** a tier with no packages starts collapsed,
+**When** the tab renders,
+**Then** empty tiers are collapsed and non-empty tiers follow the existing default, and the expand-all /
+collapse-all control from Story 8.17 works across all four.
+
+**Given** the licence phase can fail independently,
+**When** it has failed,
+**Then** the tab shows the shared failure notice with its reason.
+
+**Given** grouping is the tab's whole value,
+**When** the story completes,
+**Then** tests cover tier ordering, per-tier membership, expand/collapse-all, and the failed-phase notice, and
+`pixi run ci` exits 0.
+
+### Story 21.16: Version Currency Tab
+
+As a user,
+I want to see how far behind my dependencies are,
+So that I can prioritise upgrades.
+
+**Acceptance Criteria:**
+
+**Given** `VersionsTab.tsx` renders Package, Installed, Status, PyPI Latest, conda-forge Latest, LTS, and
+Source,
+**When** it is converted,
+**Then** the same seven columns render, package names link to their registry detail page (PyPI or prefix.dev)
+where the ecosystem is known and render as plain text where it is not (Story 8.9).
+
+**Given** the status column sorts by class rank rather than alphabetically (`CURRENCY_RANK`,
+`VersionsTab.tsx:28` — `behind-2+` > `behind-1` > `current` > `unknown`),
+**When** sorting is converted to the server,
+**Then** the same rank ordering is preserved, and the default sort matches today's (by package name, ascending,
+per Story 8.16).
+
+**Given** a conda-forge latest that diverges from the PyPI latest is flagged in the warning colour (Story 8.10),
+**When** the row renders,
+**Then** the divergence is still visually flagged, and the LTS cell still distinguishes "on LTS", "LTS target",
+and "no LTS tracked" (Story 8.7).
+
+**Given** the version phase can fail independently,
+**When** it has failed,
+**Then** the tab shows the shared failure notice with its reason.
+
+**Given** ranked sorting is easy to get wrong server-side,
+**When** the story completes,
+**Then** tests assert the `CURRENCY_RANK` ordering explicitly, plus registry links, divergence flagging, LTS
+states, and the failed-phase notice, and `pixi run ci` exits 0.
+
+### Story 21.17: Server-Side Excel Export
+
+As a user,
+I want to export reports to Excel,
+So that I can share and analyse results outside the application.
+
+**Context:** The last thing standing between this project and a Node-free toolchain. `excelExport.ts` and
+`reportSheets.ts` build workbooks in the browser with exceljs; this story reimplements all four sheet builders
+plus the combined workbook as a Django service using openpyxl. Carries a dependency sign-off gate.
+
+**Acceptance Criteria:**
+
+**Given** the project has no server-side spreadsheet library,
+**When** the export service is built,
+**Then** the story **proposes** `openpyxl` (conda-forge first) and adds it only after explicit approval.
+
+**Given** `reportSheets.ts:12,49,79,112` defines four sheet builders — version currency, vulnerabilities, SBOM
+components, and licences (Stories 8.12–8.14, 8.27),
+**When** they are reimplemented,
+**Then** each produces a sheet with the same name, the same columns in the same order, and the same row content
+as the exceljs output.
+
+**Given** the exceljs builder renders hyperlink cells and red-font cells (`RED_ARGB = 'FFD32F2F'`, Story 8.22),
+**When** the openpyxl equivalent renders,
+**Then** hyperlinks are clickable in Excel and the conda-forge divergence warning renders in the same red,
+**verified against a reference workbook** rather than asserted only on cell values.
+
+**Given** the Overview offers a combined "export all" workbook (Story 8.15),
+**When** it is converted,
+**Then** a single download contains all available sheets, and a report whose phase failed is **omitted** from
+the workbook rather than emitted empty.
+
+**Given** exports are org-scoped downloads,
+**When** the story completes,
+**Then** each export is reachable only by a user entitled to that job's results, tests cover all four sheets,
+the combined workbook, the failed-phase omission, and the styling parity, and `pixi run ci` exits 0.
+
+### Story 21.18: Landing Page and Visual Identity
+
+As a visitor,
+I want a landing page that explains the product,
+So that I understand what the service does before signing in.
+
+**Context:** The last page to convert, and the one carrying Epic 12's branding work. Note that **no UX design
+contract exists for this project** (`epics.md:13`) — parity here is judged against the current rendered SPA, not
+against a design spec.
+
+**Acceptance Criteria:**
+
+**Given** `HomePage.tsx` renders a feature-card landing page for anonymous visitors and an authenticated
+dashboard entry for signed-in users (Story 12.8),
+**When** it is converted,
+**Then** both states render at `/`, with the same feature cards, the same primary calls to action, and the
+documentation link preserved.
+
+**Given** Epic 12 established a theme, icon set, and branding (Stories 12.1, 12.2, 12.5, 12.7),
+**When** the visual identity is carried over,
+**Then** the application name, favicon, and per-page document titles match today's, the Bootstrap Icons
+equivalents of the MUI icons are used consistently across nav, tabs, and actions, and the light and dark themes
+are both legible.
+
+**Given** the SPA is responsive,
+**When** the templates render on a narrow viewport,
+**Then** navigation collapses and the wide report tables scroll within their own container rather than forcing
+the page to scroll horizontally.
+
+**Given** a signed-in user with no org must still get somewhere useful,
+**When** they land on `/`,
+**Then** they see the zero-org state from Story 21.4.
+
+**Given** visual parity is subjective,
+**When** the story completes,
+**Then** the two page states, the document titles, and the favicon are covered by tests, **the product owner
+reviews the rendered result against the current SPA**, and `pixi run ci` exits 0.
+
+### Story 21.19: Retire the React SPA and the Node Toolchain
+
+As a developer,
+I want the React application and every trace of its build chain removed,
+So that the project has one language and one toolchain.
+
+**Context:** Nothing here may start until every route has a Django owner (Stories 21.5–21.18). This is the story
+that makes the epic's benefit real.
+
+**Acceptance Criteria:**
+
+**Given** `frontend/` holds 4,578 non-test lines, 39 vitest files, and a `node_modules` tree,
+**When** the SPA is retired,
+**Then** the entire `frontend/` directory is deleted, and `pixi.toml` drops `nodejs = ">=20"` (`pixi.toml:18`)
+and all eight `fe-*` tasks (`fe-install`, `fe-dev`, `fe-lint`, `fe-build`, `fe-test`, `fe-typecheck`,
+`fe-security`, `fe-cov`).
+
+**Given** Django still serves the SPA entrypoint through a catch-all,
+**When** the coupling is removed,
+**Then** `SpaView` (`src/django_apps/inventory/.../common/views.py`), the `re_path` catch-all, `SPA_INDEX_FILE`, and the
+`FRONTEND_DIST`/`STATICFILES_DIRS` block are all deleted, and **no** request path that previously reached a SPA
+route now 404s — each resolves to its Django view.
+
+**Given** the build and CI reference the frontend,
+**When** they are cleaned,
+**Then** `Dockerfile` drops `COPY frontend/` and the `pixi run fe-build` step (keeping `collectstatic`), the
+`frontend:` line leaves `Procfile` (reversing Story 20.8), and `ci.yml` drops `frontend-quality` (`:75`),
+`frontend-test` (`:90`), and `frontend-build` (`:126`) along with their entries in the `needs:` arrays (`:143`,
+`:164`) and the Windows job (`:201`); `maintenance.yml` drops the `fe-security` npm audit (`:48`).
+
+**Given** coverage and quality tooling report on two source trees,
+**When** they are cleaned,
+**Then** `codecov.yml` drops the `frontend` flag and component, and `sonar-project.properties` drops all six
+frontend references (`:21`, `:22`, `:29`, `:30`, `:33`, `:43`) — leaving Python-only analysis.
+
+**Given** the whole point is a simpler toolchain,
+**When** the story completes,
+**Then** a clean checkout requires no Node runtime to build, test, or run the application, `pixi run ci` exits 0,
+and `pixi run dev` starts web + worker + beat with the UI reachable at `:8000`.
+
+### Story 21.20: Architecture Reconciliation
+
+As an architect,
+I want the architecture spine to describe the system as it now is,
+So that future stories are not planned against decisions this epic reversed.
+
+**Acceptance Criteria:**
+
+**Given** AD-5 mandates a React SPA with "no Django template coupling" — the exact opposite of what now exists,
+**When** the spine is reconciled,
+**Then** AD-5 is marked **superseded** and **AD-15** replaces it, stating that the web UI is server-rendered
+Django templates whose views call the service layer directly and never call `/api/v1/` over HTTP (AD-1, AD-3),
+while `/api/v1/` remains the programmatic contract (AD-8).
+
+**Given** the app structure and user identity both changed,
+**When** the spine is reconciled,
+**Then** **AD-16** records the single `src/django_apps/inventory/` app — installed and imported unqualified as
+`inventory` from a `src/django_apps/` **path root that carries no `__init__.py`**, with app-internal templates
+and static — and **AD-17** records that app code depends on `settings.AUTH_USER_MODEL`/`get_user_model()` with
+the concrete `User` owned by `src/django_service/users/`, noting that the setting's *value* (`users.User`) is
+unchanged.
+
+**Given** AD-13 describes `backend/` and `frontend/` as project-root peers,
+**When** it is amended,
+**Then** it describes the `src/{config,django_service,django_apps}` + root-`tests/` layout adopted from the
+`django-15-factor-base` reference application, records `APPS_DIR = BASE_DIR / "src" / "django_service"` as the
+driver of `TEMPLATES["DIRS"]`/`STATICFILES_DIRS`/`MEDIA_ROOT`, names
+`[tool.hatch.build.targets.wheel] sources` as the **single** import-root declaration site, and the **Source
+tree** section is rewritten to match reality.
+
+**Given** pluggability into a `django-15-factor-base` platform is an explicit future intent but deferred here,
+**When** the spine is reconciled,
+**Then** a **Deferred** entry records the four known gaps (global `DEFAULT_AUTHENTICATION_CLASSES` and
+`DEFAULT_PERMISSION_CLASSES`, `config`'s direct import of the app's `configure_structlog`, and the app-owned
+`STORAGES["default"]` backend) together with the contribution-module, `component.toml`,
+`django_service.__api_version__`, and navigation-registry machinery not implemented, so a later epic inherits
+the analysis rather than redoing it.
+
+**Given** the **Stack** table lists React, @mui/material, Vite, and the retired Cytoscape packages,
+**When** it is updated,
+**Then** those entries are removed and django-crispy-forms, crispy-bootstrap5, django-tables2, django-filter,
+htmx, Bootstrap, and openpyxl are added at their pinned versions.
+
+**Given** the **Capability → Architecture Map** points F6 and F7 at `frontend/`,
+**When** it is updated,
+**Then** both point at the Django app and cite AD-15/AD-16, and the **Deferred** entry for "Frontend state
+management" is removed as moot.
+
+### Story 21.21: Documentation Reconciliation and Product-Copy Rename (L6)
+
+As a user or contributor,
+I want the documentation and all user-facing copy to match the application and its new name,
+So that I am not following instructions for a UI that no longer exists, under a name the product no longer
+uses.
+
+**Context:** Carries **rebrand layer L6**. Deliberately runs *after* the UI exists (21.3–21.18) and after
+React is retired (21.19), so the docs describe what is actually there. The 154-file "sbom" footprint is mostly
+here.
+
+**Acceptance Criteria:**
+
+**Given** `docs/developer/project-layout.md`, `architecture.md`, and `setup.md` describe a `backend/` +
+`frontend/` monorepo with npm and Vite,
+**When** they are reconciled,
+**Then** they describe the `src/{config,django_service,django_apps}` + root-`tests/` layout, the Node-free
+toolchain, the fresh-database requirement from Story 21.2, and a `pixi run dev` loop with no `:5173` frontend
+process.
+
+**Given** the seven user-guide pages and eight how-to pages describe SPA navigation,
+**When** they are reconciled,
+**Then** their navigation instructions and any screenshots match the server-rendered UI.
+
+**Given** `README.md` and `CONTRIBUTING.md` document the frontend build and its test commands,
+**When** they are reconciled,
+**Then** those instructions are removed, and the badge set no longer advertises frontend coverage.
+
+**Given** the product is renamed but still produces SBOMs,
+**When** the copy sweep runs,
+**Then** `mkdocs.yml` `site_name` and `site_description` (`:3-4`), the header brand, `README.md`,
+`CONTRIBUTING.md`, `SECURITY.md`, the `docs/` tree, and `presentations/` all use the new product display name,
+while the words "SBOM" and "CycloneDX" are **retained wherever they name the artifact or the standard** —
+renaming the app must not make the docs describe a different product.
+
+**Given** the rename must not silently miss files,
+**When** the sweep completes,
+**Then** a documented audit accounts for every remaining case-insensitive "sbom" occurrence as either
+**intentional** (domain term, model name, API path, changelog history) or **renamed**, with no unreviewed
+residue.
+
+**Given** the API reference documents the programmatic contract,
+**When** it is checked,
+**Then** it is confirmed **unchanged** — `/api/v1/` did not change in this epic — and the docs build
+(`pixi run docs-build`, `--strict`) passes with no broken links.
+
+### Story 21.22: Distribution Identity Rename (L4)
+
+As a maintainer,
+I want the project's packaging and configuration identity renamed,
+So that the distribution, containers, and tooling refer to the product by its actual name.
+
+**Context:** Carries **rebrand layer L4** — the machine-readable identity, as distinct from 21.21's
+user-facing copy. Runs after 21.19 so it is not competing with the file moves and deletions. **Layer L5
+(external identity — the GitHub repo, docs-site URL, SonarCloud project key, Codecov project) is explicitly
+out of scope**, by product-owner decision; note that a SonarCloud project key cannot be renamed without losing
+all historical analysis, which is why it stays.
+
+**Acceptance Criteria:**
+
+**Given** `pixi.toml:8` declares `name = "django-python-generate-sbom"` and `pyproject.toml` declares the
+distribution `generate-sbom`,
+**When** the identity is renamed,
+**Then** both carry the new project/distribution name, `pixi run build` produces a correspondingly named
+wheel, and `pixi install` still resolves the editable install.
+
+**Given** `docker-compose.yml`, the four `.env*.example` files, `cliff.toml`, `.vscode/settings.json`, and
+`.github/workflows/release.yml` all carry the old identity,
+**When** they are renamed,
+**Then** each uses the new name, the Compose stack still builds and starts, and the release workflow still
+produces a correctly named artifact.
+
+**Given** `CHANGELOG.md` records released history under the old name,
+**When** the rename lands,
+**Then** existing changelog entries and git tags are **left untouched** — history is not rewritten — and only
+forward-looking configuration changes.
+
+**Given** external identity is deliberately unchanged,
+**When** the story completes,
+**Then** `sonar-project.properties` `projectKey`/`projectName` (`:10`, `:17`), the GitHub repo URL, and the
+docs-site URL are confirmed **unchanged**, with the reason recorded in the file so a later contributor does not
+"fix" the inconsistency by accident.
+
+**Given** identity strings are easy to miss,
+**When** the story completes,
+**Then** `pixi run ci` exits 0, the Docker image builds, and a test asserts the distribution name matches the
+declared project name.
+
+### Story 21.23: Test-Parity Audit and Epic Closeout
+
+As a maintainer,
+I want proof that removing 39 frontend test files did not remove coverage of behaviour,
+So that the merge is defensible rather than merely green.
+
+**Context:** The final story; the branch merges when this passes. A coverage percentage alone is not the bar —
+3,643 lines of frontend tests are gone, and this story demonstrates their behaviours are covered elsewhere.
+
+**Acceptance Criteria:**
+
+**Given** 39 vitest files covering pages, components, hooks, and helpers were deleted,
+**When** the audit runs,
+**Then** a mapping records, for each deleted test file, the Django test that now covers the same behaviour —
+or an explicit, justified statement that the behaviour no longer exists (for example SPA routing).
+
+**Given** the coverage gate is `--cov-fail-under=90`,
+**When** the suite runs,
+**Then** the gate passes against the Python tree alone with no threshold reduction, and the `cov` task's
+`--cov` target reflects the new package layout.
+
+**Given** access control was re-implemented from scratch in Story 21.4,
+**When** the audit runs,
+**Then** it confirms every one of the 10 original routes has an authorisation test for anonymous, member,
+org-admin, and global-admin principals, including cross-org denial.
+
+**Given** the epic replaced the entire user interface,
+**When** closeout runs,
+**Then** every route from `App.tsx` is confirmed reachable and functional in the Django UI, the product owner
+signs off on a walkthrough, `pixi run ci` exits 0, and the branch is ready to merge.
+
+**Given** Epic 16 and Story 17.5 were planned against React,
+**When** the epic closes,
+**Then** both are flagged in `sprint-status.yaml` as requiring re-authoring, so no dev agent picks up a story
+that targets a deleted stack.

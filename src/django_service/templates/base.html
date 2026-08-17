@@ -61,6 +61,7 @@
           </a>
 
           <div class="ms-auto d-flex align-items-center gap-1">
+            {% if user.is_authenticated %}{% include "_org_switcher.html" %}{% endif %}
             {% if api_docs_url %}
               <a class="btn btn-link link-body-emphasis p-2" href="{{ api_docs_url }}"
                  target="_blank" rel="noopener noreferrer" aria-label="API docs" title="API docs">

@@ -9,7 +9,7 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path, re_path
 
-from django_service.views import ShellPreviewView
+from django_service.views import OrgSwitchView, ShellPreviewView
 from inventory.common.views import SpaView, health
 
 urlpatterns = [
@@ -24,6 +24,14 @@ urlpatterns = [
     # Stories 21.5-21.18 claim the real paths one at a time as each page is converted,
     # and Story 21.19 removes the SPA and this prefix along with it.
     path("ui/", ShellPreviewView.as_view(), name="shell-preview"),
+    # Story 21.4: the org switcher form posts here. Under `ui/` so the SPA catch-all does
+    # not shadow it, and so it disappears with the prefix in Story 21.19.
+    #
+    # The name is `ui-org-switch`, NOT `org-switch`: inventory/users/urls.py already
+    # registers `org-switch` for the DRF endpoint, and Django resolves a duplicate name to
+    # whichever pattern is registered LAST — which silently pointed the HTML form at the
+    # JSON API. tests/unit/test_org_switcher.py pins the resolved action.
+    path("ui/orgs/switch/", OrgSwitchView.as_view(), name="ui-org-switch"),
     path("api/v1/", include("inventory.users.urls")),
     path("api/v1/", include("inventory.manifests.urls")),
     path("api/v1/", include("inventory.sbom.urls")),

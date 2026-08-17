@@ -23,6 +23,7 @@ from django.conf import settings
 from django.http import HttpRequest
 
 from inventory.users.auth import get_admin_org, get_request_org
+from inventory.users.selectors import get_user_orgs
 from inventory.users.services import is_global_admin
 
 
@@ -47,6 +48,9 @@ def ui(request: HttpRequest) -> dict[str, Any]:
         "active_org": None,
         "is_org_admin": False,
         "is_global_admin": False,
+        # The orgs the switcher may offer. Empty for anonymous users; the switcher hides
+        # itself below two entries (Story 2.19).
+        "switchable_orgs": (),
     }
 
     user = request.user
@@ -56,4 +60,7 @@ def ui(request: HttpRequest) -> dict[str, Any]:
     context["active_org"] = get_request_org(request)
     context["is_org_admin"] = get_admin_org(request) is not None
     context["is_global_admin"] = is_global_admin(user)
+    # get_user_orgs excludes the system ADMIN org, so a global admin is not offered it as a
+    # workspace (Story 2.18) — the switcher lists exactly what they may act as.
+    context["switchable_orgs"] = list(get_user_orgs(user))
     return context

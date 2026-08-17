@@ -194,6 +194,14 @@ if FRONTEND_DIST.exists():
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# --- Authentication redirects (Story 21.4) ---
+# Django defaults LOGIN_URL to /accounts/login/, which this project has never served. The
+# access-control mixins send anonymous users here (with `next`), so it has to be right.
+# Story 21.5 replaces the SPA's /login with the server-rendered page at the same path.
+LOGIN_URL = "/login"
+LOGIN_REDIRECT_URL = "/"
+LOGOUT_REDIRECT_URL = "/"
+
 # --- Server-rendered UI configuration (Story 21.3) ---
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
 CRISPY_TEMPLATE_PACK = "bootstrap5"

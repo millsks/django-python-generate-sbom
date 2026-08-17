@@ -16,6 +16,7 @@ Every path added here must also be added to the SPA catch-all's negative lookahe
 
 from django.urls import path
 
+from inventory.sbom.pages import UploadPageView
 from inventory.users.pages import (
     ApiKeyCreateView,
     ApiKeyRevokeView,
@@ -65,4 +66,6 @@ urlpatterns = [
     path("platform/global-admins", GlobalAdminsView.as_view(), name="ui-global-admins"),
     path("platform/global-admins/grant", GlobalAdminGrantView.as_view(), name="ui-global-admin-grant"),
     path("platform/global-admins/revoke", GlobalAdminRevokeView.as_view(), name="ui-global-admin-revoke"),
+    # Story 21.9 — the primary journey: upload a manifest and start a job.
+    path("upload", UploadPageView.as_view(), name="ui-upload"),
 ]

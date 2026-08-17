@@ -12,9 +12,7 @@ import uuid
 from collections.abc import Iterable
 from typing import cast
 
-from django.conf import settings
 from django.core.files.storage import default_storage
-from django.db import transaction
 from django.db.models import QuerySet
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema, extend_schema_view
@@ -29,8 +27,6 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from inventory.manifests.detection import ManifestParseError, UnsupportedFormatError
-from inventory.manifests.services import upload_manifest
-from inventory.tasks.sbom_pipeline import run_sbom_pipeline
 from inventory.users.auth import get_admin_org, get_request_org
 from inventory.users.serializers import ErrorResponseSerializer
 
@@ -48,12 +44,13 @@ from .serializers import (
     SbomDocumentResponseSerializer,
 )
 from .services import (
-    OUTPUT_FORMAT_MAP,
-    create_job,
+    ConcurrencyLimitError,
+    at_concurrency_limit,
     delete_artifacts_for_jobs,
     delete_job_artifacts,
     estimate_seconds,
     mark_stale_job_timed_out,
+    submit_job,
 )
 
 _NO_ACTIVE_ORG = {"error": "No active org.", "code": "no_active_org"}
@@ -81,13 +78,14 @@ class GenerateJobView(APIView):
         if org is None:
             return Response(_NO_ACTIVE_ORG, status=status.HTTP_404_NOT_FOUND)
 
-        jobs = cast("QuerySet[SBOMJob]", SBOMJob.objects.for_org(org))
-        active = jobs.filter(status__in=_ACTIVE_STATUSES).count()
-        if active >= settings.SBOM_MAX_CONCURRENT_JOBS_PER_ORG:
+        # The gate is checked BEFORE payload validation, deliberately and unchanged: a caller
+        # at the limit gets 429 whether or not their payload is well-formed. `submit_job`
+        # re-checks it, which is harmless and keeps the rule in one place (AD-7).
+        if at_concurrency_limit(org):
             return Response(
                 {"error": "Concurrent job limit reached", "code": "rate_limited"},
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
-                headers={"Retry-After": "60"},
+                headers={"Retry-After": str(ConcurrencyLimitError.retry_after_seconds)},
             )
 
         serializer = GenerateJobSerializer(data=request.data)
@@ -101,29 +99,27 @@ class GenerateJobView(APIView):
         user = request.user if request.user.is_authenticated else None
         size = getattr(data["file"], "size", 0)
 
-        with transaction.atomic():
-            try:
-                upload = upload_manifest(
-                    org,
-                    user,
-                    file_obj=data["file"],
-                    application_id=data["application_id"],
-                    component_name=data["component_name"],
-                    repository_url=data["repository_url"],
-                    source_branch=data["source_branch"],
-                )
-            except UnsupportedFormatError as exc:
-                return Response(
-                    {"error": str(exc), "code": "unsupported_format"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            except ManifestParseError as exc:
-                return Response(
-                    {"error": str(exc), "code": "parse_error"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            job = create_job(org, upload, user, OUTPUT_FORMAT_MAP[data["output_format"]])
-            run_sbom_pipeline.delay_on_commit(str(job.task_id))
+        try:
+            job, upload = submit_job(
+                org,
+                user,
+                file_obj=data["file"],
+                application_id=data["application_id"],
+                component_name=data["component_name"],
+                repository_url=data["repository_url"],
+                source_branch=data["source_branch"],
+                output_format=data["output_format"],
+            )
+        except UnsupportedFormatError as exc:
+            return Response(
+                {"error": str(exc), "code": "unsupported_format"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except ManifestParseError as exc:
+            return Response(
+                {"error": str(exc), "code": "parse_error"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         return Response(
             {

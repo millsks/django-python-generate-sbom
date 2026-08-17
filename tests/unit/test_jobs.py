@@ -10,7 +10,12 @@ from inventory.sbom.models import SBOMJob
 from inventory.sbom.services import finalize_job, update_job_status
 from inventory.users.services import create_org, register_user
 
-_DISPATCH = "inventory.sbom.views.run_sbom_pipeline.delay_on_commit"
+# Story 21.9 moved dispatch out of the view and into `sbom.services.submit_job`, which the
+# DRF endpoint and the server-rendered upload page now share. `submit_job` imports the task
+# lazily (inventory.tasks.sbom_pipeline imports this module, so a top-level import would be
+# circular), so the patch target is the task's own module — its canonical home — rather than
+# a name re-exported by whichever view happens to dispatch.
+_DISPATCH = "inventory.tasks.sbom_pipeline.run_sbom_pipeline.delay_on_commit"
 META = {
     "application_id": "APP-1",
     "component_name": "web",

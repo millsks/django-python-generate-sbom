@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% load crispy_forms_tags %}
+{% comment %} Manifest upload and job submission (converted from UploadPage.tsx).
+
+  enctype="multipart/form-data" is required for the FileField — without it the browser posts
+  only the filename and the form fails validation with no obvious cause.
+
+  Every rejection (unsupported format, parse failure, oversize, concurrency limit) comes back
+  as a form error rather than an error page, so the user keeps what they typed.
+{% endcomment %}
+
+{% block title %}Upload · {{ product_name_short }}{% endblock %}
+
+{% block content %}
+  <div class="row justify-content-center py-2">
+    <div class="col-12 col-lg-8">
+      <h1 class="h3">Generate an SBOM</h1>
+      <p class="text-body-secondary">
+        Upload a dependency manifest for {{ org.name }}. The format is detected automatically.
+      </p>
+
+      <form method="post" enctype="multipart/form-data" novalidate>
+        {% csrf_token %}
+        {{ form|crispy }}
+        <button type="submit" class="btn btn-primary mt-2">Generate SBOM</button>
+      </form>
+    </div>
+  </div>
+{% endblock %}

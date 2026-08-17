@@ -9,16 +9,18 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from datetime import datetime, timedelta
-from typing import cast
+from typing import Any, cast
 
 import structlog
 from django.conf import settings
 from django.core.files.storage import default_storage
+from django.db import transaction
 from django.db.models import QuerySet
 from django.utils import timezone
 
 from inventory.common.users import UserT, user_ref
 from inventory.manifests.models import ManifestUpload
+from inventory.manifests.services import upload_manifest
 from inventory.users.models import Org
 
 from .generation import (
@@ -32,9 +34,13 @@ from .parsers import PackageSpec, resolve_packages
 from .selectors import get_job_by_task_id
 
 __all__ = [
+    "ACTIVE_STATUSES",
+    "OUTPUT_FORMAT_CHOICES",
     "OUTPUT_FORMAT_MAP",
+    "ConcurrencyLimitError",
     "Provenance",
     "SBOMGenerationError",
+    "at_concurrency_limit",
     "build_provenance",
     "create_job",
     "delete_job_artifacts",
@@ -47,6 +53,7 @@ __all__ = [
     "record_generation",
     "resolve_job_packages",
     "sbom_extension",
+    "submit_job",
     "update_job_status",
 ]
 
@@ -59,6 +66,114 @@ OUTPUT_FORMAT_MAP = {
     "spdx-2.3": "spdx-json",
 }
 DEFAULT_OUTPUT_FORMAT = "cdx-json"
+
+# Human labels for the same keys. Kept beside the map on purpose: Story 6.4 was caused by the
+# frontend and backend keeping *separate* format lists that drifted, and the fix is that there
+# is exactly one canonical list. `test_output_format_choices_cover_every_supported_format`
+# fails if a format is added to the map without a label here.
+OUTPUT_FORMAT_LABELS = {
+    "cdx-json": "CycloneDX (JSON)",
+    "cdx-xml": "CycloneDX (XML)",
+    "spdx-2.3": "SPDX (JSON)",
+}
+
+#: Choices for any form or serializer offering an output format. Derived from
+#: OUTPUT_FORMAT_MAP so a form can never offer a value the backend would reject.
+OUTPUT_FORMAT_CHOICES = tuple((value, OUTPUT_FORMAT_LABELS[value]) for value in OUTPUT_FORMAT_MAP)
+
+#: Statuses that count against the per-org concurrency gate (AD-7).
+ACTIVE_STATUSES = (SBOMJob.Status.PENDING, SBOMJob.Status.PROGRESS)
+
+
+class ConcurrencyLimitError(Exception):
+    """Raised when an org is already at ``SBOM_MAX_CONCURRENT_JOBS_PER_ORG`` (AD-7)."""
+
+    #: Mirrors the ``Retry-After`` header the API returns with its 429.
+    retry_after_seconds = 60
+    message = (
+        "This organization already has the maximum number of jobs running. "
+        "Wait for one to finish and try again in about a minute."
+    )
+
+    def __init__(self) -> None:
+        """Initialise with the shared user-facing message."""
+        super().__init__(self.message)
+
+
+def at_concurrency_limit(org: Org) -> bool:
+    """Return True if ``org`` is at or above its concurrent-job limit (AD-7).
+
+    The single implementation of the gate. Both the DRF endpoint and the server-rendered
+    upload page call it, so the API and the web UI cannot diverge on the limit.
+    """
+    jobs = cast("QuerySet[SBOMJob]", SBOMJob.objects.for_org(org))
+    active = jobs.filter(status__in=ACTIVE_STATUSES).count()
+    return bool(active >= settings.SBOM_MAX_CONCURRENT_JOBS_PER_ORG)
+
+
+def submit_job(
+    org: Org,
+    user: UserT | None,
+    *,
+    file_obj: Any,
+    application_id: str,
+    component_name: str,
+    repository_url: str,
+    source_branch: str,
+    output_format: str,
+) -> tuple[SBOMJob, ManifestUpload]:
+    """Gate, store the manifest, create the job, and dispatch the pipeline.
+
+    The whole submission sequence, extracted in Story 21.9 so the DRF endpoint and the
+    server-rendered page share one implementation rather than two that drift.
+
+    The invariants live here and are not to be reproduced by callers:
+
+    - **AD-7** — the concurrency gate is checked before anything is written.
+    - **AD-12** — ``create_job`` performs the sole permitted non-Celery write of the initial
+      ``PENDING`` status.
+    - **AD-10** — dispatch is ``delay_on_commit``, so the worker cannot observe a job row
+      that the surrounding transaction has not yet committed.
+
+    Args:
+        org: The organisation the job belongs to.
+        user: The submitting user, or None for an API-key submission.
+        file_obj: The uploaded manifest.
+        application_id: Provenance — the owning application's identifier.
+        component_name: Provenance — the component name.
+        repository_url: Provenance — the source repository.
+        source_branch: Provenance — the source branch.
+        output_format: One of :data:`OUTPUT_FORMAT_MAP`'s keys.
+
+    Returns:
+        The created job and the stored manifest upload.
+
+    Raises:
+        ConcurrencyLimitError: If the org is already at its limit.
+        UnsupportedFormatError: If the manifest's format cannot be detected.
+        ManifestParseError: If the manifest cannot be parsed.
+    """
+    if at_concurrency_limit(org):
+        raise ConcurrencyLimitError
+
+    # Imported here rather than at module scope: inventory.tasks.sbom_pipeline imports from
+    # this module, so a top-level import would be circular.
+    from inventory.tasks.sbom_pipeline import run_sbom_pipeline
+
+    with transaction.atomic():
+        upload = upload_manifest(
+            org,
+            user,
+            file_obj=file_obj,
+            application_id=application_id,
+            component_name=component_name,
+            repository_url=repository_url,
+            source_branch=source_branch,
+        )
+        job = create_job(org, upload, user, OUTPUT_FORMAT_MAP[output_format])
+        run_sbom_pipeline.delay_on_commit(str(job.task_id))
+
+    return job, upload
 
 
 def create_job(org: Org, manifest: ManifestUpload, user: UserT | None, output_format: str) -> SBOMJob:

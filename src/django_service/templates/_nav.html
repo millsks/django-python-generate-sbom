@@ -19,9 +19,10 @@
 {% url 'ui-organization' as organization_url %}
 {% url 'ui-keys' as keys_url %}
 {% url 'ui-global-admins' as global_admins_url %}
+{% url 'ui-upload' as upload_url %}
 <nav class="nav flex-column nav-pills gap-1" aria-label="Main navigation">
   {% include "_nav_item.html" with url="/" label="Home" icon="house-door" %}
-  {% include "_nav_item.html" with url="/upload" label="Upload" icon="cloud-arrow-up" %}
+  {% include "_nav_item.html" with url=upload_url label="Upload" icon="cloud-arrow-up" %}
   {% include "_nav_item.html" with url="/history" label="History" icon="clock-history" %}
   {% if is_org_admin %}
     {% include "_nav_item.html" with url=members_url label="Members" icon="people" %}

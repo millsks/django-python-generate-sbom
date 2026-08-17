@@ -9,7 +9,8 @@ from __future__ import annotations
 from typing import Any
 
 from django.contrib import messages
-from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
+from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
+from django.shortcuts import render
 from django.urls import reverse
 from django.views import View
 from django.views.generic import FormView
@@ -23,8 +24,8 @@ from inventory.manifests.detection import ManifestParseError, UnsupportedFormatE
 from .filters import JobFilterSet
 from .forms import ManifestUploadForm
 from .models import SBOMJob
-from .selectors import get_jobs
-from .services import ConcurrencyLimitError, delete_artifacts_for_jobs, submit_job
+from .selectors import get_job, get_jobs
+from .services import TERMINAL_STATUSES, ConcurrencyLimitError, delete_artifacts_for_jobs, submit_job
 from .tables import JobTable
 
 
@@ -72,11 +73,7 @@ class UploadPageView(OrgMemberRequiredMixin, FormView):  # type: ignore[type-arg
 
         # POST-redirect-GET (AC #4): a refresh after submitting must not enqueue a second job.
         #
-        # The results path is still owned by the SPA catch-all until Story 21.12 converts it,
-        # so this is a literal path rather than a {% url %} reverse. 21.12 swaps it for
-        # `reverse("ui-job-results", ...)` when the server-rendered page exists — the same
-        # one-at-a-time handover the nav uses.
-        return HttpResponseRedirect(f"/results/{job.task_id}")
+        return HttpResponseRedirect(reverse("ui-job-results", kwargs={"task_id": job.task_id}))
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Expose the active org for the page heading."""
@@ -157,3 +154,65 @@ class JobArtifactsDeleteAllView(OrgAdminRequiredMixin, View):
         deleted = delete_artifacts_for_jobs(jobs)
         messages.success(request, f"Deleted artifacts for {deleted} job(s). The job records were kept.")
         return HttpResponseRedirect(reverse("ui-history"))
+
+
+# --- Live progress (Story 21.11) -----------------------------------------------------------
+
+
+class JobRowPartialView(OrgMemberRequiredMixin, View):
+    """Re-render one history row (the polling endpoint for the table).
+
+    Org-scoped through ``get_job``, so a cross-org or unknown task id is a 404 — identical
+    responses, no existence leak (AD-2). htmx stops polling on a 404 by default, which is
+    exactly the required behaviour: the row is left as it was rather than spinning forever.
+    """
+
+    def get(self, request: HttpRequest, task_id: str) -> HttpResponse:
+        """Return the row's current markup, with or without a poll trigger."""
+        try:
+            job = get_job(self.org, task_id)
+        except SBOMJob.DoesNotExist as exc:
+            raise Http404 from exc
+        # Built from the same JobTable as the full table, so every cell renderer — badge,
+        # progress bar, elapsed — is shared rather than reimplemented for the partial.
+        table = JobTable([job])
+        return render(request, "inventory/sbom/_job_row.html", {"table": table})
+
+
+class JobResultsView(OrgMemberRequiredMixin, View):
+    """The results page — a progress gate until the job terminates (AC #4).
+
+    Story 21.12 replaces what renders *behind* the gate with the tabbed results shell; this
+    story owns the gate itself, which is what 21.12 depends on.
+    """
+
+    def get(self, request: HttpRequest, task_id: str) -> HttpResponse:
+        """Show progress while running, or the completed view once terminal."""
+        try:
+            job = get_job(self.org, task_id)
+        except SBOMJob.DoesNotExist as exc:
+            raise Http404 from exc
+        context = {"job": job, "org": self.org, "job_is_terminal": job.status in TERMINAL_STATUSES}
+        return render(request, "inventory/sbom/results.html", context)
+
+
+class JobProgressPartialView(OrgMemberRequiredMixin, View):
+    """The results page's polled fragment.
+
+    Uses the same 5-second convention as the row trigger. When the job terminates this
+    responds with an ``HX-Refresh`` header so the page reloads into the full results view
+    without a manual refresh — the server decides the transition, not the client.
+    """
+
+    def get(self, request: HttpRequest, task_id: str) -> HttpResponse:
+        """Return the progress fragment, or ask htmx to reload once the job is done."""
+        try:
+            job = get_job(self.org, task_id)
+        except SBOMJob.DoesNotExist as exc:
+            raise Http404 from exc
+
+        terminal = job.status in TERMINAL_STATUSES
+        response = render(request, "inventory/sbom/_job_progress.html", {"job": job, "job_is_terminal": terminal})
+        if terminal:
+            response["HX-Refresh"] = "true"
+        return response

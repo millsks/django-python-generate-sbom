@@ -3,10 +3,38 @@
 from __future__ import annotations
 
 import django_tables2 as tables
+from django.urls import reverse
+from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.safestring import SafeString
 
 from .models import SBOMJob
+from .services import TERMINAL_STATUSES
+
+#: How often a running job refreshes itself. Matches POLL_MS = 5000 in useJobStatus.ts.
+POLL_INTERVAL = "5s"
+
+
+def poll_attrs(job: SBOMJob) -> dict[str, str]:
+    """Return the htmx attributes that make a row poll — or nothing if it is finished.
+
+    The single trigger convention (Story 21.11). The SPA deliberately centralised polling in
+    one hook "so there are no per-component polling loops"; the server-side equivalent is that
+    this function is the only place a poll trigger is produced.
+
+    A terminal job gets **no attributes at all**, so it issues no requests — and because the
+    refreshed markup is produced by this same function, a job that finishes mid-poll comes
+    back without a trigger and polling self-terminates. That is more robust than asking the
+    client to cancel itself.
+    """
+    if job.status in TERMINAL_STATUSES:
+        return {}
+    return {
+        "hx-get": reverse("ui-job-row", kwargs={"task_id": job.task_id}),
+        "hx-trigger": f"every {POLL_INTERVAL}",
+        "hx-swap": "outerHTML",
+    }
+
 
 #: SBOMJob.status → (label, Bootstrap contextual class), carried over from
 #: JobStatusBadge.tsx so the wording a user sees does not change with the rendering stack.
@@ -72,6 +100,16 @@ class JobTable(tables.Table):
         order_by = "-created_at"
         attrs = {"class": "table align-middle"}  # noqa: RUF012  # tables2 Meta option, not a dataclass default
         empty_text = "No jobs yet."
+        # Only non-terminal rows carry a trigger, which is the single biggest load
+        # difference between this and a naive implementation: a page of finished jobs
+        # issues zero requests.
+        row_attrs = {  # noqa: RUF012  # tables2 Meta option
+            "id": lambda record: f"job-row-{record.task_id}",
+            **{
+                name: (lambda attr: lambda record: poll_attrs(record).get(attr, ""))(name)
+                for name in ("hx-get", "hx-trigger", "hx-swap")
+            },
+        }
 
     def render_detected_format(self, value: str, record: SBOMJob) -> str:
         """Show the manifest format's human label rather than its code."""
@@ -86,6 +124,20 @@ class JobTable(tables.Table):
         """
         label, css = STATUS_BADGES.get(SBOMJob.Status(record.status), (record.status, "text-bg-secondary"))
         badge = format_html('<span class="badge {}">{}</span>', css, label)
+        if record.status == SBOMJob.Status.PROGRESS or record.status == SBOMJob.Status.PENDING:
+            # Story 6.2: an in-progress row shows its phase and percentage, not just a badge.
+            return format_html(
+                '{}<div class="small text-body-secondary mt-1">{}</div>'
+                '<div class="progress mt-1" style="height:4px;" role="progressbar" '
+                'aria-valuenow="{}" aria-valuemin="0" aria-valuemax="100">'
+                '<div class="progress-bar" style="width:{}%"></div></div>',
+                badge,
+                record.current_step or "Queued",
+                record.progress,
+                record.progress,
+            )
+        if record.status == SBOMJob.Status.FAILED and record.failure_reason:
+            return format_html('{} <span class="small text-danger">{}</span>', badge, record.failure_reason)
         if _artifacts_purged(record):
             # The metadata survives forever (FR-8.1); only the blobs are gone, and the row
             # must say so rather than appearing broken.
@@ -99,16 +151,18 @@ class JobTable(tables.Table):
         return badge
 
     def render_elapsed(self, record: SBOMJob) -> str:
-        """Elapsed wall-clock time between submission and completion."""
-        if record.completed_at is None:
-            return "—"
-        return format_duration((record.completed_at - record.created_at).total_seconds())
+        """Elapsed wall-clock time: live while running, frozen once finished (Story 6.3).
+
+        A running job is measured against *now*, so each poll advances it; a finished job uses
+        its recorded ``completed_at`` and therefore stops moving. The freeze is a consequence
+        of the data, not of stopping a timer.
+        """
+        end = record.completed_at or timezone.now()
+        return format_duration((end - record.created_at).total_seconds())
 
     def render_results(self, record: SBOMJob) -> SafeString:
         """Link to the job's results page."""
-        # Still the SPA's route until Story 21.12 converts it; a literal path for now, like
-        # the upload page's redirect.
-        return format_html('<a href="/results/{}">View</a>', record.task_id)
+        return format_html('<a href="{}">View</a>', reverse("ui-job-results", kwargs={"task_id": record.task_id}))
 
 
 def _artifacts_purged(job: SBOMJob) -> bool:

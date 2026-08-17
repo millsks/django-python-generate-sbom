@@ -1,0 +1,25 @@
+{% load static %}
+{% comment %} The results page's live progress fragment (Story 21.11).
+
+  Polls on the same 5s convention as the history rows. A terminal job's response carries an
+  HX-Refresh header from the view, so the page reloads into the full results view without the
+  user touching anything — the server decides when the gate opens.
+
+  Like the row trigger, the attributes are absent once the job is finished, so this fragment
+  cannot keep polling after the work is done.
+{% endcomment %}
+<div id="job-progress"
+     {% if not job_is_terminal %}hx-get="{% url 'ui-job-progress' task_id=job.task_id %}"
+     hx-trigger="every 5s"
+     hx-swap="outerHTML"{% endif %}>
+  {% if job_is_terminal %}
+    <p class="text-body-secondary">Finished.</p>
+  {% else %}
+    <h2 class="h6">{{ job.current_step|default:"Queued" }}</h2>
+    <div class="progress" role="progressbar" aria-valuenow="{{ job.progress }}"
+         aria-valuemin="0" aria-valuemax="100" style="height: 8px;">
+      <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: {{ job.progress }}%"></div>
+    </div>
+    <p class="small text-body-secondary mt-2">{{ job.progress }}% &mdash; this page updates itself.</p>
+  {% endif %}
+</div>

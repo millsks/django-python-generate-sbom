@@ -20,6 +20,9 @@ from inventory.sbom.pages import (
     JobArtifactsDeleteAllView,
     JobArtifactsDeleteView,
     JobHistoryView,
+    JobProgressPartialView,
+    JobResultsView,
+    JobRowPartialView,
     UploadPageView,
 )
 from inventory.users.pages import (
@@ -78,4 +81,9 @@ urlpatterns = [
     path("history", JobHistoryView.as_view(), name="ui-history"),
     path("history/artifacts/delete", JobArtifactsDeleteView.as_view(), name="ui-jobs-delete-artifacts"),
     path("history/artifacts/delete-all", JobArtifactsDeleteAllView.as_view(), name="ui-jobs-delete-all-artifacts"),
+    # Story 21.11 — live progress. ONE partial per surface and one trigger convention; a later
+    # tab story must reuse these rather than adding a poller of its own.
+    path("history/row/<uuid:task_id>", JobRowPartialView.as_view(), name="ui-job-row"),
+    path("results/<uuid:task_id>", JobResultsView.as_view(), name="ui-job-results"),
+    path("results/<uuid:task_id>/progress", JobProgressPartialView.as_view(), name="ui-job-progress"),
 ]

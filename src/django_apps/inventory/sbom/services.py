@@ -37,6 +37,7 @@ __all__ = [
     "ACTIVE_STATUSES",
     "OUTPUT_FORMAT_CHOICES",
     "OUTPUT_FORMAT_MAP",
+    "TERMINAL_STATUSES",
     "ConcurrencyLimitError",
     "Provenance",
     "SBOMGenerationError",
@@ -83,6 +84,11 @@ OUTPUT_FORMAT_CHOICES = tuple((value, OUTPUT_FORMAT_LABELS[value]) for value in 
 
 #: Statuses that count against the per-org concurrency gate (AD-7).
 ACTIVE_STATUSES = (SBOMJob.Status.PENDING, SBOMJob.Status.PROGRESS)
+
+#: Statuses a job never leaves. Polling stops here (Story 21.11), mirroring the SPA's
+#: TERMINAL_STATUSES in useJobStatus.ts. Defined once so the row trigger, the results gate,
+#: and any later view agree on when work is finished.
+TERMINAL_STATUSES = (SBOMJob.Status.SUCCESS, SBOMJob.Status.FAILED)
 
 
 class ConcurrencyLimitError(Exception):

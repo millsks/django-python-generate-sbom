@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% comment %} Job results (Story 21.11 builds the GATE; Story 21.12 builds what is behind it).
+
+  While the job runs this shows the live phase and progress bar and polls itself. Once the job
+  terminates the poll response carries HX-Refresh, the page reloads, and the completed view
+  below renders — which Story 21.12 replaces with the tabbed results shell.
+{% endcomment %}
+
+{% block title %}Results · {{ product_name_short }}{% endblock %}
+
+{% block content %}
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <div>
+      <h1 class="h3 mb-0">{{ job.manifest.original_filename }}</h1>
+      <p class="text-body-secondary mb-0">
+        {{ job.manifest.component_name }} &middot; {{ job.manifest.application_id }}
+      </p>
+    </div>
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'ui-history' %}">Back to history</a>
+  </div>
+
+  <div class="mt-4">
+    {% if job_is_terminal %}
+      {% if job.status == 'FAILED' %}
+        <div class="alert alert-danger" role="alert">
+          <strong>This job failed.</strong>
+          {% if job.failure_reason %}<div class="mt-1">{{ job.failure_reason }}</div>{% endif %}
+        </div>
+      {% else %}
+        <div class="alert alert-success" role="alert">
+          This job completed. {{ job.summary_stats.package_count|default:"" }}
+        </div>
+        {% comment %} Story 21.12 replaces this placeholder with the results shell and its
+          Overview / SBOM / Vulnerabilities / Licenses / Version-currency tabs. {% endcomment %}
+        <p class="text-body-secondary">The detailed report tabs arrive in Story 21.12.</p>
+      {% endif %}
+    {% else %}
+      {% include "inventory/sbom/_job_progress.html" %}
+    {% endif %}
+  </div>
+{% endblock %}

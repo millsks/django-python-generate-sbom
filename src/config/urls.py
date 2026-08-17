@@ -32,6 +32,10 @@ urlpatterns = [
     # whichever pattern is registered LAST — which silently pointed the HTML form at the
     # JSON API. tests/unit/test_org_switcher.py pins the resolved action.
     path("ui/orgs/switch/", OrgSwitchView.as_view(), name="ui-org-switch"),
+    # Story 21.5 onward: the app's server-rendered pages, claiming their REAL paths one
+    # story at a time. Every path added there must also join the catch-all's negative
+    # lookahead below, or the SPA will shadow it.
+    path("", include("inventory.urls_pages")),
     path("api/v1/", include("inventory.users.urls")),
     path("api/v1/", include("inventory.manifests.urls")),
     path("api/v1/", include("inventory.sbom.urls")),
@@ -53,9 +57,14 @@ if settings.API_DOCS_ENABLED:
         path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
     ]
 
-# The SPA catch-all must remain last so it never shadows the routes above. `ui/` joins the
-# exclusion list for the server-rendered shell (Story 21.3); it goes away with the SPA in
-# Story 21.19.
+# The SPA catch-all must remain last so it never shadows the routes above. `ui/` is the
+# server-rendered shell (Story 21.3); `login`, `register`, and `logout` are real pages
+# converted in Story 21.5 and are now served by Django rather than the SPA. The whole
+# lookahead — and the SPA — goes away in Story 21.19.
+#
+# The SPA's own client-side router still has /login and /register routes, so an in-app
+# navigation stays on the SPA while a fresh request for those URLs gets the Django page.
+# That coexistence is intentional for the duration of the epic.
 urlpatterns += [
-    re_path(r"^(?!api/|health/|static/|admin/|ui/).*$", SpaView.as_view()),
+    re_path(r"^(?!api/|health/|static/|admin/|ui/|login|register|logout).*$", SpaView.as_view()),
 ]

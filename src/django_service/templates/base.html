@@ -97,15 +97,21 @@
                   {% endif %}
                   <li><hr class="dropdown-divider"></li>
                   <li>
-                    <a class="dropdown-item d-flex align-items-center gap-2" href="/logout">
-                      <svg class="bi" width="16" height="16" aria-hidden="true"><use href="{% static 'images/icons.svg' %}#bi-box-arrow-right"/></svg>
-                      Sign out
-                    </a>
+                    {% comment %} POST, not a link (Story 21.5 AC #5): a GET-reachable logout
+                      can be triggered by any link, image, or prefetcher on a page the user
+                      visits. {% endcomment %}
+                    <form method="post" action="{% url 'ui-logout' %}">
+                      {% csrf_token %}
+                      <button type="submit" class="dropdown-item d-flex align-items-center gap-2">
+                        <svg class="bi" width="16" height="16" aria-hidden="true"><use href="{% static 'images/icons.svg' %}#bi-box-arrow-right"/></svg>
+                        Sign out
+                      </button>
+                    </form>
                   </li>
                 </ul>
               </div>
             {% else %}
-              <a class="btn btn-sm btn-primary ms-1" href="/login">Sign in</a>
+              <a class="btn btn-sm btn-primary ms-1" href="{% url 'ui-login' %}">Sign in</a>
             {% endif %}
           </div>
         </div>

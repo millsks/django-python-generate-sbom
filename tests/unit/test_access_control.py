@@ -12,6 +12,7 @@ The views under test are defined here, not imported. No business page exists unt
 
 from __future__ import annotations
 
+import re
 from uuid import uuid4
 
 import pytest
@@ -33,6 +34,16 @@ from inventory.users.services import create_org, grant_global_admin, register_us
 
 PASSWORD = "pw12345678"
 LOGIN_PREFIX = "/login"
+
+# Django re-salts the CSRF token on every render, so the shell's logout form (Story 21.5)
+# makes any two rendered pages differ by that token alone. It has to be masked before two
+# error pages can be compared — a rotating token distinguishes nothing about the request.
+CSRF_TOKEN = re.compile(r'value="[A-Za-z0-9]{32,}"')
+
+
+def _masked(response: object) -> str:
+    """Return a response body with per-render noise normalised away."""
+    return CSRF_TOKEN.sub('value="MASKED_TOKEN"', response.content.decode())  # type: ignore[attr-defined]
 
 
 def _manifest(org: Org) -> ManifestUpload:
@@ -240,8 +251,9 @@ def test_cross_org_and_missing_objects_are_indistinguishable() -> None:
     missing = outsider.get(f"/t/manifest/{uuid4()}/")
 
     assert cross_org.status_code == missing.status_code == 404
-    # Not just the same status — the same response, so nothing distinguishes them.
-    assert cross_org.content == missing.content
+    # Not just the same status — the same response once the rotating CSRF token is masked,
+    # so nothing about the two requests is distinguishable.
+    assert _masked(cross_org) == _masked(missing)
 
 
 @pytest.mark.django_db

@@ -5,7 +5,7 @@
 #   in-progress    — dev-story implementation underway
 #   review         — implementation complete, awaiting code-review
 #   done           — merged and verified
-last_updated: 2026-08-16
+last_updated: 2026-08-17
 
 development_status:
   epic-1: done
@@ -407,7 +407,7 @@ development_status:
   # Epic 21 deliberately does NOT absorb them — run bmad-correct-course on Epic 16 and Story 17.5 once 21
   # merges, and do not let a dev agent pick either up meanwhile. Epic 15 is backend-only and unaffected.
   epic-21: backlog
-  21-1-restructure-to-src-layout: ready-for-dev
+  21-1-restructure-to-src-layout: review
   21-2-collapse-apps-into-inventory-and-establish-django-service: ready-for-dev
   21-3-server-rendered-ui-foundation: ready-for-dev
   21-4-access-control-mixins-and-org-context: ready-for-dev

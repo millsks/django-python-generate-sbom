@@ -232,7 +232,7 @@ jobs:
         run: |
           pixi run build
           echo "Backend wheel built"
-          ls -lh backend/dist/
+          ls -lh dist/
 
       - name: Build and archive the frontend bundle
         if: steps.should_skip.outputs.skip != 'true'
@@ -294,7 +294,7 @@ jobs:
           draft: false
           prerelease: ${{ github.event.inputs.prerelease }}
           files: |
-            backend/dist/*.whl
+            dist/*.whl
             dist/${{ github.event.repository.name }}-frontend-${{ env.NEW_TAG }}.tar.gz
           token: ${{ steps.app-token.outputs.token }}
 
@@ -302,7 +302,7 @@ jobs:
         if: steps.should_skip.outputs.skip != 'true'
         run: |
           echo "Release created: ${{ steps.create_release.outputs.url }}"
-          ls -lh backend/dist/ dist/*-frontend-*.tar.gz 2>/dev/null || true
+          ls -lh dist/ 2>/dev/null || true
 
   # ---------------------------------------------------------------------------
   # Rebuild + republish the documentation site after a release is cut (Story

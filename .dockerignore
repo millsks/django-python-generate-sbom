@@ -10,8 +10,8 @@ _bmad-output/
 **/dist/
 **/__pycache__/
 **/*.pyc
-backend/staticfiles/
-backend/db.sqlite3
+staticfiles/
+db.sqlite3
 .env
 .env.*
 *.md

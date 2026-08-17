@@ -43,10 +43,12 @@ plugins:
   - search
   - mkdocstrings:
       # Static (griffe) rendering of the backend docstrings — no Django runtime import.
-      # `paths` points griffe at backend/ so the generate_sbom package resolves.
+      # Story 21.1: `paths` lists BOTH import roots so `config`/`django_service` resolve
+      # from src/ and the reusable app resolves as the unqualified `inventory`, exactly
+      # as it does at runtime.
       handlers:
         python:
-          paths: [backend]
+          paths: [src, src/django_apps]
           options:
             docstring_style: google
             show_source: false

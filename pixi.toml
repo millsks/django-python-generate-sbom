@@ -1,7 +1,8 @@
 # Umbrella pixi manifest for the whole project (AD-13).
 # Installs the Python env (backend) AND the Node runtime (frontend), and
-# orchestrates every task. Backend tasks run with cwd = "backend"; frontend
-# tasks run with cwd = "frontend" and shell out to npm/vite.
+# orchestrates every task. Story 21.1 moved the Django tree to a src/ layout at
+# the repo root, so backend tasks now run from the root with NO `cwd`; frontend
+# tasks still run with cwd = "frontend" and shell out to npm/vite.
 [workspace]
 authors = ["Kevin Mills <millsks@gmail.com>"]
 channels = ["conda-forge"]
@@ -64,11 +65,10 @@ gunicorn = ">=22"
 # per platform without any shared shell command.
 [target.win-64.tasks.worker]
 cmd = "celery -A config.celery_app worker -Q pipeline,analysis --pool=solo"
-cwd = "backend"
 env = { DJANGO_SETTINGS_MODULE = "config.settings.local" }
 
 [pypi-dependencies]
-generate-sbom = { path = "./backend", editable = true }
+generate-sbom = { path = ".", editable = true }
 
 [feature.dev.dependencies]
 pytest = ">=8,<9"
@@ -99,84 +99,67 @@ default = { features = ["dev"], solve-group = "default" }
 # --- Backend (Python) tasks — run from ./backend ---
 [tasks.fmt]
 cmd = "ruff format ."
-cwd = "backend"
 
 [tasks.lint]
 cmd = "ruff check ."
-cwd = "backend"
 
 [tasks.check]
-cmd = "mypy generate_sbom"
-cwd = "backend"
+cmd = "mypy src"
 
 [tasks.test]
 cmd = "pytest tests/unit/"
-cwd = "backend"
 
 [tasks.test-integration]
 cmd = "pytest tests/integration/"
-cwd = "backend"
 
 [tasks.cov]
-cmd = "pytest tests/ --cov=generate_sbom --cov-report=term-missing --cov-fail-under=90"
-cwd = "backend"
+cmd = "pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=90"
 
 [tasks.build]
 cmd = "python -m build --no-isolation --wheel"
-cwd = "backend"
 
 # Non-mutating format check (companion to the mutating `fmt`) — CI-friendly.
 [tasks.fmt-check]
 cmd = "ruff format --check ."
-cwd = "backend"
 
 # Lint with autofix (companion to the read-only `lint`).
 [tasks.lint-fix]
 cmd = "ruff check --fix ."
-cwd = "backend"
 
 # Static security scan (bandit); reads [tool.bandit] from pyproject, medium+ severity
 # only so low-noise asserts don't fail it.
 [tasks.security]
-cmd = "bandit -r generate_sbom -c pyproject.toml -ll"
-cwd = "backend"
+cmd = "bandit -r src -c pyproject.toml -ll"
 
 # Full suite with an HTML coverage report for local inspection (htmlcov/).
 [tasks.cov-html]
-cmd = "pytest tests/ --cov=generate_sbom --cov-report=html"
-cwd = "backend"
+cmd = "pytest tests/ --cov=src --cov-report=html"
 
 # CI coverage: same gate as `cov` plus branch coverage and a machine-readable
-# coverage.xml (backend/coverage.xml) for the Codecov upload (Story 9.1).
+# coverage.xml (at the repo root) for the Codecov upload (Story 9.1).
 [tasks.cov-xml]
-cmd = "pytest tests/ --cov=generate_sbom --cov-branch --cov-report=xml --cov-report=term-missing --cov-fail-under=90"
-cwd = "backend"
+cmd = "pytest tests/ --cov=src --cov-branch --cov-report=xml --cov-report=term-missing --cov-fail-under=90"
 
 # --- Server / ops tasks — also the Docker service commands ---
 [tasks.migrate]
 cmd = "python manage.py migrate"
-cwd = "backend"
 
 [tasks.seed-superuser]
 cmd = "python manage.py seed_superuser"
-cwd = "backend"
 
 [tasks.collectstatic]
 cmd = "python manage.py collectstatic --noinput"
-cwd = "backend"
 
 # Container/prod WSGI server (Unix-only). Used by the Dockerfile/OCP `web`
 # process; NEVER on the local/dev path — local uses `runserver` (see below).
 [tasks.web]
 cmd = "gunicorn config.wsgi --bind 0.0.0.0:8000 --workers 4"
-cwd = "backend"
 
 # --- Cross-platform local dev tasks (Story 20.5) — macOS + Windows, no containers ---
 # Local web = Django's `runserver` (cross-platform; gunicorn is Unix-only). Serves
 # on :8000 under local settings. Standalone (`pixi run runserver`) or via honcho.
 [tasks.runserver]
 cmd = "python manage.py runserver 0.0.0.0:8000"
-cwd = "backend"
 env = { DJANGO_SETTINGS_MODULE = "config.settings.local" }
 
 # Local combined Celery worker draining BOTH queues in one process (prefork `-c 4`,
@@ -184,7 +167,6 @@ env = { DJANGO_SETTINGS_MODULE = "config.settings.local" }
 # tasks. On win-64 the `[target.win-64.tasks.worker]` override swaps to `--pool=solo`.
 [tasks.worker]
 cmd = "celery -A config.celery_app worker -Q pipeline,analysis -c 4"
-cwd = "backend"
 env = { DJANGO_SETTINGS_MODULE = "config.settings.local" }
 
 # Worker pool per OS (Story 20.4): the default (prefork) pool below is Unix-only. On
@@ -193,23 +175,19 @@ env = { DJANGO_SETTINGS_MODULE = "config.settings.local" }
 # task overrides that inject `--pool=solo` on win-64 while linux/osx keep prefork `-c 4`.
 [tasks.worker-pipeline]
 cmd = "celery -A config.celery_app worker -Q pipeline -c 4"
-cwd = "backend"
 
 [tasks.worker-analysis]
 cmd = "celery -A config.celery_app worker -Q analysis -c 4"
-cwd = "backend"
 
 # Portable beat schedule (Story 20.4): the schedule DB lives at a repo-relative,
-# git-ignored path (backend/.celery/celerybeat-schedule) — not POSIX-only `/tmp`, which
-# does not exist on Windows. cwd is `backend`, so this resolves under backend/.celery/.
+# git-ignored path (.celery/celerybeat-schedule) — not POSIX-only `/tmp`, which does
+# not exist on Windows. Tasks run from the repo root, so this resolves under ./.celery/.
 [tasks.beat]
 cmd = "celery -A config.celery_app beat -s .celery/celerybeat-schedule"
-cwd = "backend"
 
 # Celery Flower monitoring UI (http://localhost:5555).
 [tasks.flower]
 cmd = "celery -A config.celery_app flower --port=5555"
-cwd = "backend"
 
 # --- Project-wide tasks — run from the root ---
 # One-command containerless local stack (Story 20.5): honcho reads the root

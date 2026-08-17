@@ -1,6 +1,10 @@
+---
+baseline_commit: e5778dee2a521120a337ca517f509815653894da
+---
+
 # Story 21.1: Restructure the Repository to a `src/` Layout
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -68,23 +72,23 @@ natural, graduation-ready home.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Move the tree (AC: #1)** — `git mv` `backend/config` → `src/config`,
+- [x] **Task 1 — Move the tree (AC: #1)** — `git mv` `backend/config` → `src/config`,
   `backend/generate_sbom` → `src/django_apps/inventory`, `backend/tests` → `tests`, and
   `backend/{manage.py,pyproject.toml}` → repo root. Create `src/django_service/` (package, with
   `__init__.py`). Use `git mv` so history is preserved and the diff reads as renames.
-- [ ] **Task 2 — Make `src/django_apps/` a path root (AC: #2)** — Ensure it has **no** `__init__.py`. Set
+- [x] **Task 2 — Make `src/django_apps/` a path root (AC: #2)** — Ensure it has **no** `__init__.py`. Set
   `only-include = ["src"]` and `sources = ["src", "src/django_apps"]`.
-- [ ] **Task 3 — Wheel verification test (AC: #3)** — Build the wheel and assert its top-level entries. This
+- [x] **Task 3 — Wheel verification test (AC: #3)** — Build the wheel and assert its top-level entries. This
   is the AC most likely to fail first; treat a `django_apps/inventory` result as the expected failure mode and
   resolve it in `sources`, not with a `sys.path` insert.
-- [ ] **Task 4 — `BASE_DIR` / `APPS_DIR` (AC: #4)** — Correct the `parent` chain, introduce `APPS_DIR`, and add
+- [x] **Task 4 — `BASE_DIR` / `APPS_DIR` (AC: #4)** — Correct the `parent` chain, introduce `APPS_DIR`, and add
   a unit test asserting the derived paths.
-- [ ] **Task 5 — Repoint packaging + tool config (AC: #5)** — The six settings in `pyproject.toml`.
-- [ ] **Task 6 — Strip `cwd` from pixi tasks (AC: #6)** — All 24 occurrences. Smoke-run each task group.
-- [ ] **Task 7 — Dockerfile + CI + Sonar + Codecov (AC: #7)** — Update every `backend/` path reference.
-- [ ] **Task 8 — Verify the SPA still works (AC: #8)** — `pixi run fe-build`, `collectstatic`, then load each
+- [x] **Task 5 — Repoint packaging + tool config (AC: #5)** — The six settings in `pyproject.toml`.
+- [x] **Task 6 — Strip `cwd` from pixi tasks (AC: #6)** — All 24 occurrences. Smoke-run each task group.
+- [x] **Task 7 — Dockerfile + CI + Sonar + Codecov (AC: #7)** — Update every `backend/` path reference.
+- [x] **Task 8 — Verify the SPA still works (AC: #8)** — `pixi run fe-build`, `collectstatic`, then load each
   SPA route against `pixi run runserver`.
-- [ ] **Task 9 — Gate (AC: #9)** — `pixi run ci` to green; confirm the diff contains no assertion changes.
+- [x] **Task 9 — Gate (AC: #9)** — `pixi run ci` to green; confirm the diff contains no assertion changes.
 
 ## Dev Notes
 
@@ -153,16 +157,165 @@ collapse.
 
 ### Agent Model Used
 
-_(to be filled by the dev agent)_
+claude-opus-5[1m] (Claude Opus 5, 1M context)
 
 ### Debug Log References
 
-_(to be filled by the dev agent)_
+- `pixi run ci` — **exit 0**. precommit / build / check / lint / fmt-check / security / cov /
+  fe-lint / fe-typecheck / fe-cov / fe-build / docs-build all pass.
+- Backend: **417 passed**, coverage **95.89%** (gate 90%). Frontend: **223 passed** across 39 files.
+- `mypy src` — clean over **90** source files.
+- Built wheel top-level entries: `['config', 'django_service', 'generate_sbom-0.1.0.dist-info', 'inventory']`.
+- Wheel built with the story's hypothesised array form, for contrast:
+  `['config', 'django_apps', 'django_service', 'generate_sbom-0.1.0.dist-info']` — no `inventory`.
+- Live route check against `runserver` (port 8111): `/`, `/login`, `/register`, `/jobs`,
+  `/organizations` → 200 (SPA index, 484 bytes each); `/admin/` → 302; `/health/` → 200
+  `{"status": "ok"}`; `/api/docs/` → 200; `/api/schema/` → 200 (41 KB);
+  `/api/v1/{sbom/jobs,orgs,auth/me}/` → 401 (auth required, i.e. routed and reachable).
+- `collectstatic` → 177 files copied, 334 post-processed, into `./staticfiles/`.
+- `celery beat` → `db -> .celery/celerybeat-schedule`; `celery worker` → binds `pipeline` + `analysis`.
+- `git diff --cached -M`: **70 pure renames + 71 renamed-and-edited**, so history is preserved.
 
 ### Completion Notes List
 
-_(to be filled by the dev agent)_
+**AC #3 falsified AC #2's literal `sources` value — this is the story's headline finding.**
+The array form the reference application flagged as unverified, `sources = ["src", "src/django_apps"]`,
+**does not work**. Verified against hatchling rather than reasoned about:
+`BuilderConfig.sources` ends with `dict(sorted(sources.items()))` and
+`get_distribution_path` returns on the **first** `startswith` match. `normalize_relative_directory`
+yields `'src/'` and `'src/django_apps/'`, and `'src/' < 'src/django_apps/'`, so every app path is
+rewritten by `'src/'` alone and the app ships as `django_apps/inventory`. Building the wheel both
+ways confirms it (see Debug Log). Under the array form `import inventory` fails outright and the whole
+suite cannot even be collected.
+
+Resolved **in `sources`** as Task 3 directs — not with a `sys.path` insert — by switching to the
+**mapping form**, whose keys do not prefix-collide:
+
+```toml
+[tool.hatch.build.targets.wheel.sources]
+"src/config" = "config"
+"src/django_service" = "django_service"
+"src/django_apps" = "."
+```
+
+This also keeps editable installs correct with no special-casing: hatchling derives the `.pth` roots
+from the rewritten distribution paths, producing `src` and `src/django_apps`. `force-include` was
+considered and **rejected** — `build_editable_*` copies force-included files into the wheel, so the app
+would be a frozen copy in site-packages shadowing the working tree. `dev-mode-dirs` alone was rejected
+too: it fixes only the editable install and leaves the published wheel wrong.
+**AC #2's `sources` line should be amended to the mapping form.**
+
+**Test assertions changed (AC #9 asked for none beyond import paths) — three, each forced by another AC:**
+1. `tests/unit/test_dev_runner_config.py` × 3 — `assert task["cwd"] == "backend"` is unsatisfiable once
+   AC #6 removes `cwd`. Inverted to `assert "cwd" not in task`, which is stronger: it stops a stray `cwd`
+   from creeping back.
+2. `tests/unit/test_{dev_runner_config,manifest_format_consistency}.py` — `parents[3]` → `parents[2]`.
+   Path derivation, not behaviour: the files lost a directory level.
+3. `tests/unit/test_settings_celery.py` — renamed `test_local_celery_dir_is_under_backend_base` →
+   `..._under_base_dir` and fixed its comment. Assertion body untouched.
+
+**A sed over-rename I introduced and reverted — worth a reviewer's eye.**
+`generate_sbom` → `inventory` also hit the pipeline **task function** `generate_sbom_document`
+(→ `inventory_document`), silently renaming the Celery task and desynchronising it from
+`beat_schedule`. Caught by inspecting the live task registry, not by the suite — every test was renamed
+in lockstep, so all 417 stayed green while the task name was wrong. Reverted; per-file occurrence counts
+now match `HEAD` exactly (1/2/3/2/1/1/4/9/17 across the 9 affected files). `generate_sbom_document` was
+the **only** identifier where `generate_sbom` was a substring rather than the package prefix (verified
+by regex over `HEAD`).
+
+**Three scope widenings, each a consequence of the move, each with fallout fixed:**
+- `check`: `mypy generate_sbom` → `mypy src`. `config/` had **never** been type-checked. Surfaced 3
+  pre-existing errors: `environ` has no `py.typed` (added to `[[tool.mypy.overrides]]`), and
+  `configure_structlog` was unresolvable in `local.py`/`production.py` because strict
+  `no_implicit_reexport` does not re-export a plain import through `from .base import *`. Fixed with the
+  redundant-alias idiom (`import X as X`) in `base.py` — deliberately chosen so the `config` → app import
+  stays in the **one** place that already had it, rather than adding two more instances of a gap the epic
+  has already recorded for a later epic.
+- `security`: `bandit -r generate_sbom` → `bandit -r src`. Surfaced B104 on `local.py`'s
+  `ALLOWED_HOSTS = [..., "0.0.0.0"]` — a false positive (a Host-header allowlist, not a bind address, in
+  LOCAL-only settings). Suppressed **inline** rather than via `[tool.bandit] skips` so a genuine bind-all
+  elsewhere still fails the gate. Bandit then emits a cosmetic `nosec encountered ... but no failed test`
+  warning because `-ll` filters the finding before reconciling the marker; `Medium: 0`, gate green.
+- `lint` / `fmt`: ruff was previously scoped by `cwd = "backend"`. From the repo root `ruff check .`
+  swept vendored BMad/agent scripts — **354 errors** across 23 files we do not own. Added
+  `extend-exclude = ["_bmad", "_bmad-output", ".claude", ".agents"]`, mirroring the existing
+  `.pre-commit-config.yaml` exclude so task, hook, and editor all agree.
+
+**Coverage now measures `src` (config included) and still clears the gate at 95.89%.**
+
+**Pre-existing defect found, deliberately NOT fixed here (out of scope for a mechanical move):**
+the two `beat_schedule` entries — `inventory.tasks.maintenance.{refresh_parselmouth_mapping,
+purge_expired_artifacts}` — are **not in the Celery task registry** at runtime. `inventory/tasks/__init__.py`
+imports only `sbom_pipeline`, no `INSTALLED_APPS` entry has a `tasks` module for
+`autodiscover_tasks()` to find, and nothing imports `maintenance`, so Beat would dispatch an
+unregistered task. Confirmed pre-existing: `tasks/__init__.py` is byte-identical to `HEAD` and
+`celery_app.py` differs from `HEAD` only by the package rename. The unit tests pass because they import
+the module directly, which registers it. **Needs its own bug story.**
+
+**Deferred to Story 21.21 (documentation reconciliation), as the epic ordered:** narrative `backend/`
+path references in `README.md` (tree diagram, L75/L83) and `docs/` (`project-layout.md`,
+`setup.md`, `architecture.md`, `testing.md`, `pipeline.md`, the OpenShift pages). Only
+**functional** references were fixed here — `mkdocs.yml` griffe `paths`, the `code-reference.md`
+mkdocstrings identifiers (both required for `docs-build --strict`), and the one executable README
+command (`pixi run python backend/manage.py` → `manage.py`). Because the epic merges big-bang at 21.23,
+no stale prose reaches `main`.
+
+**Also done, beyond the AC list but required by the move:** `.gitignore` (`.celery/`, `media/`, plus
+`staticfiles/` which was never ignored and is now a root-level artifact), `.dockerignore`,
+`.pre-commit-config.yaml` `files:` patterns, `.github/labeler.yml`, `.github/workflows/release.yml`
+(wheel now lands in root `dist/`), `.env.local.example`, and ruff `per-file-ignores` (the old
+`config/settings/*` patterns no longer matched under `src/`). The Dockerfile now copies
+`pyproject.toml` + `manage.py` + `src/` before `pixi install --locked`, preserving the
+editable-install ordering AC #7 calls out.
+
+**No `sys.path` inserts were added** to `manage.py`, `wsgi.py`, or `asgi.py`, and pytest's
+`pythonpath` was **removed** rather than repointed — the editable install is the sole import-root
+resolver (reference AD-7).
+
+**Local artifacts relocated** (all git-ignored, no data lost): `db.sqlite3`, `media/`, and `.celery/`
+moved from `backend/` to the repo root to match the new `BASE_DIR`; stale `backend/` tool caches
+(`.mypy_cache`, `.pytest_cache`, `.ruff_cache`, `.coverage`, `dist/`) removed. `backend/` no longer exists.
 
 ### File List
 
-_(to be filled by the dev agent)_
+**New (4)**
+- `pyproject.toml` (repo root; replaces `backend/pyproject.toml`)
+- `src/django_service/__init__.py`
+- `tests/unit/test_settings_paths.py` (AC #4)
+- `tests/integration/test_wheel_layout.py` (AC #3)
+
+**Deleted (1)**
+- `backend/pyproject.toml`
+
+**Moved (141 total: 70 pure renames, 71 renamed-and-edited)**
+- `backend/config/` → `src/config/`
+- `backend/generate_sbom/` → `src/django_apps/inventory/`
+- `backend/tests/` → `tests/`
+- `backend/manage.py` → `manage.py`
+
+**Modified in place (16)**
+- `pixi.toml` (24 × `cwd = "backend"` removed; editable path `./backend` → `.`; `mypy src`,
+  `bandit -r src`, `--cov=src`)
+- `pixi.lock` (regenerated for the editable-path change)
+- `Dockerfile`, `.dockerignore`, `.gitignore`, `.pre-commit-config.yaml`
+- `.github/workflows/ci.yml`, `.github/workflows/release.yml`, `.github/labeler.yml`
+- `sonar-project.properties`, `codecov.yml`
+- `mkdocs.yml`, `docs/developer/code-reference.md`
+- `.env.local.example`, `README.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+
+**Notable edits inside moved files**
+- `src/config/settings/base.py` — `BASE_DIR` 4 hops, new `APPS_DIR`, `FRONTEND_DIST` drops its
+  `.parent`, redundant-alias re-export of `configure_structlog`, `INSTALLED_APPS`/DRF paths → `inventory.*`
+- `src/config/settings/local.py` — `.celery` comment, B104 inline suppression
+- `src/config/celery_app.py` — app name + autodiscover + `beat_schedule` task paths → `inventory.*`
+- `src/django_apps/inventory/{users,manifests}/migrations/0001_initial.py` — import paths only
+  (migration graph and app labels untouched)
+- `tests/unit/test_dev_runner_config.py`, `tests/unit/test_manifest_format_consistency.py`,
+  `tests/unit/test_settings_celery.py` — see Completion Notes
+
+## Change Log
+
+| Date | Change |
+|---|---|
+| 2026-08-17 | Restructured the repository to the `src/` layout (`src/config`, `src/django_service`, `src/django_apps/inventory`; `tests/`, `manage.py`, `pyproject.toml` at the root). Renamed the app package `generate_sbom` → `inventory`, imported unqualified via a hatchling `sources` **mapping** after proving the array form is shadowed. Stripped all 24 `cwd = "backend"` pixi entries and repointed Docker/CI/Sonar/Codecov/mkdocs. Added AC #3 wheel-layout and AC #4 settings-path tests. `pixi run ci` exit 0; 417 backend + 223 frontend tests pass at 95.89% coverage. |

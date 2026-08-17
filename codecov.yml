@@ -34,7 +34,7 @@ flag_management:
   individual_flags:
     - name: backend
       paths:
-        - backend/generate_sbom
+        - src
     - name: frontend
       paths:
         - frontend/src
@@ -45,7 +45,7 @@ component_management:
     - component_id: backend
       name: Backend (Django/DRF/Celery)
       paths:
-        - backend/generate_sbom/**
+        - src/**
     - component_id: frontend
       name: Frontend (React SPA)
       paths:

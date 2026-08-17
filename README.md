@@ -133,7 +133,7 @@ To reach the Django admin at `/admin/`, create a superuser in the running `web`
 container:
 
 ```sh
-docker compose exec web pixi run python backend/manage.py createsuperuser
+docker compose exec web pixi run python manage.py createsuperuser
 ```
 
 The first superuser is seeded into the system **ADMIN** organization, making them

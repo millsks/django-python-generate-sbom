@@ -1,0 +1,120 @@
+"""django-tables2 tables for the server-rendered SBOM pages (Story 21.10)."""
+
+from __future__ import annotations
+
+import django_tables2 as tables
+from django.utils.html import format_html
+from django.utils.safestring import SafeString
+
+from .models import SBOMJob
+
+#: SBOMJob.status → (label, Bootstrap contextual class), carried over from
+#: JobStatusBadge.tsx so the wording a user sees does not change with the rendering stack.
+STATUS_BADGES = {
+    SBOMJob.Status.PENDING: ("In Progress", "text-bg-info"),
+    SBOMJob.Status.PROGRESS: ("In Progress", "text-bg-info"),
+    SBOMJob.Status.SUCCESS: ("Completed", "text-bg-success"),
+    SBOMJob.Status.FAILED: ("Failed", "text-bg-danger"),
+}
+
+
+def format_duration(seconds: float | None) -> str:
+    """Format a duration the way ``duration.ts`` did (Story 6.3).
+
+    Ported rather than reinvented so the History page reads identically before and after the
+    conversion: an em dash when unknown, then ms / s / m+s / h+m.
+
+    Args:
+        seconds: Elapsed seconds, or None when the job has not finished.
+
+    Returns:
+        A short human-readable duration.
+    """
+    if seconds is None or seconds < 0:
+        return "—"
+    if seconds < 1:
+        return f"{round(seconds * 1000)}ms"
+    if seconds < 60:
+        return f"{round(seconds)}s"
+    if seconds < 3600:
+        minutes, remainder = divmod(seconds, 60)
+        return f"{int(minutes)}m {round(remainder)}s"
+    hours, remainder = divmod(seconds, 3600)
+    return f"{int(hours)}h {int(remainder // 60):02d}m"
+
+
+class JobTable(tables.Table):
+    """The org's SBOM jobs — the columns ``HistoryPage.tsx`` rendered, in the same order."""
+
+    select = tables.CheckBoxColumn(
+        accessor="task_id",
+        orderable=False,
+        # Selection is per page, matching the SPA's `toggleAll`, which only ever covered the
+        # rows currently fetched. The confirmation copy says so explicitly.
+        attrs={"th__input": {"id": "select-all", "aria-label": "Select all rows on this page"}},
+        verbose_name="",
+    )
+    created_at = tables.DateTimeColumn(verbose_name="Submitted", format="Y-m-d H:i")
+    manifest = tables.Column(accessor="manifest__original_filename", verbose_name="Manifest", orderable=False)
+    detected_format = tables.Column(accessor="manifest__detected_format", verbose_name="Format", orderable=False)
+    output_format = tables.Column(verbose_name="Output", orderable=False)
+    status = tables.Column(verbose_name="Status")
+    elapsed = tables.Column(empty_values=(), verbose_name="Elapsed", orderable=False)
+    results = tables.Column(empty_values=(), verbose_name="Results", orderable=False)
+
+    class Meta:
+        # django-tables2 Meta options, not mutable dataclass defaults — same exemption the
+        # project already applies to Django model Meta classes.
+        model = SBOMJob
+        fields = ("select", "created_at", "manifest", "detected_format", "output_format", "status", "elapsed")
+        # Newest-first is the queryset's ordering; stated here too so a user clearing the sort
+        # returns to it rather than to an undefined order.
+        order_by = "-created_at"
+        attrs = {"class": "table align-middle"}  # noqa: RUF012  # tables2 Meta option, not a dataclass default
+        empty_text = "No jobs yet."
+
+    def render_detected_format(self, value: str, record: SBOMJob) -> str:
+        """Show the manifest format's human label rather than its code."""
+        return record.manifest.get_detected_format_display()
+
+    def render_status(self, record: SBOMJob) -> SafeString:
+        """Render the status badge, including the purged-artifact indicator (Story 7.3).
+
+        Reads ``record.status`` rather than the column's ``value``: because the field has
+        ``choices``, django-tables2 hands the renderer the *display* label ("Success"), not
+        the stored code ("SUCCESS"), and the badge map is keyed by the code.
+        """
+        label, css = STATUS_BADGES.get(SBOMJob.Status(record.status), (record.status, "text-bg-secondary"))
+        badge = format_html('<span class="badge {}">{}</span>', css, label)
+        if _artifacts_purged(record):
+            # The metadata survives forever (FR-8.1); only the blobs are gone, and the row
+            # must say so rather than appearing broken.
+            expiry = record.artifacts_expire_at
+            tooltip = f"Artifacts removed on {expiry:%Y-%m-%d}" if expiry else "Artifacts removed"
+            return format_html(
+                '{} <span class="badge text-bg-secondary ms-1" title="{}">Artifacts removed</span>',
+                badge,
+                tooltip,
+            )
+        return badge
+
+    def render_elapsed(self, record: SBOMJob) -> str:
+        """Elapsed wall-clock time between submission and completion."""
+        if record.completed_at is None:
+            return "—"
+        return format_duration((record.completed_at - record.created_at).total_seconds())
+
+    def render_results(self, record: SBOMJob) -> SafeString:
+        """Link to the job's results page."""
+        # Still the SPA's route until Story 21.12 converts it; a literal path for now, like
+        # the upload page's redirect.
+        return format_html('<a href="/results/{}">View</a>', record.task_id)
+
+
+def _artifacts_purged(job: SBOMJob) -> bool:
+    """Return True if a completed job's artifacts have been removed (Story 7.3).
+
+    Mirrors ``HistoryPage.tsx``: ``expired = status === 'SUCCESS' && !artifactsAvailable``.
+    A job that never succeeded has no artifacts to have lost.
+    """
+    return bool(job.status == SBOMJob.Status.SUCCESS and not job.result_key)

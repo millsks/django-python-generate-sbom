@@ -8,15 +8,24 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.http import HttpResponse, HttpResponseRedirect
+from django.contrib import messages
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
+from django.urls import reverse
+from django.views import View
 from django.views.generic import FormView
+from django_filters.views import FilterView
+from django_tables2 import SingleTableMixin
 
-from inventory.common.access import OrgMemberRequiredMixin
+from inventory.common.access import OrgAdminRequiredMixin, OrgMemberRequiredMixin
 from inventory.common.users import UserT
 from inventory.manifests.detection import ManifestParseError, UnsupportedFormatError
 
+from .filters import JobFilterSet
 from .forms import ManifestUploadForm
-from .services import ConcurrencyLimitError, submit_job
+from .models import SBOMJob
+from .selectors import get_jobs
+from .services import ConcurrencyLimitError, delete_artifacts_for_jobs, submit_job
+from .tables import JobTable
 
 
 class UploadPageView(OrgMemberRequiredMixin, FormView):  # type: ignore[type-arg]
@@ -74,3 +83,77 @@ class UploadPageView(OrgMemberRequiredMixin, FormView):  # type: ignore[type-arg
         context = super().get_context_data(**kwargs)
         context["org"] = self.org
         return context
+
+
+# --- Job history (Story 21.10) -------------------------------------------------------------
+
+#: Matches the SPA's PAGE_SIZE and the API's PageNumberPagination default.
+JOBS_PER_PAGE = 25
+
+
+class JobHistoryView(OrgMemberRequiredMixin, SingleTableMixin, FilterView):
+    """Filterable, paginated job history (converted from ``HistoryPage.tsx``).
+
+    Sorting and paging are **server-side**, via the querystring, so a filtered view is
+    bookmarkable and shareable. That is a deliberate trade the epic accepted: the SPA sorted
+    already-fetched rows in the browser, which cost no round trip but could not be linked to.
+    """
+
+    model = SBOMJob
+    table_class = JobTable
+    filterset_class = JobFilterSet
+    template_name = "inventory/sbom/history.html"
+    paginate_by = JOBS_PER_PAGE
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        """Only the active org's jobs (AD-2), newest first."""
+        return get_jobs(self.org)
+
+
+class _ArtifactDeleteMixin(OrgMemberRequiredMixin):
+    """Shared redirect target for the delete actions."""
+
+    def _back(self) -> HttpResponse:
+        return HttpResponseRedirect(reverse("ui-history"))
+
+
+class JobArtifactsDeleteView(_ArtifactDeleteMixin, View):
+    """Delete artifacts for one job or for a page selection (Story 7.2, FR-8.2).
+
+    Single and bulk are the same operation with a different number of ids, so they share an
+    endpoint rather than duplicating the org scoping.
+    """
+
+    def post(self, request: HttpRequest) -> HttpResponse:
+        """Purge the named jobs' artifacts, keeping every job record."""
+        task_ids = request.POST.getlist("task_ids")
+        if not task_ids:
+            messages.error(request, "Select at least one job.")
+            return self._back()
+
+        # Scoped to the active org, so a task id from another org simply matches nothing
+        # (AD-2) — there is no branch that could treat it differently.
+        jobs = get_jobs(self.org).filter(task_id__in=task_ids, result_key__isnull=False)
+        deleted = delete_artifacts_for_jobs(jobs)
+
+        if deleted:
+            messages.success(request, f"Deleted artifacts for {deleted} job(s). The job records were kept.")
+        else:
+            messages.info(request, "Nothing to delete — those jobs have no artifacts.")
+        return self._back()
+
+
+class JobArtifactsDeleteAllView(OrgAdminRequiredMixin, View):
+    """Delete every artifact in the active org (FR-8.5) — **admin only**.
+
+    The gate is this mixin, not the hidden button. Story 2.17 exists because an admin-only
+    action was once enforced only in the UI, and `test_a_member_cannot_post_the_org_wide_delete`
+    is what stops that recurring here.
+    """
+
+    def post(self, request: HttpRequest) -> HttpResponse:
+        """Purge artifacts org-wide, keeping every job record."""
+        jobs = get_jobs(self.org).filter(result_key__isnull=False)
+        deleted = delete_artifacts_for_jobs(jobs)
+        messages.success(request, f"Deleted artifacts for {deleted} job(s). The job records were kept.")
+        return HttpResponseRedirect(reverse("ui-history"))

@@ -416,7 +416,7 @@ development_status:
   21-7-api-key-management-page: review
   21-8-global-administration-page: review
   21-9-manifest-upload-and-job-submission-page: review
-  21-10-job-history-table: ready-for-dev
+  21-10-job-history-table: review
   21-11-live-job-progress-via-htmx-polling: ready-for-dev
   21-12-results-page-shell-and-overview-tab: ready-for-dev
   21-13-sbom-viewer-tab: ready-for-dev

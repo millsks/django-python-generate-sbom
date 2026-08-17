@@ -16,7 +16,12 @@ Every path added here must also be added to the SPA catch-all's negative lookahe
 
 from django.urls import path
 
-from inventory.sbom.pages import UploadPageView
+from inventory.sbom.pages import (
+    JobArtifactsDeleteAllView,
+    JobArtifactsDeleteView,
+    JobHistoryView,
+    UploadPageView,
+)
 from inventory.users.pages import (
     ApiKeyCreateView,
     ApiKeyRevokeView,
@@ -68,4 +73,9 @@ urlpatterns = [
     path("platform/global-admins/revoke", GlobalAdminRevokeView.as_view(), name="ui-global-admin-revoke"),
     # Story 21.9 — the primary journey: upload a manifest and start a job.
     path("upload", UploadPageView.as_view(), name="ui-upload"),
+    # Story 21.10 — job history. The two delete endpoints are separate so the org-wide one
+    # can carry its own admin gate rather than branching inside a single view.
+    path("history", JobHistoryView.as_view(), name="ui-history"),
+    path("history/artifacts/delete", JobArtifactsDeleteView.as_view(), name="ui-jobs-delete-artifacts"),
+    path("history/artifacts/delete-all", JobArtifactsDeleteAllView.as_view(), name="ui-jobs-delete-all-artifacts"),
 ]

@@ -7236,3 +7236,108 @@ Celery, which never loads the transport. This is the second real defect the Epic
 3. **It cannot be dropped silently.**
    Given the failure is invisible on macOS and Linux, when the story completes, then a test asserts the
    win-64 declaration exists, and the reason is recorded beside it.
+
+---
+
+**Stories 22.8-22.12 were added mid-epic**, in response to product-owner direction and to an audit of whether
+the test suite was still valid after the Epic 21 refactor. They are recorded here because they changed the
+shipped product, not just its packaging.
+
+### Story 22.8: Make the Admin Surfaces Work for an Anonymous Caller
+
+As an operator of an app with no authentication,
+I want the surfaces Story 21.24 declared open to actually work when nobody is signed in,
+so that the ordinary caller is not the one path nothing was tested against.
+
+**Context:** Story 21.24 removed the app's authentication and stated (AC #5) that member management, org
+creation, API-key create/revoke, bulk artifact deletion, and the global-admins page all remain reachable and
+succeed. Two defects slipped through, and **the suite could not see either, because every page and API test
+logs in first** — so nothing exercised the anonymous path that is now the ordinary one.
+
+**Acceptance Criteria:**
+
+1. **Org creation succeeds without a user.**
+   Given `create_org` assigned `admin_user` to `OrgMembership.user`, and an `AnonymousUser` raises
+   `ValueError: Cannot assign ...`, when the caller is anonymous, then the org is created with **no**
+   membership rather than a synthetic user — the same coherent shape as a userless API-key upload.
+2. **Signing in never removes capability.**
+   Given four DRF views kept in-body `is_global_admin()` checks, and `is_global_admin` returns `True` for
+   anonymous but does the real membership query for a real user, when a signed-in ordinary user calls those
+   endpoints, then they are not more restricted than an anonymous caller. Asserted as a **relationship**, since
+   that relationship is what inverted; two separate absolutes would not have caught it.
+
+### Story 22.9: Remove the Inert Membership and Global-Admin UI
+
+As a user,
+I want the navigation to offer only what still does something,
+so that a screen does not imply an access-control decision the app no longer makes.
+
+**Context:** Product-owner direction: *"if that functionality is no longer needed i would rather get rid of
+it."* Members, Global Admins, and the leave-org action all edited records that gate nothing without identity,
+and all three were broken for the anonymous caller — `/organization/leave` raised `TypeError` on
+`AnonymousUser`.
+
+**Acceptance Criteria:**
+
+1. The pages, routes, templates, nav entries, and forms for Members, Global Admins, and leave-org are removed.
+2. **The org and membership model, the services, and the `/api/v1/` endpoints are retained.** The model is the
+   seam OIDC group claims re-attach to (Epics 17-18), and Story 21.24 AC #9 froze the API surface.
+
+### Story 22.10: Seed Organizations From a Committed List
+
+As a maintainer,
+I want organizations created from a reviewable file rather than typed into a form,
+so that the tenant list is deliberate instead of accumulated.
+
+**Context:** Organizations are lines of business, known up front. A creation form gets typos, near-duplicates,
+and slugs nobody chose.
+
+**Acceptance Criteria:**
+
+1. **`seed_orgs` is idempotent and boot-safe.** Runs on every boot, skips what exists, and says why.
+2. **The slug is the identity.** Matching is by slug, never by name — the slug is what
+   `INVENTORY_DEFAULT_ORG_SLUG`, the switcher, and API keys reference. A name that differs from the file is
+   *reported*, never silently rewritten.
+3. **Removing a line deletes nothing.** Deleting an org would orphan its jobs and artifacts.
+4. **A bad list seeds nothing at all.** Validation completes before any write: a half-seeded tenant list is
+   worse than none, because jobs start landing in whichever orgs happened to exist.
+5. **The reserved `admin` slug is refused.** Migration `0002` owns the ADMIN org, which is a platform tier and
+   not a workspace (Stories 2.12/2.18).
+
+### Story 22.11: Remove the Organization UI
+
+As a user,
+I want the navigation to reflect that orgs are seeded, not created,
+so that the app does not offer a form that duplicates a committed file.
+
+**Context:** With 22.10 seeding orgs from `orgs.yml`, the creation form is redundant and the organization hub
+only linked to surfaces the nav already offers.
+
+**Acceptance Criteria:**
+
+1. The Organization pages, routes, templates, and nav entry are removed; the nav is Home / Upload / History /
+   API Keys.
+2. **Orgs remain first-class data.** The header switcher selects one and the upload form files a job against
+   one; only the management UI goes.
+
+### Story 22.12: Close the Post-Refactor Suite Audit Findings
+
+As a maintainer,
+I want the things that merely *look* covered to be either real or gone,
+so that a green suite means what it appears to mean.
+
+**Context:** An audit of the suite's validity after the Epic 21/22 refactor found three problems of the same
+kind.
+
+**Acceptance Criteria:**
+
+1. **The fake security boundary is deleted.** `get_org_scoped_object_or_404` was documented as the org-isolation
+   boundary and had **zero callers** — every real lookup went through `.for_org()`. A function that looks like
+   the boundary and enforces nothing is worse than no function, because it invites the next reader to trust it.
+2. **The no-organizations state is covered on every surface.** It proved to be the same condition behind nearly
+   all of `users/views.py`'s uncovered lines, since `get_admin_org` has been `get_request_org` since Story
+   21.24 — so the `not_admin` 403s now fire when the database has no org, not because a caller lacks privilege.
+   Pages answer 200 with an explanation; the API answers its documented `{error, code}` envelope; nothing 500s.
+3. **The order-dependent test landmine is removed.** Test-only `_ScopedThing` (no table, cascading FK to `Org`)
+   made *any* `Org` delete fail with `no such table` once its module was collected — a pass/fail that depended
+   on collection order. Tables are now created for models declared under `tests/`.

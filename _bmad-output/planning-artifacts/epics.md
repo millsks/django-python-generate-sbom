@@ -7341,3 +7341,26 @@ kind.
 3. **The order-dependent test landmine is removed.** Test-only `_ScopedThing` (no table, cascading FK to `Org`)
    made *any* `Org` delete fail with `no such table` once its module was collected — a pass/fail that depended
    on collection order. Tables are now created for models declared under `tests/`.
+
+### Story 22.13: Reconcile the API Reference With the Removed Authorization
+
+As a reader of the API reference,
+I want the documented gates to match what the app enforces,
+so that I do not conclude an endpoint is protected when it is open.
+
+**Context:** Surfaced by an `mkdocs build` INFO line about a link to an endpoint Story 21.24 deleted.
+`docs/api/authentication.md` was updated by that story and is accurate; `organizations.md`, `api-keys.md`, and
+`index.md` were missed and still said "Admin only", "Global admin only", and listed `403 not_global_admin` as a
+returned error on endpoints that **cannot return it**.
+
+**Acceptance Criteria:**
+
+1. **Every API page that describes endpoints states the true posture up front**, and the admin markers are kept
+   as a record of the authorization each endpoint is *meant* to carry (Epics 17-18 restore it at that seam).
+2. **No page lists an error code the app cannot return.** `not_global_admin` and `invalid_credentials` are gone
+   from the code and from the reference — both were dead module constants that coverage could not see, because
+   a module-level assignment always executes.
+3. **The stale `403 not_admin` listings are explained rather than deleted.** That code *is* still returned, but
+   only when the deployment has no organization at all.
+4. **A test ties the docs to the code**, asserting the retired codes appear nowhere in `src/` and that no API
+   page mentions them without saying they are retired.

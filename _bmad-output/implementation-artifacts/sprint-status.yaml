@@ -533,3 +533,11 @@ development_status:
   #       its module was collected — a pass/fail that depended on test order. Table now created
   #       for models declared under tests/.
   22-12-close-post-refactor-audit-findings: review
+  # ADDED 2026-08-18, surfaced by an `mkdocs build` INFO line about a link to an endpoint
+  # Story 21.24 deleted. The API reference still described gates the app no longer enforces:
+  # "Admin only", "Global admin only", and `403 not_global_admin` listed as a returned error
+  # on endpoints that CANNOT return it. Documenting protection the app does not have is worse
+  # than documenting none. Also removed two dead constants (_NOT_GLOBAL_ADMIN,
+  # _INVALID_CREDENTIALS) that coverage could not see, since a module-level assignment always
+  # executes.
+  22-13-reconcile-api-reference-with-removed-authorization: review

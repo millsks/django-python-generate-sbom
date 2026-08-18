@@ -100,24 +100,21 @@ def test_global_admin_is_admin_on_org_never_joined() -> None:
 
 
 @pytest.mark.django_db
-def test_only_global_admin_can_grant_global_admin() -> None:
-    """Only an existing global admin may grant global admin (AC #3)."""
+def test_granting_global_admin_works_for_any_caller() -> None:
+    """Was "only a global admin may grant" (Story 2.8 AC #3).
+
+    Stories 21.24 and 22.8 removed that gate: there is no principal to hold the tier against,
+    and keeping the check made a *signed-in* ordinary user more restricted than an anonymous
+    one. What survives is the effect — the grant lands — which is what this now asserts.
+    """
     User.objects.create_superuser(email="root@example.com", password="pw12345678")
     register_user(email="alice@example.com", password="pw12345678")
     bob = register_user(email="bob@example.com", password="pw12345678")
 
-    # A non-global-admin (alice) is rejected.
     alice_client = APIClient()
     alice_client.login(email="alice@example.com", password="pw12345678")
-    denied = alice_client.post("/api/v1/admin/global-admins/", {"email": "bob@example.com"}, format="json")
-    assert denied.status_code == 403
-    assert denied.data["code"] == "not_global_admin"
-    assert is_global_admin(bob) is False
+    granted = alice_client.post("/api/v1/admin/global-admins/", {"email": "bob@example.com"}, format="json")
 
-    # A global admin (root) may grant it.
-    root_client = APIClient()
-    root_client.login(email="root@example.com", password="pw12345678")
-    granted = root_client.post("/api/v1/admin/global-admins/", {"email": "bob@example.com"}, format="json")
     assert granted.status_code == 201
     assert is_global_admin(bob) is True
 
@@ -223,11 +220,17 @@ def test_revoke_last_global_admin_is_blocked() -> None:
 
 
 @pytest.mark.django_db
-def test_global_admin_list_and_revoke_require_global_admin() -> None:
-    """GET/DELETE on the global-admins endpoints are 403 for a non-global-admin (Story 13.1)."""
+def test_global_admin_list_and_revoke_are_reachable_by_any_caller() -> None:
+    """Inverted from a 403 assertion (Story 13.1) by Stories 21.24 / 22.8.
+
+    The *business* rules on these endpoints are unchanged and covered elsewhere — an unknown
+    email is still rejected, and the last remaining global admin still cannot be revoked. Only
+    the tier gate is gone.
+    """
     root = User.objects.create_superuser(email="root@example.com", password="pw12345678")
     register_user(email="alice@example.com", password="pw12345678")
     alice_client = _login("alice@example.com")
 
-    assert alice_client.get("/api/v1/admin/global-admins/").status_code == 403
-    assert alice_client.delete(f"/api/v1/admin/global-admins/{root.pk}/").status_code == 403
+    assert alice_client.get("/api/v1/admin/global-admins/").status_code == 200
+    # Still refused — but by the last-admin business rule, not by an authorization gate.
+    assert alice_client.delete(f"/api/v1/admin/global-admins/{root.pk}/").status_code == 400

@@ -67,15 +67,20 @@ class OrganizationHubView(OrgContextMixin, TemplateView):
     template_name = "inventory/orgs/hub.html"
 
 
-class CreateOrgView(FormView):  # type: ignore[type-arg]  # see LoginPageView
-    """Create an organisation — global admins only (Story 2.12)."""
+class CreateOrgView(FormView):  # type: ignore[type-arg]
+    """Create an organisation. Ungated since Story 21.24 (was global-admins-only, Story 2.12)."""
 
     template_name = "inventory/orgs/create.html"
     form_class = CreateOrgForm
 
     def form_valid(self, form: CreateOrgForm) -> HttpResponse:
-        """Create the org with the caller as its admin, then switch to it."""
-        creator = cast(UserT, self.request.user)
+        """Create the org — with the caller as its admin when there is one — then switch to it.
+
+        An anonymous caller is the ordinary case after Story 21.24 and has no user to make an
+        admin. Passing ``AnonymousUser`` straight through raised a ``ValueError`` from the
+        membership FK, so this page returned **500** for the normal case until Story 22.8.
+        """
+        creator = cast(UserT, self.request.user) if self.request.user.is_authenticated else None
         org = create_org(name=form.cleaned_data["name"], admin_user=creator)
         # Make the new org the active one, so the admin lands in the thing they just made
         # rather than in whichever org happened to be active.

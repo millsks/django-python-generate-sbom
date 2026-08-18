@@ -487,3 +487,11 @@ development_status:
   # on Windows, pywin32 was never declared, so the worker/beat/dev all died at import. The one
   # platform with no Docker fallback had no working background-job path at all.
   22-7-fix-windows-worker-pywin32: review
+  # ADDED 2026-08-18, found by auditing the suite for post-refactor validity. TWO defects that
+  # Story 21.24 left behind and that no test could see, because every page/API test logs in
+  # first and nothing exercised the anonymous path that is now the ORDINARY one:
+  #   (a) org creation returned 500 for an anonymous caller on BOTH the API and the page
+  #       (AnonymousUser assigned to OrgMembership.user), and
+  #   (b) four DRF views kept in-body is_global_admin() gates, so SIGNING IN made a user more
+  #       restricted than staying anonymous.
+  22-8-anonymous-admin-surface: review

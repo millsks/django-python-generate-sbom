@@ -82,7 +82,19 @@ def stack(tmp_path: Path) -> dict[str, object]:
         "DJANGO_SETTINGS_MODULE": "config.settings.local",
         "DATABASE_URL": f"sqlite:///{db_path}",
         "CELERY_DIR": str(tmp_path / ".celery"),
-        # Keep the analysis phases from waiting on real network timeouts.
+        # Force every outbound HTTP call to fail INSTANTLY by pointing the proxy at a closed
+        # local port. The analysis phases (4-7) call OSV, NVD, PyPI, endoflife.date and
+        # prefix.dev, whose URLs are hardcoded module constants rather than settings — so this
+        # is the only way to make the test offline without refactoring production code for a
+        # test's convenience.
+        #
+        # This is not a workaround for a flaky test, it is the test getting stricter: the job
+        # must still reach SUCCESS with every analysis phase failed, which is exactly FR-6.7's
+        # per-phase graceful degradation. Without it the test depended on real third-party
+        # availability and timed out on Windows CI at progress=45.
+        "HTTP_PROXY": "http://127.0.0.1:1",
+        "HTTPS_PROXY": "http://127.0.0.1:1",
+        "NO_PROXY": "",
         "PARSELMOUTH_PYPI_TO_CONDA_URL": "",
     }
 
@@ -178,7 +190,8 @@ while time.monotonic() < deadline:
         break
     time.sleep(1)
 
-print(f"status={{job.status}} result_key={{job.result_key}} progress={{job.progress}}")
+reports = list(job.reports.values_list("report_type", "failed"))
+print(f"status={{job.status}} result_key={{job.result_key}} progress={{job.progress}} reports={{reports}}")
 """
 
 
@@ -196,6 +209,20 @@ def test_a_real_worker_completes_a_job_over_the_filesystem_broker(stack: dict[st
 
     key = output.split("result_key=")[1].split()[0]
     assert (Path(str(stack["media"])) / key).exists(), f"SBOM blob missing at {key}"
+
+    # FR-6.7, asserted precisely rather than loosely. With the network unreachable the
+    # observed result is:
+    #
+    #     reports=[('vuln', True), ('license', False), ('version', False)]
+    #
+    # Only the VULNERABILITY phase fails, because only it genuinely requires a remote lookup
+    # (OSV/NVD). Licence classification reads what Story 8.25 already wrote into the SBOM, and
+    # version currency degrades to "unknown" per package rather than erroring — both are
+    # successful degradations, not failures. Asserting "some phase failed" would have been
+    # true but vague; this pins which one, so a future change that starts silently reaching the
+    # network (or stops running the phase at all) fails here.
+    assert "('vuln', True)" in output, f"the vulnerability phase should fail offline: {output}"
+    assert "progress=100" in output, output
 
 
 def test_the_worker_registers_the_scheduled_maintenance_tasks(worker: object) -> None:

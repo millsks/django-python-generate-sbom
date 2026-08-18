@@ -44,11 +44,15 @@ def test_procfile_declares_web_worker_beat() -> None:
     assert {"web", "worker", "beat"} <= set(processes)
 
 
-def test_procfile_declares_frontend_process() -> None:
-    """The Procfile declares a frontend HMR process delegating to fe-dev (Story 20.8)."""
+def test_procfile_declares_no_frontend_process() -> None:
+    """Story 21.19 reversed Story 20.8: honcho must not try to start a deleted task.
+
+    Inverted rather than deleted — a leftover `frontend:` line would fail `pixi run dev`
+    at the point a developer is least expecting it.
+    """
     processes = _procfile_processes()
-    assert "frontend" in processes
-    assert "fe-dev" in processes["frontend"]
+    assert "frontend" not in processes
+    assert not any("fe-" in command for command in processes.values())
 
 
 def test_procfile_web_uses_runserver_not_gunicorn() -> None:
@@ -108,14 +112,6 @@ def test_win64_worker_uses_solo_pool(pixi_config: dict[str, object]) -> None:
     assert "pipeline,analysis" in win_worker["cmd"]
     assert "cwd" not in win_worker
     assert win_worker["env"]["DJANGO_SETTINGS_MODULE"] == LOCAL_SETTINGS
-
-
-def test_fe_dev_task_runs_vite(pixi_config: dict[str, object]) -> None:
-    """The fe-dev task runs the Vite dev server from frontend after fe-install (Story 20.8)."""
-    fe_dev = pixi_config["tasks"]["fe-dev"]
-    assert "npm run dev" in fe_dev["cmd"]
-    assert fe_dev["cwd"] == "frontend"
-    assert "fe-install" in fe_dev["depends-on"]
 
 
 def test_container_web_task_still_gunicorn(pixi_config: dict[str, object]) -> None:

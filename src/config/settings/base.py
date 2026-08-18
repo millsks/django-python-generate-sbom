@@ -188,17 +188,10 @@ STORAGES = {
 # Built React SPA (frontend/dist/ at the project root, AD-5). Included only when
 # present so `check` / collectstatic don't warn before the frontend is built.
 # BASE_DIR is now the repo root itself (Story 21.1), so no `.parent` hop here.
-FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
-SPA_INDEX_FILE = FRONTEND_DIST / "index.html"
-
 # Project-wide static: the vendored Bootstrap/htmx assets and the icon sprite live under
 # django_service (Story 21.3). App static resolves separately through
 # AppDirectoriesFinder at src/django_apps/inventory/static/inventory/.
-# The SPA's built bundle is appended only while it exists (Story 21.19 removes it), so
-# `collectstatic` and `check` do not warn on a tree that has not been built yet.
 STATICFILES_DIRS = [APPS_DIR / "static"]
-if FRONTEND_DIST.exists():
-    STATICFILES_DIRS.append(FRONTEND_DIST)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

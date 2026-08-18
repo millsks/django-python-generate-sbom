@@ -1,43 +1,32 @@
 # Root URL configuration.
 #
-# Order matters: the SPA catch-all must come last and must not shadow the API,
-# health check, static assets, or the admin site. Story 1.2 adds /health/ and
-# Epic 2+ adds the /api/v1/ prefix; the negative-lookahead already excludes them.
-# Story 11.9 adds the OpenAPI schema + Swagger UI/ReDoc under /api/ (gated by
-# API_DOCS_ENABLED), which the catch-all's `api/` exclusion already keeps clear.
+# Story 21.19 retired the React SPA, and with it the catch-all that used to sit at the
+# bottom of this file serving `index.html` for every unmatched path. Nothing is a
+# fallback now: an unmatched path 404s, which is the point — a mistyped URL used to
+# answer 200 with the landing page, hiding broken links.
 from django.conf import settings
 from django.contrib import admin
-from django.urls import include, path, re_path
+from django.urls import include, path
 
 from django_service.views import LandingPageView, OrgSwitchView, ShellPreviewView
-from inventory.common.views import SpaView, health
+from inventory.common.views import health
 
 urlpatterns = [
-    # Story 21.18: the landing page owns "/". With this, every route has a Django owner,
-    # which is the precondition Story 21.19 needs before it can delete the SPA.
     path("", LandingPageView.as_view(), name="ui-home"),
     path("health/", health, name="health"),
     path("admin/", admin.site.urls),
-    # Story 21.3: the server-rendered shell, mounted under a TEMPORARY prefix.
-    #
-    # The SPA catch-all below still owns every real page path (/upload, /history, ...)
-    # for the whole of Epic 21, so the shell needs somewhere it will not be shadowed —
-    # hence `ui/`, which is also added to the catch-all's negative lookahead.
-    #
-    # Stories 21.5-21.18 claim the real paths one at a time as each page is converted,
-    # and Story 21.19 removes the SPA and this prefix along with it.
+    # The shell preview from Story 21.3, kept as a rendering harness for the base
+    # template. The `ui/` prefix existed to escape the SPA catch-all; with the catch-all
+    # gone it is now just this page's path.
     path("ui/", ShellPreviewView.as_view(), name="shell-preview"),
-    # Story 21.4: the org switcher form posts here. Under `ui/` so the SPA catch-all does
-    # not shadow it, and so it disappears with the prefix in Story 21.19.
+    # The org switcher form posts here (Story 21.4).
     #
     # The name is `ui-org-switch`, NOT `org-switch`: inventory/users/urls.py already
     # registers `org-switch` for the DRF endpoint, and Django resolves a duplicate name to
     # whichever pattern is registered LAST — which silently pointed the HTML form at the
     # JSON API. tests/unit/test_org_switcher.py pins the resolved action.
     path("ui/orgs/switch/", OrgSwitchView.as_view(), name="ui-org-switch"),
-    # Story 21.5 onward: the app's server-rendered pages, claiming their REAL paths one
-    # story at a time. Every path added there must also join the catch-all's negative
-    # lookahead below, or the SPA will shadow it.
+    # The app's server-rendered pages (Stories 21.5-21.18), at their real paths.
     path("", include("inventory.urls_pages")),
     path("api/v1/", include("inventory.users.urls")),
     path("api/v1/", include("inventory.manifests.urls")),
@@ -59,18 +48,3 @@ if settings.API_DOCS_ENABLED:
         path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
         path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
     ]
-
-# The SPA catch-all must remain last so it never shadows the routes above. `ui/` is the
-# server-rendered shell (Story 21.3); `login`, `register`, and `logout` are real pages
-# converted in Story 21.5 and are now served by Django rather than the SPA. The whole
-# lookahead — and the SPA — goes away in Story 21.19.
-#
-# The SPA's own client-side router still has /login and /register routes, so an in-app
-# navigation stays on the SPA while a fresh request for those URLs gets the Django page.
-# That coexistence is intentional for the duration of the epic.
-urlpatterns += [
-    re_path(
-        r"^(?!api/|health/|static/|admin/|ui/|login|register|logout|organization|members|keys|platform/|upload|history|results).*$",
-        SpaView.as_view(),
-    ),
-]

@@ -1,6 +1,10 @@
+---
+baseline_commit: d8ab00a
+---
+
 # Story 21.19: Retire the React SPA and the Node Toolchain
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -46,17 +50,17 @@ so that the project has one language and one toolchain.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 0 — Confirm prerequisites** — Every route from `App.tsx` has a Django owner; Story 21.17's
+- [x] **Task 0 — Confirm prerequisites** — Every route from `App.tsx` has a Django owner; Story 21.17's
   reference workbooks are committed. Do not proceed otherwise.
-- [ ] **Task 1 — Delete `frontend/` (AC: #1)**.
-- [ ] **Task 2 — pixi cleanup (AC: #1)** — `nodejs` dependency and the eight `fe-*` tasks; check the `ci` task's
+- [x] **Task 1 — Delete `frontend/` (AC: #1)**.
+- [x] **Task 2 — pixi cleanup (AC: #1)** — `nodejs` dependency and the eight `fe-*` tasks; check the `ci` task's
   `depends-on` array for `fe-*` entries.
-- [ ] **Task 3 — Remove the SPA coupling (AC: #2)** — `SpaView`, catch-all, `SPA_INDEX_FILE`, `FRONTEND_DIST`,
+- [x] **Task 3 — Remove the SPA coupling (AC: #2)** — `SpaView`, catch-all, `SPA_INDEX_FILE`, `FRONTEND_DIST`,
   `STATICFILES_DIRS`.
-- [ ] **Task 4 — Dockerfile + Procfile (AC: #3)**.
-- [ ] **Task 5 — CI + maintenance workflows (AC: #4)**.
-- [ ] **Task 6 — Codecov + Sonar (AC: #5)**.
-- [ ] **Task 7 — Clean-checkout verification (AC: #6)** — Fresh clone, `pixi install`, `pixi run ci`,
+- [x] **Task 4 — Dockerfile + Procfile (AC: #3)**.
+- [x] **Task 5 — CI + maintenance workflows (AC: #4)**.
+- [x] **Task 6 — Codecov + Sonar (AC: #5)**.
+- [x] **Task 7 — Clean-checkout verification (AC: #6)** — Fresh clone, `pixi install`, `pixi run ci`,
   `pixi run dev`, walk every route.
 
 ## Dev Notes
@@ -112,16 +116,114 @@ routes from `App.tsx` and walk each one before deleting `SpaView`.
 
 ### Agent Model Used
 
-_(to be filled by the dev agent)_
+claude-opus-5[1m] (Claude Opus 5, 1M context)
 
 ### Debug Log References
 
-_(to be filled by the dev agent)_
+- `pixi run ci` — **exit 0**. **806 passed**, coverage **96.72%**. No frontend step remains in
+  the gate.
+- **Clean-checkout verification (AC #6):** a fresh tree, `pixi install --locked` → succeeds;
+  `.pixi/envs/default/bin/node` and `npm` **absent**; `pixi run test` → **798 passed**.
+- `pixi.lock` re-solved with **zero** `nodejs` references.
+- **`pixi run dev` (AC #6):** honcho starts **web + worker + beat** — three processes, no
+  frontend. Route walk against `:8000`: `/` 200, `/register` 200, `/login` 200, and
+  `/organization` `/members` `/keys` `/upload` `/history` `/platform/global-admins` all 302 to
+  login (owned, not 404). `/health/` 200, `/admin/` 302, `/definitely-not-real` **404**.
+  `/static/css/bootstrap.min.css` and `/static/images/icons.svg` both 200.
+- **13 new tests** in `tests/unit/test_spa_retirement.py`; `test_spa.py` and
+  `test_manifest_format_consistency.py` deleted.
 
 ### Completion Notes List
 
-_(to be filled by the dev agent)_
+**Task 0 was run as a test, before anything was deleted.** The Dev Notes call AC #2 "the one
+that bites": deleting the catch-all converts every un-migrated path from *renders the SPA* to
+*404*, so a route missed in Stories 21.5-21.18 fails only at this point. So the ten routes were
+transcribed out of `App.tsx`'s `<Route>` table into a parametrised test and run **while the SPA
+was still in place** — all ten resolved and all ten answered non-404. Only then was `frontend/`
+deleted. That transcription is also the reason the test still means something now that
+`App.tsx` no longer exists to check against.
+
+**One route needed a real job to be checked honestly.** `/results/<placeholder-id>` 404s
+correctly — AD-2 makes a cross-org job indistinguishable from a missing one — so a placeholder
+id cannot tell *"the route lost its owner"* from *"that job does not exist"*, which is precisely
+the confusion this story's tests exist to avoid. The test creates a job the requesting org owns.
+
+**The `*`-fallback decision from Story 21.18 is implemented here, as promised.** An unknown path
+now 404s instead of answering 200 with the landing page. 21.18's
+`test_an_unknown_path_still_falls_back_to_the_spa` said in its docstring that this story was
+expected to replace it; it is now `test_an_unknown_path_now_404s` in the retirement module, with
+a pointer left behind at the old site. The behaviour change is in the diff of the story that
+owns it rather than buried in the one before.
+
+**The removal checks are file-level on purpose.** A half-removal is the likely failure here, and
+none of it is behavioural: a stale `fe-*` entry in the `ci` task's `depends-on`, a lingering
+`frontend` flag in `codecov.yml`, a `COPY frontend/` in the `Dockerfile`. No test of the
+application would ever notice. So there is a parametrised test asserting none of the six build
+and CI files mentions `frontend`, `npm`, `node_modules`, or any `fe-*` task, plus one that walks
+every pixi task's `depends-on` and fails on a reference to a task that no longer exists — a stale
+entry there breaks the gate itself.
+
+**`STATICFILES_DIRS` was pruned, not emptied.** The Dev Notes flagged this: Story 21.3 put the
+vendored Bootstrap/htmx assets and the icon sprite in the same setting the SPA bundle used.
+Only the `FRONTEND_DIST` entry went, and a test asserts the list is still non-empty — emptying it
+would have 404'd every stylesheet, which the live route walk confirms it does not.
+
+**The Windows job kept the half it exists for.** Story 20.6 added `unit-windows` to catch POSIX
+paths, the Unix-only Celery prefork pool, and gunicorn imports. Only its `fe-test` step went.
+
+**Two test modules were deleted, for different reasons, and one claim was rescued.**
+`test_spa.py` tested `SpaView` and the catch-all — both gone. But one of its assertions was that
+the admin site is not shadowed, and *that* is worth keeping independently of what used to
+threaten it, so it moved into the retirement module with a note saying where it came from.
+`test_manifest_format_consistency.py` existed to keep a TypeScript constant in step with the
+Django enum (Story 6.4 AC #4); with no TypeScript constant there is nothing left to drift, so
+deleting it is correct rather than a coverage loss.
+
+**One Procfile test was inverted rather than deleted.** A leftover `frontend:` line would make
+honcho try to start a task that no longer exists, failing `pixi run dev` at the moment a
+developer is least expecting it — so the test now asserts the Procfile declares *no* frontend
+process and no `fe-` command at all.
+
+**The lock file re-solved rather than being hand-edited**, and the clean checkout is the proof
+that matters: `pixi install --locked` in a fresh tree produces an environment with no `node` and
+no `npm` binary, and the suite passes in it. That is AC #6 demonstrated rather than asserted.
+
+**Not done here, and deliberately.** `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, and seven
+pages under `docs/` still describe the React SPA. That is Story 21.21's scope (documentation
+reconciliation), which the epic sequences after this one precisely so the docs describe the UI
+that exists rather than the one being built. AD-5 is retired in behaviour here and formally
+superseded in Story 21.20.
+
+**Still open, unchanged:** the `beat_schedule` maintenance tasks are absent from the Celery
+registry (found in 21.1, needs its own bug story), and the four deferred pluggability violations.
 
 ### File List
 
-_(to be filled by the dev agent)_
+**Deleted**
+- `frontend/` — the entire SPA tree (4,578 non-test lines, 39 vitest files, `node_modules`)
+- `tests/unit/test_spa.py`, `tests/unit/test_manifest_format_consistency.py`
+
+**New (1)**
+- `tests/unit/test_spa_retirement.py` (13 tests, 34 cases with parametrisation)
+
+**Modified (12)**
+- `pixi.toml` / `pixi.lock` — `nodejs` and the eight `fe-*` tasks removed; four `fe-*` entries
+  dropped from the `ci` task's `depends-on`
+- `Procfile` — the Vite line removed (reverses Story 20.8)
+- `Dockerfile` — `COPY frontend/` and the `fe-build` step removed; `collectstatic` kept
+- `src/config/urls.py` — the SPA catch-all removed
+- `src/django_apps/inventory/common/views.py` — `SpaView` removed
+- `src/config/settings/base.py` — `FRONTEND_DIST`, `SPA_INDEX_FILE`, and the
+  `STATICFILES_DIRS` append removed
+- `.github/workflows/ci.yml` — `frontend-quality`, `frontend-test`, `frontend-build` removed
+  plus their `needs:` entries and the Windows job's frontend step
+- `.github/workflows/maintenance.yml` — the npm audit step, summary block, and artifact
+- `codecov.yml`, `sonar-project.properties` — Python-only
+- `tests/unit/{test_settings_paths,test_dev_runner_config,test_landing_page}.py`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`, and this story file
+
+## Change Log
+
+| Date | Change |
+|---|---|
+| 2026-08-18 | Deleted the React SPA and every trace of its build chain: the `frontend/` tree, the `nodejs` dependency, the eight `fe-*` pixi tasks and their `ci` entries, the Vite process, the Docker build step, three GitHub CI jobs, the npm audit, and the frontend halves of the Codecov and Sonar configs. Removed the AD-5 coupling — `SpaView`, the catch-all, `SPA_INDEX_FILE`, `FRONTEND_DIST` — with no route left behind: the ten routes were transcribed out of `App.tsx` and asserted to resolve *and* respond before anything was deleted, and re-checked live afterwards. An unknown path now 404s, implementing the decision Story 21.18 flagged. Verified on a clean checkout: `pixi install --locked` yields an environment with no `node` or `npm`, the suite passes in it, and `pixi run dev` brings up web + worker + beat with the UI at `:8000`. `pixi run ci` exit 0; 806 tests at 96.72%. Documentation still describing the SPA is Story 21.21's scope. |

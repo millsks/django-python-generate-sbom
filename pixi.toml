@@ -1,8 +1,8 @@
 # Umbrella pixi manifest for the whole project (AD-13).
-# Installs the Python env (backend) AND the Node runtime (frontend), and
-# orchestrates every task. Story 21.1 moved the Django tree to a src/ layout at
-# the repo root, so backend tasks now run from the root with NO `cwd`; frontend
-# tasks still run with cwd = "frontend" and shell out to npm/vite.
+# One environment, one runner: pixi installs the Python env and orchestrates every
+# task. Story 21.1 moved the Django tree to a src/ layout at the repo root, so tasks
+# run from the root with NO `cwd`. Story 21.19 retired the React SPA and with it the
+# Node runtime and the eight `fe-*` tasks — the project is Python-only.
 [workspace]
 authors = ["Kevin Mills <millsks@gmail.com>"]
 channels = ["conda-forge"]
@@ -16,7 +16,6 @@ version = "0.1.0"
 # will be tightened toward the spine pins as those land on conda-forge.
 [dependencies]
 python = "3.13.*"
-nodejs = ">=20"
 django = ">=5.1"
 djangorestframework = ">=3.15"
 djangorestframework-api-key = ">=3.1"
@@ -258,61 +257,10 @@ cmd = "docker compose exec web pixi run migrate"
 [tasks.docker-shell]
 cmd = "docker compose exec web bash"
 
-# --- Frontend (Node) tasks — run from ./frontend; pixi provides the Node runtime ---
-[tasks.fe-install]
-cmd = "npm install"
-cwd = "frontend"
-
-# Vite HMR dev server (Story 20.8). Serves the SPA at http://localhost:5173 with
-# hot-module reload and proxies /api, /admin, /static to Django on :8000 (see
-# frontend/vite.config.ts). Run standalone (`pixi run fe-dev`) or via the root
-# Procfile so `pixi run dev` brings the UI up alongside the backend. Cross-platform
-# (macOS + Windows) through the pixi-provided Node runtime.
-[tasks.fe-dev]
-cmd = "npm run dev"
-cwd = "frontend"
-depends-on = ["fe-install"]
-
-[tasks.fe-lint]
-cmd = "npm run lint"
-cwd = "frontend"
-depends-on = ["fe-install"]
-
-[tasks.fe-build]
-cmd = "npm run build"
-cwd = "frontend"
-depends-on = ["fe-install"]
-
-[tasks.fe-test]
-cmd = "npm run test"
-cwd = "frontend"
-depends-on = ["fe-install"]
-
-# Standalone type check (tsc, no emit via tsconfig noEmit) so CI can type-check
-# independently of the build. Runs the local tsc binary — no registry access.
-[tasks.fe-typecheck]
-cmd = "node_modules/.bin/tsc -b"
-cwd = "frontend"
-depends-on = ["fe-install"]
-
-# npm dependency vulnerability audit for the frontend; gates on high/critical
-# (lists moderate/low too, but doesn't fail the task on them).
-[tasks.fe-security]
-cmd = "npm audit --audit-level=high"
-cwd = "frontend"
-depends-on = ["fe-install"]
-
-# Frontend tests with v8 coverage → frontend/coverage/lcov.info for the Codecov
-# upload (Story 9.1). Vitest coverage config lives in vitest.config.ts.
-[tasks.fe-cov]
-cmd = "npm run test:coverage"
-cwd = "frontend"
-depends-on = ["fe-install"]
-
-# Unified CI gate across both backend and frontend (AD-13 pixi umbrella). Mirrors
-# the GitHub CI quality jobs: ruff lint + format-check, mypy, bandit (backend);
-# oxlint + tsc (frontend); full coverage; and both builds. Story 9.1 wired the
-# format-check / security / typecheck gates in so local == CI.
+# The CI gate (AD-13 pixi umbrella). Mirrors the GitHub CI quality jobs: ruff lint +
+# format-check, mypy, bandit, full coverage, the wheel build, and the docs build.
+# Story 9.1 wired the format-check / security / typecheck gates in so local == CI;
+# Story 21.19 removed the frontend half when the SPA was retired.
 [tasks.ci]
 depends-on = [
   "precommit",
@@ -322,9 +270,5 @@ depends-on = [
   "fmt-check",
   "security",
   "cov",
-  "fe-lint",
-  "fe-typecheck",
-  "fe-cov",
-  "fe-build",
   "docs-build",
 ]

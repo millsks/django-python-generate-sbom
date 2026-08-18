@@ -218,17 +218,6 @@ def test_the_external_links_are_settings_driven_with_the_spa_defaults() -> None:
     assert settings.DOCS_URL in html
 
 
-# --- The `*`-route fallback (Dev Notes: decide deliberately, do not ship silently) ----------
-
-
-@pytest.mark.django_db
-def test_an_unknown_path_still_falls_back_to_the_spa() -> None:
-    """Pins TODAY's behaviour, which this story deliberately does not change.
-
-    `App.tsx` routes `*` to `HomePage`, so an unknown path currently renders the landing page
-    rather than a 404. Making it 404 is better behaviour but it *is* a behaviour change, and
-    the SPA catch-all is Story 21.19's to remove — so the change belongs in that story's diff,
-    where it is visible, rather than buried in this one. This test is expected to be REPLACED
-    by a 404 assertion there; a silent flip is what it exists to prevent.
-    """
-    assert Client().get("/definitely-not-a-real-page").status_code == 200
+# The `*`-route fallback that this module used to pin lives in test_spa_retirement.py now:
+# Story 21.19 deleted the SPA catch-all, so an unknown path 404s rather than rendering the
+# landing page. The replacement is `test_an_unknown_path_now_404s`.

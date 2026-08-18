@@ -64,10 +64,3 @@ def test_media_root_resolves_under_the_repository_root() -> None:
 def test_default_sqlite_path_resolves_under_the_repository_root() -> None:
     # The test settings inherit the base default (no DATABASE_URL in the env).
     assert _CONFIGURED_DB_NAME == str(REPO_ROOT / "db.sqlite3")
-
-
-def test_frontend_dist_resolves_to_the_repo_root_frontend() -> None:
-    # AC #8: the SPA must keep working. BASE_DIR is now the repo root itself, so this
-    # path takes no `.parent` hop — a stale `.parent` would point outside the repo.
-    assert settings.FRONTEND_DIST == REPO_ROOT / "frontend" / "dist"
-    assert settings.SPA_INDEX_FILE == REPO_ROOT / "frontend" / "dist" / "index.html"

@@ -14,10 +14,9 @@ COPY pixi.toml pixi.lock pyproject.toml manage.py ./
 COPY src/ src/
 RUN pixi install --locked
 
-# Build the SPA into frontend/dist, then collect static assets into STATIC_ROOT.
-COPY frontend/ frontend/
-RUN pixi run fe-build \
- && DJANGO_SETTINGS_MODULE=config.settings.production SECRET_KEY=build-only pixi run collectstatic
+# Collect static assets into STATIC_ROOT. Story 21.19 removed the SPA build step that
+# used to run first; the vendored assets now ship in the source tree copied above.
+RUN DJANGO_SETTINGS_MODULE=config.settings.production SECRET_KEY=build-only pixi run collectstatic
 
 EXPOSE 8000
 

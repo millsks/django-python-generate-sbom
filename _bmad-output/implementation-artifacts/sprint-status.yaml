@@ -460,3 +460,19 @@ development_status:
   # documents, and audits an app that is already open. Org isolation (AD-2), API keys (AD-8), CSRF, and the
   # whole org/member/key model are RETAINED — this removes the identity gate, not the tenancy model.
   21-24-remove-authentication-requirement: review
+
+  # Epic 22 — HARDENS what Epic 20 already built; it does not rebuild it. SQLite, the
+  # filesystem broker, win-64 + --pool=solo, and `pixi run dev` all work today. What is
+  # missing is a guarantee they KEEP working on Windows for a team with no fallback:
+  # Docker and Podman are unavailable there by security policy in the destination org, so
+  # a regression in the containerless path stops work outright. 22.2 is a confirmed bug
+  # already shipping (both beat_schedule tasks are absent from the Celery registry).
+  # 22.5 carries a product-owner decision gate on the Compose path.
+  # Suggested order: 22.2 (bug) -> 22.1 -> 22.3 -> 22.4 -> 22.5.
+  # Stories are defined in epics.md; run create-story to context each before dev.
+  epic-22: backlog
+  22-1-containerless-env-template-default: backlog
+  22-2-fix-unregistered-beat-maintenance-tasks: backlog
+  22-3-windows-ci-parity-full-gate: backlog
+  22-4-prove-local-pipeline-end-to-end: backlog
+  22-5-state-the-no-container-contract: backlog

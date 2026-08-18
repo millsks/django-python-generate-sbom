@@ -6996,3 +6996,176 @@ flight and its sign-in call-to-action should be written once, against the final 
 because the React retirement, the documentation sweep (21.21), and the test-parity audit (21.23) must all
 describe and audit the app as it will actually ship — an audit that certifies authorization tests for four
 principal types would otherwise certify tests this story deletes.
+
+---
+
+## Epic 22: Harden Containerless Local Development (Windows + macOS)
+
+**This epic does not build containerless local development — Epic 20 already did.** SQLite is the local
+database, Kombu's `filesystem://` transport is the local broker, `FileSystemStorage` is local object storage,
+`win-64` is a supported pixi platform with a `--pool=solo` worker override, and `pixi run dev` starts web +
+worker + beat through honcho with no container of any kind. All of that is implemented and verified.
+
+What is **not** established is that it *keeps* working, on Windows, for a team that has no fallback. The
+application is moving into an organization where Docker and Podman are unavailable on Windows by security
+policy, so the containerless path is not the convenient option — it is the **only** option, and a regression in
+it stops work outright. This epic closes the gap between "works on the machine it was built on" and "is
+guaranteed on both platforms by CI", and fixes one real defect that ships to every developer today.
+
+**Grounded facts (verified against the repo, 2026-08-18):**
+- `pixi.toml:10` — `platforms = [..., "win-64"]`; `[target.win-64.tasks.worker]` swaps the Unix-only prefork
+  pool for `--pool=solo`.
+- `src/config/settings/local.py` — `CELERY_BROKER_URL = "filesystem://"`, `CELERY_RESULT_BACKEND = "django-db"`,
+  and a comment forbidding a `DATABASES`/`STORAGES` swap because the base SQLite + filesystem defaults **are**
+  the containerless defaults.
+- `pixi run dev` starts exactly three processes (`web.1`, `worker.1`, `beat.1`); `/upload` answers `200` from a
+  database created by `pixi run migrate` alone.
+- `pixi run test-integration` — **8 passed** with no Postgres, Redis, MinIO, or network. The integration suite
+  is already containerless.
+- `.github/workflows/ci.yml` — the `unit-windows` job runs `pixi run test` (**unit only**) on `windows-latest`.
+- `.env.example` sets `DJANGO_SETTINGS_MODULE=config.settings.production` with Postgres, Redis, and MinIO
+  values; `.env.local.example` is the containerless template.
+- Both `beat_schedule` entries in `src/config/celery_app.py:23-34` name tasks that are **absent from the Celery
+  registry** — confirmed by importing the default modules and diffing against `app.tasks`.
+
+### Story 22.1: Make the Containerless Template the Obvious One
+
+As a developer joining on Windows,
+I want the environment file I am told to copy to be the containerless one,
+so that my first run does not point the app at a PostgreSQL, Redis, and MinIO that I cannot start.
+
+**Context:** `.env.example` is the file a newcomer reaches for by name, and it is the **production/container**
+template — `DJANGO_SETTINGS_MODULE=config.settings.production` plus Postgres, Redis, and MinIO. The
+containerless template is `.env.local.example`. `README.md`'s Quick Start compounds this by instructing
+`cp .env.example .env` as part of the Docker path. A developer with no Docker who follows the most obvious
+instruction gets a stack that cannot start, and the failure (a Postgres connection refusal) does not point at
+the cause.
+
+**Acceptance Criteria:**
+1. **The default-named template is containerless.**
+   Given a developer copies the template whose name carries no qualifier, when they run `pixi run migrate` and
+   `pixi run dev` with no further edits, then the application starts against SQLite, the filesystem broker, and
+   filesystem storage, and requires no container.
+2. **The container template is still available and clearly named.**
+   Given the Docker Compose path still exists for prod-parity work, when the templates are reorganised, then a
+   container/production template remains, is named so its purpose is unambiguous, and is referenced only from
+   the Compose section of the docs.
+3. **The README's Quick Start leads with the containerless path.**
+   Given Docker is unavailable to part of the team by policy, when the Quick Start is reordered, then
+   `pixi install` → `pixi run migrate` → `pixi run dev` is the first path presented, and the Compose path is
+   presented after it as optional.
+4. **A test asserts the default template is containerless.**
+   Given the trap was a filename, when the story completes, then a test parses the default-named template and
+   fails if it selects production settings or names a service the containerless path cannot provide.
+
+### Story 22.2: Fix the Unregistered Celery Beat Maintenance Tasks
+
+As a developer running the local stack,
+I want the two scheduled maintenance tasks to actually exist in the Celery registry,
+so that Beat is not dispatching tasks that every worker rejects.
+
+**Context:** Found during Story 21.1 and carried unfixed through Epic 21 because it was out of that epic's
+scope. `app.conf.beat_schedule` schedules `inventory.tasks.maintenance.refresh_parselmouth_mapping` and
+`...purge_expired_artifacts`; neither module is imported during autodiscovery, so both names are **missing from
+`app.tasks`**. Beat dispatches them and the worker raises `NotRegistered`. Two features are silently dead:
+artifact retention (FR-8.2) never purges, and the parselmouth mapping never refreshes. This mattered less when
+Beat ran only in a container; `pixi run dev` now starts Beat on every developer's machine.
+
+**Acceptance Criteria:**
+1. **Both scheduled tasks are registered.**
+   Given `beat_schedule` names two tasks, when the application starts, then both names are present in
+   `app.tasks` and a worker executes them rather than raising `NotRegistered`.
+2. **The schedule cannot drift from the registry again.**
+   Given the failure was invisible because nothing compared the two, when the story completes, then a test
+   asserts every `beat_schedule` entry's `task` resolves in the registry — so adding a third schedule entry
+   without importing its module fails the suite.
+3. **Both tasks are proven to run.**
+   Given the defect hid behind tests that never dispatched them, when the story completes, then each task is
+   executed in a test and asserted on its effect, not merely on being importable.
+4. **Gate green.** `pixi run ci` exits 0.
+
+### Story 22.3: Windows CI Parity — Run the Whole Gate on `win-64`
+
+As a maintainer,
+I want Windows to run the same suite macOS does,
+so that a cross-platform regression is caught by CI rather than by the developer who cannot work around it.
+
+**Context:** `unit-windows` runs `pixi run test` — the **unit** suite only. The parts most likely to break on
+Windows are precisely the parts it does not cover: the `filesystem://` broker's locking, the `--pool=solo`
+worker, Beat's schedule file, and SQLite under two processes. The integration suite already runs offline with
+no infrastructure (**8 passed**), so there is no technical obstacle to running it on `windows-latest`.
+
+**Acceptance Criteria:**
+1. **The Windows job runs the integration suite too.**
+   Given `pixi run test-integration` needs no container, when the job is extended, then it runs on
+   `windows-latest` and passes.
+2. **The Windows job runs the coverage gate.**
+   Given coverage is the merge gate on Ubuntu, when the job is extended, then Windows runs `pixi run cov` and
+   is subject to the same ≥90% floor.
+3. **A Windows failure blocks the merge.**
+   Given the platform has no fallback for part of the team, when the workflow is updated, then the Windows job
+   is a required check rather than an advisory one, and the change is recorded in the workflow.
+4. **The matrix is honest about what it does not cover.**
+   Given `pixi run ci` also runs `precommit`, `build`, `security`, and `docs-build`, when the job is defined,
+   then whatever it deliberately omits is stated in a comment rather than left implicit.
+
+### Story 22.4: Prove the Local Pipeline End to End on Both Platforms
+
+As a developer,
+I want evidence that a real SBOM job completes locally on SQLite with a real worker,
+so that the containerless stack is verified as a working system rather than as a set of green unit tests.
+
+**Context:** Every existing test runs Celery **eager** (`config.settings.test`), so no test has ever exercised
+the local stack as it actually runs: a separate worker process, the `filesystem://` broker, and **two processes
+writing the same SQLite file**. SQLite's writer lock is the classic failure here — the web process writing
+`SBOMJob.status` while the worker writes phase progress produces `database is locked`, and it appears under
+load rather than on the first run. AD-12 makes the worker the sole writer of `status`, which helps, but nothing
+proves it.
+
+**Acceptance Criteria:**
+1. **A real job completes against a real worker.**
+   Given `pixi run dev` runs web + worker + beat, when a manifest is submitted through the UI, then the job
+   reaches a terminal state with its SBOM artifact written, driven by the real worker over the filesystem
+   broker — not eager mode.
+2. **Concurrent writes do not lock the database.**
+   Given SQLite permits one writer, when a job runs while the web process is serving requests against the same
+   database, then no request or task fails with `database is locked`, and whatever makes that true (Django's
+   `timeout`, WAL mode, or AD-12's single-writer rule) is **recorded in settings with its reasoning**.
+3. **The verification runs on both platforms.**
+   Given the team develops on Windows and macOS, when the check is automated, then it runs on both and its
+   result is visible in CI.
+4. **The filesystem broker's limits are documented.**
+   Given Kombu's `filesystem://` transport is a development convenience, when the story completes, then its
+   known constraints — no fanout, polling latency, shared-directory locking — are documented where a developer
+   debugging a stuck job will find them.
+
+### Story 22.5: State the No-Container Contract (Product-Owner Decision)
+
+As a maintainer,
+I want the project to state that local development requires no container, and to decide what happens to the
+Compose path,
+so that a contributor does not add a dependency that half the team cannot satisfy.
+
+**Context:** Docker and Podman are unavailable on Windows in the destination organization by security policy.
+The repository still ships `docker-compose.yml`, a `Dockerfile`, and eight `docker-*` pixi tasks, and
+`docs/developer/setup.md` presents Compose as the "prod-parity" path. None of that is wrong — the container
+path is how OCP/prod runs (Epic 19) — but nothing states the **contract**: that no local workflow, and no CI
+gate, may require a container.
+
+> **⚠ DECISION GATE.** Whether to keep, de-emphasise, or retire the local Compose path is the product owner's
+> call. Propose; do not remove anything until it is answered.
+
+**Acceptance Criteria:**
+1. **The contract is written down.**
+   Given the constraint is a policy rather than a preference, when it is recorded, then `CONTRIBUTING.md` and
+   the developer docs state that local development and `pixi run ci` must never require Docker or Podman, and
+   that Windows and macOS are equally supported.
+2. **A test enforces the contract.**
+   Given a future task could reintroduce a container dependency, when the story completes, then a test asserts
+   no task in `pixi run ci`'s chain invokes `docker` or `podman`.
+3. **The Compose path's fate is decided and applied.**
+   Given the decision gate above, when the product owner answers, then the Compose path is kept as-is,
+   marked explicitly as unavailable to part of the team, or retired — and the reasoning is recorded in place.
+4. **The docs stop implying Docker is expected.**
+   Given `setup.md` currently frames Compose as a normal alternative, when it is updated, then the
+   containerless path is unambiguously the supported local path and Compose is qualified accordingly.

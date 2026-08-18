@@ -100,7 +100,9 @@ mkdocstrings-python = ">=1.11,<2"
 [environments]
 default = { features = ["dev"], solve-group = "default" }
 
-# --- Backend (Python) tasks — run from the repo root (Story 21.1) ---
+# --- Quality tasks — run from the repo root (Story 21.1) ---
+# There is no "backend" qualifier any more: Story 21.19 retired the SPA, so these are
+# simply the project's tasks.
 [tasks.fmt]
 cmd = "ruff format ."
 
@@ -145,9 +147,15 @@ cmd = "pytest tests/ --cov=src --cov-report=html"
 cmd = "pytest tests/ --cov=src --cov-branch --cov-report=xml --cov-report=term-missing --cov-fail-under=90"
 
 # --- Server / ops tasks — also the Docker service commands ---
+# Applies migrations, including the two data migrations that seed the ADMIN org and the
+# default org an anonymous caller acts as. `pixi run migrate` is the only setup the app
+# needs before `pixi run dev`.
 [tasks.migrate]
 cmd = "python manage.py migrate"
 
+# Creates a Django superuser for the ADMIN org from DJANGO_SUPERUSER_EMAIL /
+# DJANGO_SUPERUSER_PASSWORD (Story 2.13); idempotent. Since Story 21.24 the app itself
+# needs NO account — this is only for `django.contrib.admin` at /admin/.
 [tasks.seed-superuser]
 cmd = "python manage.py seed_superuser"
 
@@ -195,9 +203,13 @@ cmd = "celery -A config.celery_app flower --port=5555"
 
 # --- Project-wide tasks — run from the root ---
 # One-command containerless local stack (Story 20.5): honcho reads the root
-# Procfile and launches web (runserver) + worker + beat together in the
-# foreground, identically on macOS and Windows. Sets local settings for the
-# whole process tree so no child falls back to the production-defaulting wsgi.
+# Procfile and launches THREE processes — web (runserver) + worker + beat — together in
+# the foreground, identically on macOS and Windows. Sets local settings for the whole
+# process tree so no child falls back to the production-defaulting wsgi.
+#
+# The UI is at http://localhost:8000, served by Django itself: Story 21.19 removed the
+# fourth (Vite) process, so there is no second port and no build step.
+# First run needs `pixi run migrate`, which seeds the orgs the app needs.
 [tasks.dev]
 cmd = "honcho start"
 env = { DJANGO_SETTINGS_MODULE = "config.settings.local" }

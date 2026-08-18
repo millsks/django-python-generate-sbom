@@ -63,12 +63,11 @@ before that story is unusable and must be recreated:
 ```sh
 rm db.sqlite3                  # discard the pre-21.2 database (no upgrade path)
 pixi run migrate               # rebuild the schema from the new initial migrations
-pixi run seed-superuser        # recreate the superuser + ADMIN org (env-driven)
 ```
 
-`seed-superuser` reads `DJANGO_SUPERUSER_EMAIL` and `DJANGO_SUPERUSER_PASSWORD`, and is
-idempotent. The ADMIN org itself is seeded by the `inventory.0002_seed_admin_org` data
-migration, so `pixi run migrate` alone is enough to get a working ADMIN org.
+**`pixi run migrate` alone is enough to get a usable app**: the data migrations seed both
+the ADMIN org (`0002`) and the default org an anonymous caller acts as (`0003`). Run
+`pixi run seed-superuser` as well only if you want a Django `/admin/` login.
 
 This was a deliberate, signed-off trade: at `version = 0.1.0` with nothing deployed, a
 fresh database was judged far less risky than hand-authoring `SeparateDatabaseAndState`
@@ -187,44 +186,54 @@ pixi run docker-migrate     # apply migrations in the web container
 pixi run docker-shell       # open a shell in the web container
 ```
 
-## Creating the initial admin
+## You do not need an account to use the app
 
-Migrations seed the distinguished **ADMIN** org (`Org.is_admin_org=True`); members
-of that org are **global admins** (see [Architecture](architecture.md)). There is no
-auto-created "personal" org for the first user — a new account starts with zero
-memberships. Instead, seed a Django **superuser**, which is automatically made a
-global admin:
+!!! warning "The application has no authentication"
+
+    Story 21.24 removed the app's own login. Every page and every `/api/v1/` endpoint is
+    open to anyone who can reach the server, and every action is available to every caller.
+    Identity is intended to come from the host platform via OIDC and group claims (Epics
+    17-18); until then, **run this only on a trusted network.**
+
+`pixi run migrate` seeds two organizations and that is all the setup the app needs:
+
+| Org | Seeded by | Purpose |
+|---|---|---|
+| **Enterprise Wells Fargo Technology** (`enterprise-wells-fargo-technology`) | `inventory.0003_seed_default_org` | The org an anonymous caller acts as. Override the slug with `INVENTORY_DEFAULT_ORG_SLUG`. |
+| **Admin** (`admin`) | `inventory.0002_seed_admin_org` | The platform-admin tier. Never a workspace — it is not offered in the org switcher or on the upload form. |
+
+Open [http://localhost:8000](http://localhost:8000) and go straight to **Upload**. Pick the
+organization on the form; create more from the **Organization** page whenever you need them.
+
+### Creating a Django superuser (for `/admin/` only)
+
+`django.contrib.admin` keeps its **own** login at `/admin/`, independent of the app. A
+superuser is needed only to reach that:
 
 ```sh
-cd backend
-python manage.py createsuperuser        # create_superuser hook → grant_global_admin
+pixi run python manage.py createsuperuser
 ```
 
 **Env-driven auto-seed (Story 2.13):** set `DJANGO_SUPERUSER_EMAIL` and
-`DJANGO_SUPERUSER_PASSWORD` in `.env` and seeding creates that superuser (making
-them a global admin via the `create_superuser` hook) if it does not already exist —
-no manual step. The `.env.local.example` template ships placeholder values you can
-edit. The command is idempotent: it skips cleanly when the vars are unset or the
-user already exists, and never logs the password. You can also run it directly:
+`DJANGO_SUPERUSER_PASSWORD` in `.env` and seeding creates that superuser if it does not
+already exist. It is idempotent — it skips cleanly when the vars are unset or the user
+exists, and never logs the password:
 
 ```sh
 pixi run seed-superuser        # env-driven; idempotent (Story 2.13)
 ```
 
-The seeded superuser is provisioned into the **ADMIN** org — there is no auto-created
-personal org. Never commit real credentials.
-
-`UserManager.create_superuser` calls `grant_global_admin`, so the new superuser is
-written into the ADMIN org and back-filled as an admin of every org. If you created
-superusers before running the seed migration (or need an idempotent catch-up), run:
+`UserManager.create_superuser` calls `grant_global_admin`, so the superuser is written into
+the ADMIN org. That tier no longer gates anything in the app, but the records are still
+maintained — they are the seam host-supplied group claims will re-attach to. For an
+idempotent catch-up over superusers created before the seed migration:
 
 ```sh
-cd backend
-python manage.py bootstrap_admin_org    # ensure the ADMIN org exists; seed all superusers
+pixi run python manage.py bootstrap_admin_org   # ensure the ADMIN org exists; seed superusers
 ```
 
-Under Docker Compose, run these inside the `web` container (`pixi run docker-shell`,
-then the same `python manage.py …` commands).
+Under Docker Compose run these inside the `web` container — `pixi run docker-shell`, then
+the same `pixi run python manage.py …` commands. Never commit real credentials.
 
 ## Settings
 

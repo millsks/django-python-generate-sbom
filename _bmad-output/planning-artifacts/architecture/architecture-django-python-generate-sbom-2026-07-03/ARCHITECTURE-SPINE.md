@@ -4,10 +4,10 @@ type: architecture-spine
 purpose: build-substrate
 altitude: feature
 paradigm: layered-modular-monolith
-scope: full system — Django REST API + React SPA + Celery async pipeline for Python SBOM generation
+scope: full system — server-rendered Django UI + REST API + Celery async pipeline for Python SBOM generation
 status: final
 created: 2026-07-03
-updated: 2026-07-03T15:30
+updated: 2026-08-18T00:00
 binds: [F1, F2, F3, F4, F5, F6, F7, F8]
 sources:
   - _bmad-output/planning-artifacts/prds/prd-django-python-generate-sbom-2026-07-03/prd.md
@@ -27,12 +27,12 @@ The system is a single deployable Django application. Module boundaries are Djan
 Four layers, strict top-to-bottom dependency:
 
 ```
-HTTP / React SPA   →   DRF Views   →   Service Layer   →   ORM / External APIs
+Browser / API client   →   Page views + DRF Views   →   Service Layer   →   ORM / External APIs
                                 ↑
                         Celery Tasks (same service layer, no HTTP)
 ```
 
-A React SPA (served as static assets) is the UI layer. It communicates exclusively through the versioned REST API. No server-side rendering of business data.
+Server-rendered Django templates are the UI layer (**AD-15**, Epic 21 — superseding the React SPA of AD-5). Page views and DRF views are peers on the same service layer: neither calls the other, and the UI never issues an HTTP request to `/api/v1/`. The versioned REST API remains the contract for programmatic clients.
 
 ---
 
@@ -48,7 +48,7 @@ A React SPA (served as static assets) is the UI layer. It communicates exclusive
 
 - **Binds:** all models owning org data; all service functions; all DRF views
 - **Prevents:** cross-org data access; existence leaks on unauthorized access
-- **Rule:** Every model owning org data extends `OrgScopedModel` (abstract base with `org` FK + `OrgScopedQuerySet` providing `.for_org(org)`). All queries use `.for_org(org)`. DRF views extract org from the authenticated API key (`request.auth.org`) and pass it as the first positional argument to every service function. **API endpoints** return `404` (never `403`) for cross-org or non-existent object access — `Model.objects.for_org(org).get(pk=pk)` raises `DoesNotExist` for both cases, hiding existence from API consumers. **Web UI routes** (served by the React SPA) return `403` for authenticated users accessing another org's resources — UUID-based URLs do not leak existence, and `403` gives clearer UX for the shared-link use case (FR-6.8).
+- **Rule:** Every model owning org data extends `OrgScopedModel` (abstract base with `org` FK + `OrgScopedQuerySet` providing `.for_org(org)`). All queries use `.for_org(org)`. DRF views extract org from the authenticated API key (`request.auth.org`) and pass it as the first positional argument to every service function. **API endpoints** return `404` (never `403`) for cross-org or non-existent object access — `Model.objects.for_org(org).get(pk=pk)` raises `DoesNotExist` for both cases, hiding existence from API consumers. **Web UI routes** apply the same rule via `common/access.get_org_scoped_object_or_404`, which folds the org filter into the query so wrong-org and non-existent are indistinguishable **by construction** — there is no code path that can tell them apart. *(This tightens the original decision, which allowed the UI to answer `403`: a `403`-vs-`404` difference confirms that an object the caller cannot see exists. Authorization failures that reveal nothing — a non-admin on an admin page — still answer `403`.)*
 
 ### AD-3 — Service layer purity
 
@@ -62,11 +62,20 @@ A React SPA (served as static assets) is the UI layer. It communicates exclusive
 - **Prevents:** long vulnerability scans starving new job submissions from other orgs
 - **Rule:** Phases 1–3 (detect, resolve, generate) and Phase 8 (persist) route to the `pipeline` queue. Phases 4–7 (vulnerability, license, graph, version) route to the `analysis` queue. Celery Beat cleanup tasks (FR-8.2) also route to the `pipeline` queue — low-frequency housekeeping that does not compete with analysis work. Two separate Celery worker processes, one per queue. A task must never be enqueued to the wrong queue.
 
-### AD-5 — React SPA: REST API only, no Django template coupling
+### AD-5 — React SPA: REST API only, no Django template coupling [SUPERSEDED by AD-15, Epic 21]
 
-- **Binds:** `frontend/` (project root), all DRF endpoints, `backend/config/settings/base.py`
-- **Prevents:** Django template context injection into React; server-side rendered business data; API bypass
-- **Rule:** The React SPA lives in `frontend/` at the project root (peer to `backend/`) and is built to `frontend/dist/`. Django's `STATICFILES_DIRS` includes `../frontend/dist/` (relative to `backend/`); WhiteNoise serves the built SPA from there. In Docker Compose, a shared volume or multi-stage Dockerfile makes `frontend/dist/` available to the Django container before `collectstatic` runs. All data flows through the versioned REST API (`/api/v1/`). No Django template tag, context processor, or `{% block %}` passes business data to React components.
+- **Status:** **SUPERSEDED.** Epic 21 replaced the React SPA with server-rendered Django templates and deleted `frontend/` outright (Story 21.19). This decision is retained as the record of what was built and then deliberately reversed; **AD-15 is the binding rule.**
+- **Original rule (no longer in force):** The React SPA lived in `frontend/` at the project root (peer to `backend/`) and was built to `frontend/dist/`, which Django's `STATICFILES_DIRS` included. All data flowed through `/api/v1/`; no Django template tag, context processor, or `{% block %}` passed business data to React components.
+- **Why it was reversed:** the SPA duplicated in TypeScript the access control, org scoping, and report rendering the Django service layer already owned, and required a second language and toolchain to maintain. AD-15 keeps the *outcome* AD-5 protected — no business logic in the presentation layer, one contract for programmatic clients — while removing the duplication.
+
+### AD-15 — Server-rendered Django UI: views call the service layer, never the HTTP API
+
+- **Binds:** `src/django_apps/inventory/**/pages.py`, `src/django_apps/inventory/templates/`, `src/django_service/templates/`, `src/config/urls.py`
+- **Prevents:** the UI calling the app's own REST API over HTTP (an in-process HTTP hop, forbidden by **AD-1**); business logic migrating into templates or view classes (**AD-3**); the HTML and JSON paths drifting into two different answers for the same question
+- **Rule:** The web UI is server-rendered Django templates. A page view calls the **service layer directly** — the same `services.py` / `selectors.py` functions the DRF views call — and **never** issues an HTTP request to `/api/v1/`. Where a behaviour is needed by both, it is extracted into a shared service function so the two paths cannot diverge (e.g. `sbom/services.submit_job`, `analysis/reports.read_report`); a page view must not reimplement logic a DRF view already owns, nor the reverse. Templates receive prepared context, never querysets they must interrogate for business decisions.
+  - `/api/v1/` **remains the programmatic contract** for CI/CD and scripted clients, authenticated by API key (**AD-8**). It is not deprecated by this decision and is not a private backend for the UI.
+  - Interactivity is progressive: htmx for partial updates and polling, with a working non-JS path where practical. No client-side application framework, no build step, no `node_modules` — vendored assets are committed as files.
+  - Server-rendered route names carry a `ui-` prefix where the DRF router already owns the obvious name (`ui-org-switch` vs `org-switch`). Django resolves a duplicate URL name to whichever pattern is registered **last**, which silently pointed an HTML form at a JSON endpoint before this convention existed.
 
 ### AD-6 — Storage triad: no artifact blobs in PostgreSQL or Redis [ADOPTED]
 
@@ -119,24 +128,60 @@ The SVG is stored in S3 and returned as a separate download via AD-11. No PyVis 
 - **Prevents:** worker reading stale database state before the dispatching transaction commits
 - **Rule:** Always use `task.delay_on_commit()` (never `.delay()` or `.apply_async()` without `using=connection`) when dispatching a Celery task from within a database transaction. Use `@shared_task` on all task definitions — no direct Celery app imports in task modules.
 
-### AD-13 — Monorepo layout: `backend/` and `frontend/` are project-root peers under a pixi umbrella
+### AD-13 — `src/` layout under a pixi umbrella [AMENDED — Epic 21]
 
-- **Binds:** project scaffold, Docker Compose service definitions, CI matrix, all path references in tooling
-- **Prevents:** Django scaffold generated at the project root; Node left unmanaged / provisioned by a separate out-of-band installer; frontend and backend toolchains sharing a working directory or a dependency manifest
-- **Rule:** The project root contains exactly two application directories: `backend/` (Django + Celery Python code) and `frontend/` (React + Vite). **Pixi is the umbrella toolchain for the whole project.** A single `pixi.toml` at the **project root** owns the environment: it installs the Python runtime and dependencies **and** the Node runtime (`nodejs` from conda-forge, pinned in `pixi.lock`). All top-level tasks are `pixi run <task>` commands executed from the project root; backend tasks set `cwd = "backend"`, frontend tasks set `cwd = "frontend"` and shell out to `npm`/`vite`. `manage.py`, `pyproject.toml` (Python tool config + package metadata), and the Django code live under `backend/`. `package.json` and `vite.config.ts` live under `frontend/`; npm manages JavaScript **dependencies**, but pixi provides the Node runtime that runs it and orchestrates the frontend build/lint tasks. `docker-compose.yml`, `README.md`, `LICENSE`, `pixi.toml`, and `pixi.lock` live at the project root. **Docker follows the umbrella too:** a single root `Dockerfile` (build context `.`) installs the pixi environment (Python + Node), builds the frontend into the image (`pixi run fe-build`), and runs `collectstatic`; every Django/Celery service (web, `worker-pipeline`, `worker-analysis`, `beat`) runs from that one image via `pixi run <task>`. There is no separate frontend-build service or shared frontend volume — the SPA is baked into the image at build time. The unified `pixi run ci` gate runs both backend (build, check, lint, cov) and frontend (lint, build) steps.
+- **Binds:** project scaffold, `pyproject.toml`, `pixi.toml`, Docker build, CI, every path reference in tooling
+- **Prevents:** a Django scaffold generated at the project root; a second import root competing with the packaging declaration; the runner being bypassed by an out-of-band installer
+- **Amendment (Epic 21):** the original rule described `backend/` and `frontend/` as project-root peers with pixi providing a Node runtime. Story 21.1 moved the Django tree to a `src/` layout at the repo root and Story 21.19 deleted `frontend/`, the `nodejs` dependency, and the eight `fe-*` tasks. **Pixi remains the umbrella** — that half of the decision is unchanged and load-bearing; what changed is that there is now one language under it.
+- **Rule:** The repository uses a `src/` layout adopted from the **`django-15-factor-base` reference application**, so this project's tree is already the shape of the platform `inventory` is intended to be contributed to:
 
----
+```text
+src/
+  config/            # settings/ · urls.py · celery_app.py — Django project configuration
+  django_service/    # the HOST project: concrete User, project-wide templates/static, host views
+  django_apps/       # PATH ROOT, not a package (no __init__.py) — see AD-16
+    inventory/       # the single reusable app
+tests/               # at the repo ROOT, not under src/ — unit/ and integration/
+```
+
+  - `manage.py`, `pyproject.toml`, `pixi.toml`, `pixi.lock`, `Dockerfile`, `docker-compose.yml`, `Procfile`, `README.md`, and `LICENSE` live at the **repo root**. `BASE_DIR` is the repo root itself — no `.parent` hop.
+  - **`APPS_DIR = BASE_DIR / "src" / "django_service"`** is the host-project package, and is the driver of `TEMPLATES["DIRS"]` (`APPS_DIR / "templates"`) and `STATICFILES_DIRS` (`APPS_DIR / "static"`). *(`MEDIA_ROOT` and `STATIC_ROOT` hang off `BASE_DIR`, not `APPS_DIR` — they are deployment paths, not host-package assets.)*
+  - **`[tool.hatch.build.targets.wheel] sources` in `pyproject.toml` is the SINGLE import-root declaration site.** Nothing else — not `PYTHONPATH`, not a `conftest.py` `sys.path` insertion, not a `pth` file — may declare an import root, or the checkout and the wheel will disagree about what `inventory` means. See AD-16 for the mapping-vs-array trap.
+  - All tasks are `pixi run <task>` from the repo root with **no `cwd`**. Nothing is installed with `pip`, `uv`, or `npm`.
+  - **Docker follows the umbrella:** one root `Dockerfile` (build context `.`) installs the pixi environment and runs `collectstatic`; every service (web, `worker-pipeline`, `worker-analysis`, `beat`) runs from that one image via `pixi run <task>`. There is no frontend build stage.
+  - `pixi run ci` is the single gate: pre-commit, wheel build, mypy, ruff lint + format-check, bandit, the full test suite with the coverage floor, and the docs build.
 
 ### AD-14 — Org/admin/auth model: zero-org identity, per-org vs. global admin
 
-- **Binds:** `users/` (models, services, selectors, views, `auth.py`); `GET /auth/me/`; every admin-gated API endpoint and SPA route
+- **Binds:** `inventory/users/` (models, services, selectors, views, `auth.py`); `GET /auth/me/`; `inventory/common/access.py`; every admin-gated API endpoint and page route
 - **Prevents:** identity coupled to a single org; ad-hoc or duplicated authorization; a cross-org superuser tier bolted on with special-case branching that bypasses AD-2
 - **Rule:**
   - **Zero-org identity.** Registration creates a `User` with **no** org. Identity is resolved via `GET /auth/me/` → `{id, email, is_admin, is_global_admin}`, independent of any active org. The active org lives in the session and **never** resolves to the ADMIN org; a zero-org user has no active workspace (restricted to home).
   - **Two admin scopes.** *Per-org admin* = `OrgMembership(role=ADMIN)`; may add/remove members (add-existing-by-email **or** create-new-user) and **promote/demote** other admins — there is no admin *transfer*. *Global admin* = a member of the single ADMIN org (`Org.is_admin_org=True`), provisioned as a real `OrgMembership(role=ADMIN)` in **every** non-admin org (existing and future). Because a global admin holds a genuine admin membership everywhere, authorization needs no special-casing and AD-2's org isolation is preserved.
   - **Org creation is global-admin-gated.** Only a global admin may create an org (`POST /orgs/create/`); anyone else gets `403`. `create_org` auto-provisions every global admin as an admin of the new org.
   - **Global-admin management.** List / grant-by-email / revoke via `admin/global-admins/`. Grant back-fills the target as an admin of every org (unregistered email → `no_such_user`); revoke removes them from the ADMIN org **and** demotes them to member in every non-admin org, and is blocked if it would remove the **last** global admin. The initial superuser is seeded into the ADMIN org from env config at deploy.
-  - **Authorization at both layers.** Every admin-only capability is enforced in the SPA route (`AdminRoute`, driven by the `auth/me` flags) **and** independently re-checked in the API view (`403`: `not_admin` / `not_global_admin`). UI hiding is never the only gate.
+  - **Authorization at both layers.** Every admin-only capability is enforced by the page-view mixin (`OrgAdminRequiredMixin` / `GlobalAdminRequiredMixin` in `inventory/common/access.py`, replacing the SPA's `AdminRoute`) **and** independently re-checked in the API view (`403`: `not_admin` / `not_global_admin`). Hiding a nav link is never the only gate. Admin-ness is per-org and re-evaluated against the **active** org, so switching org can change the answer.
+
+---
+
+### AD-16 — One reusable Django app: `inventory`, imported unqualified
+
+- **Binds:** `src/django_apps/inventory/`, `INSTALLED_APPS`, `[tool.hatch.build.targets.wheel] sources`, every intra-project import
+- **Prevents:** the app being importable only under a project-specific prefix (which would make it uncontributable to a host platform); a second import root competing with the packaging declaration; app assets that only resolve because the host project happens to expose them
+- **Rule:** All domain code lives in a **single** Django app at `src/django_apps/inventory/`, installed as `"inventory"` and imported **unqualified** (`from inventory.sbom import services`) — never `django_apps.inventory`. Epic 21 collapsed the former `users`/`manifests`/`sbom`/`analysis` apps into it; they survive as **packages inside** the app (`inventory/users/`, `inventory/sbom/`, …), so the Dependency Direction rules below still hold as import rules between packages.
+  - `src/django_apps/` is a **path root, not a package**: it carries **no `__init__.py`**. That is what makes `inventory` importable unqualified from a source checkout.
+  - The wheel maps it with `"src/django_apps" = "."` in `[tool.hatch.build.targets.wheel.sources]`. The **mapping** form is required: the array form sorts prefixes and strips the first match, so `"src/"` shadows `"src/django_apps/"` and the app ships as `django_apps.inventory` — importable in the checkout and broken in the wheel, with every test still passing. Verify against a built wheel, not against the source tree.
+  - The app owns its own `templates/inventory/` and `static/inventory/`, resolved by Django's `APP_DIRS`/`AppDirectoriesFinder`. It must not depend on the host project's `TEMPLATES["DIRS"]` or `STATICFILES_DIRS` to find its own assets.
+  - Django discovers management commands only at `<app_module>/management/commands/` — i.e. `inventory/management/commands/`, not inside a sub-package. Tests that invoke command classes directly will not catch a misplacement.
+
+### AD-17 — The app depends on the user *model reference*, never a concrete `User`
+
+- **Binds:** `src/django_apps/inventory/common/users.py`, every model FK and type annotation naming a user, `src/django_service/users/`
+- **Prevents:** the reusable app importing a concrete `User` class owned by the host project — the single hardest coupling to remove later, because it reaches into models, migrations, forms, and type annotations at once
+- **Rule:** App code refers to the user via `settings.AUTH_USER_MODEL` (model definitions and migrations) and `get_user_model()` (runtime), **never** by importing the concrete class. The concrete `User` is owned by the **host project** at `src/django_service/users/`, and `AUTH_USER_MODEL`'s **value is unchanged** — still `"users.User"`, so no migration or data change was required; what changed is *who may import it*.
+  - The single seam is `inventory/common/users.py`, which exports `UserT`, `user_model()`, `user_ref()`, and the creation helpers. Everything else in the app goes through it.
+  - `user_ref()` looks like a no-op and is not: it adapts a user to the ORM boundary where a concrete type would otherwise be required. Deleting it as dead code re-introduces exactly the coupling this decision exists to prevent.
+  - Migrations that touch a user FK must carry the swappable dependency (`migrations.swappable_dependency(settings.AUTH_USER_MODEL)`), or a host project with a different user model cannot apply them.
 
 ---
 
@@ -146,9 +191,14 @@ Who may import whom. Arrows point from dependent to dependency. Any import that 
 
 ```mermaid
 graph BT
-    frontend["frontend/ (React SPA — project root)"] -->|"REST API only"| views
+    api_client(["API client (CI/CD, scripts)"]) -->|"HTTPS /api/v1/ + API key"| views
 
     subgraph Django application
+        pages["Page views (server-rendered)"] --> users
+        pages --> manifests
+        pages --> sbom
+        pages --> analysis
+
         views["DRF Views"] --> users
         views --> manifests
         views --> sbom
@@ -175,6 +225,8 @@ graph BT
 
 `users/` is the base layer — it never imports from `manifests/`, `sbom/`, `analysis/`, or `tasks/`.
 
+Since Epic 21 collapsed these into one app (**AD-16**), the boxes are **packages inside `inventory/`** rather than separate Django apps; the arrows remain binding as import rules. Page views and DRF views are **peers**: both call the service layer directly, and neither calls the other (**AD-15**). Page views never appear as a client of `/api/v1/` on this diagram, which is the point.
+
 ---
 
 ## Consistency Conventions
@@ -197,7 +249,10 @@ graph BT
 | Configuration | All config via environment variables through `django-environ`; `.env` file for local dev; never committed secrets |
 | Error handling | Never bare `except:`; always catch specific exceptions; log at `error` level before re-raising or returning a domain error; `except SomeError: pass` is forbidden |
 | Task state updates | `task.update_state(state='PROGRESS', meta={'progress': N, 'current_step': '<phase name>'})` at the start of each pipeline phase |
-| Frontend data | All API calls from `frontend/src/api/`; no direct `fetch` calls in components; polling via a shared `useJobStatus(taskId)` hook |
+| Page views | Server-rendered views live in `pages.py` alongside the app's `views.py` (DRF); they call `services.py`/`selectors.py` directly and never `/api/v1/` (**AD-15**). Route names carry a `ui-` prefix wherever the DRF router owns the plain name |
+| Templates | App-owned under `inventory/templates/inventory/`; project-wide under `django_service/templates/`. Multi-line comments use `{% comment %}` — Django's `{# #}` is **single-line only**, and a multi-line one leaks into the HTML while still compiling the tags inside it |
+| Tables & filters | django-tables2 + django-filter, sorting and filtering carried in the querystring. `Meta.order_by` names a **column**, not an accessor — naming an accessor silently renders the table unsorted |
+| Icons | Semantic names resolved through `django_service/icons.py` and the `{% icon %}` tag; templates never spell out a `bi-*` sprite id |
 
 ---
 
@@ -216,8 +271,6 @@ graph BT
 | cyclonedx-python-lib | 11.11.0 |
 | lib4sbom | 0.10.4 |
 | pip-licenses | 5.5.5 |
-| NetworkX | 3.6.1 |
-| pygraphviz | 2.0 |
 | requests-cache | 1.3.2 |
 | requests-ratelimiter | 0.10.0 |
 | packaging | 26.2 |
@@ -225,12 +278,14 @@ graph BT
 | WhiteNoise | 6.12.0 |
 | PostgreSQL | 18.4 |
 | Redis | 8.8.0 |
-| React | 19.2.7 |
-| @mui/material | 9.1.2 |
-| Vite | 8.1.3 |
-| cytoscape | 3.34.0 |
-| react-cytoscapejs | 2.0.0 |
-| cytoscape-dagre | 4.0.0 |
+| django-crispy-forms | 2.6 |
+| crispy-bootstrap5 | 2026.3 |
+| django-tables2 | 3.0.0 |
+| django-filter | 26.1 |
+| openpyxl | 3.1.5 |
+| Bootstrap (vendored) | 5.3.8 |
+| Bootstrap Icons (vendored SVG sprite subset) | 1.13.1 |
+| htmx (vendored) | 2.0.8 |
 | pixi | 0.71.0 |
 
 ---
@@ -241,10 +296,10 @@ graph BT
 
 ```mermaid
 graph TB
-    user(["User / API Client<br/>(browser or CI/CD)"])
+    user(["User (browser)<br/>/ API client (CI/CD)"])
 
     subgraph compose["Docker Compose — self-hosted"]
-        web["Django + Gunicorn<br/>REST API · static SPA"]
+        web["Django + Gunicorn<br/>server-rendered UI · REST API"]
         worker_p["Celery Worker<br/>queue: pipeline"]
         worker_a["Celery Worker<br/>queue: analysis"]
         beat["Celery Beat<br/>cleanup scheduler"]
@@ -325,69 +380,78 @@ A `User` may hold **zero** memberships (zero-org identity, AD-14). Exactly one `
 ### Source tree
 
 ```text
-django-python-generate-sbom/          ← project root (pixi umbrella environment)
-  pixi.toml                           # umbrella: Python env + Node runtime + all tasks
-  pixi.lock                           # pins Python AND Node deps
-  backend/                            ← Django + Celery Python code
-    config/
-      settings/                       # base.py · local.py · production.py
+django-python-generate-sbom/          ← repo root == BASE_DIR (pixi umbrella, Python only)
+  pixi.toml                           # the single environment + every task; no cwd, no npm
+  pixi.lock
+  pyproject.toml                      # Python tool config, package metadata, and the ONLY
+                                      # import-root declaration (hatch wheel `sources`) — AD-13
+  manage.py
+  Dockerfile                          # build context "." — one image for web/worker/beat
+  docker-compose.yml · Procfile · README.md · LICENSE
+  src/
+    config/                           ← Django project configuration
+      settings/                       # base.py · local.py · test.py · production.py
       celery_app.py
       urls.py
-    <project_slug>/
-      users/                          # Org · User · OrgMembership · OrgApiKey
-      manifests/                      # ManifestUpload · upload · format detection (F3)
-      sbom/                           # SBOMJob · generation · parsers/ (F4)
-        parsers/                      # requirements.py · pyproject.py · pixi_lock.py
-                                      # pixi_toml.py · conda.py
-      analysis/                       # AnalysisReport · 4 analysis services (F5)
-        services/                     # vulnerability.py · license.py · graph.py · versions.py
-      tasks/
-        sbom_pipeline.py              # 8-phase Celery chain (pipeline queue)
-        analysis.py                   # parallel analysis group (analysis queue)
-    tests/
-      unit/                           # mirrors <project_slug> structure; no I/O
-      integration/                    # real DB · broker='memory://' · @pytest.mark.integration
-    manage.py
-    pyproject.toml                    # Python tool config + package metadata
-  frontend/                           ← React SPA (Vite + MUI) — peer to backend/
-    src/
-      api/                            # REST client — all fetch calls live here
-      components/                     # shared UI components
-      pages/                          # route-level page components
-    dist/                             # built output — referenced by Django STATICFILES_DIRS
-    package.json                      # npm manages JS deps; pixi provides Node + runs tasks
-    vite.config.ts
-  docker-compose.yml
-  README.md
-  LICENSE
+    django_service/                   ← the HOST project (APPS_DIR)
+      users/                          # the CONCRETE User — owned here, not by the app (AD-17)
+      templates/                      # base.html · landing.html · _nav.html · 404/500
+      static/                         # vendored Bootstrap · htmx · icons.svg · theme.js
+      templatetags/ui_icons.py        # {% icon 'nav.home' %} — registered via TEMPLATES OPTIONS
+      icons.py                        # semantic icon map (nav · tab · action · chrome)
+      views.py                        # landing page · org switcher · shell preview
+    django_apps/                      ← PATH ROOT, no __init__.py (AD-16)
+      inventory/                      ← the single reusable app, imported as `inventory`
+        users/                        # Org · OrgMembership · OrgApiKey · auth · pages (F1, F2)
+        manifests/                    # ManifestUpload · upload · format detection (F3)
+        sbom/                         # SBOMJob · generation · pages.py · tables.py (F4, F6, F7)
+          parsers/                    # requirements · pyproject · pixi_lock · pixi_toml · conda
+        analysis/                     # AnalysisReport · reports.py · tables.py · excel.py (F5)
+          services/                   # vulnerability.py · license.py · versions.py
+        tasks/
+          sbom_pipeline.py            # 8-phase Celery chain (pipeline queue)
+          analysis.py                 # parallel analysis group (analysis queue)
+        common/                       # users.py (the AD-17 seam) · access.py · storage.py
+        management/commands/          # must sit at the APP ROOT — Django looks nowhere else
+        templates/inventory/          # app-owned; resolved by APP_DIRS, not by the host
+        static/inventory/
+        migrations/
+  tests/                              ← at the ROOT, not under src/
+    unit/                             # mirrors the src/ structure; no I/O
+    integration/                      # real DB · broker='memory://' · @pytest.mark.integration
+    fixtures/                         # incl. the exceljs reference workbook (Story 21.17)
 ```
-
----
 
 ## Capability → Architecture Map
 
 | Capability | Lives in | Governed by |
 |---|---|---|
-| F1 — Account & Org Management | `users/` | AD-2 (org isolation), AD-8 (API key), AD-14 (org/admin/auth model) |
-| F2 — API Key Management | `users/` | AD-8 (AbstractAPIKey subclass) |
-| F3 — Manifest Upload & Job Submission | `manifests/`, `sbom/` | AD-2, AD-7 (concurrency gate), AD-3 (service purity) |
-| F4 — SBOM Generation Pipeline | `sbom/`, `tasks/sbom_pipeline.py` | AD-4 (queue topology), AD-3, AD-10 (delay_on_commit) |
-| F5 — Analysis Reports | `analysis/`, `tasks/analysis.py` | AD-4, AD-9 (graph shape), AD-3, AD-6 (storage) |
-| F6 — Results Web UI | `frontend/` (project root) | AD-5 (SPA + API only), AD-9 (Cytoscape graph), AD-13 (monorepo layout) |
-| F7 — Job History Dashboard | `frontend/` (project root), `backend/<slug>/sbom/` | AD-5, AD-2 (org scoping), AD-13 |
-| F8 — Artifact Retention & Cleanup | `tasks/`, all apps | AD-6 (storage triad), AD-4 (Beat on separate schedule) |
+| F1 — Account & Org Management | `inventory/users/` | AD-2 (org isolation), AD-8 (API key), AD-14 (org/admin/auth model), AD-17 (user reference) |
+| F2 — API Key Management | `inventory/users/` | AD-8 (AbstractAPIKey subclass) |
+| F3 — Manifest Upload & Job Submission | `inventory/manifests/`, `inventory/sbom/` | AD-2, AD-7 (concurrency gate), AD-3 (service purity), AD-15 |
+| F4 — SBOM Generation Pipeline | `inventory/sbom/`, `inventory/tasks/sbom_pipeline.py` | AD-4 (queue topology), AD-3, AD-10 (delay_on_commit) |
+| F5 — Analysis Reports | `inventory/analysis/`, `inventory/tasks/analysis.py` | AD-4, AD-3, AD-6 (storage) |
+| F6 — Results Web UI | `inventory/sbom/pages.py`, `inventory/analysis/`, `inventory/templates/inventory/sbom/` | AD-15 (server-rendered), AD-16 (single app), AD-13 (`src/` layout) |
+| F7 — Job History Dashboard | `inventory/sbom/pages.py`, `inventory/sbom/tables.py` | AD-15, AD-2 (org scoping), AD-16 |
+| F8 — Artifact Retention & Cleanup | `inventory/tasks/`, all packages | AD-6 (storage triad), AD-4 (Beat on separate schedule) |
 
 ---
 
 ## Deferred
 
-- **Frontend state management** — Redux vs Zustand vs React Query; scoped to story implementation; the `frontend/src/api/` convention (AD-5, AD-13) is the only binding constraint
 - **Nginx vs WhiteNoise-only** for production static serving — operator choice; WhiteNoise is the default in Docker Compose
 - **Celery worker `--concurrency` settings** — operator choice per hosting capacity; documented in README, not fixed here
 - **Per-app URL routing patterns** — story-level detail; bound only by `/api/v1/` prefix (Consistency Conventions)
 - **Model field types and indexes** — story-level; only relationship shape is fixed (ERD above)
 - **SPDX 3.0 output path** — deferred in PRD; no architecture impact beyond adding a new serializer in `sbom/services.py`
-- **WebSocket / Django Channels** — deferred in PRD; polling architecture (AD-5) does not block this addition
+- **WebSocket / Django Channels** — deferred in PRD; the htmx polling architecture (**AD-15**) does not block this addition
 - **`uv.lock` / `poetry.lock` parsers** — deferred in PRD; add modules to `sbom/parsers/` with no structural change
 - **OAuth / SSO** — deferred in PRD; plugs into DRF auth class layer without touching AD-8's key model
 - **Cleanup queue** — a third `cleanup` Celery queue for Celery Beat jobs; trivial to add alongside AD-4's two queues if Beat jobs compete with user traffic
+- **Pluggability into a `django-15-factor-base` platform** — explicit future intent (**AD-16**, **AD-17**), **not** implemented. Four known violations remain, each of which would force a host project to accept this app's opinion:
+  - `src/config/settings/base.py` — a **global** `DEFAULT_AUTHENTICATION_CLASSES` and `DEFAULT_PERMISSION_CLASSES` (`"inventory.users.authentication.HasSessionOrApiKey"`), imposing the app's auth on *every* DRF view a host adds. Should be declared per-viewset.
+  - `src/config/settings/base.py` — `config` imports the app's `configure_structlog` directly, so the project's logging setup depends on the app rather than the reverse.
+  - `src/config/settings/production.py` — `STORAGES["default"]` names an **app-owned** backend (`inventory.common.storage.PublicEndpointS3Storage`), making the host's default file storage the app's choice.
+
+  Also **not** implemented, and required before contribution: the contribution module, `component.toml`, `src/config/startup/` composition, `django_service.__api_version__`, the navigation registry, and an adoption-gate test that would fail on any of the above.
+- **AD-9 and the dependency-graph stack entries are stale and were left alone** — Story 20.1 retired the dependency graph (`analysis/services/graph.py` is gone; NetworkX, pygraphviz, and the three Cytoscape packages are no longer dependencies) but never reconciled the spine. The Cytoscape rows were removed here because Story 21.20's AC #4 names them; **AD-9 itself still describes a graph API that no longer exists** and needs its own correct-course pass on Epic 20 rather than a silent edit from an Epic 21 story.

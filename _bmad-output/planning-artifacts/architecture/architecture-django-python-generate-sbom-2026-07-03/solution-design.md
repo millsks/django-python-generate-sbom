@@ -9,6 +9,16 @@ binds: ARCHITECTURE-SPINE.md
 
 # Solution Design — django-python-generate-sbom
 
+> **⚠ NOT RECONCILED WITH EPIC 21 — the spine is authoritative where this document disagrees.**
+>
+> Epic 21 replaced the React SPA with server-rendered Django templates (**AD-15**, superseding
+> AD-5), collapsed four Django apps into the single reusable `inventory` app (**AD-16**), moved
+> the tree to a `src/` layout and deleted `frontend/` and the Node toolchain (**AD-13**, amended).
+> Story 21.20 reconciled `ARCHITECTURE-SPINE.md` only — its acceptance criteria name that file
+> and no other. **This document still describes the SPA, the `backend/`/`frontend/` split, and
+> the four-app structure**, and needs its own reconciliation pass.
+> Read `ARCHITECTURE-SPINE.md` first; treat anything here that contradicts it as historical.
+
 ## 1. System Overview
 
 `django-python-generate-sbom` is a self-hosted Django web service that accepts Python dependency manifests and produces Software Bills of Materials (SBOMs) in three industry-standard formats, accompanied by four analysis reports: vulnerability scan, licence compliance, dependency graph, and version currency.
@@ -23,8 +33,8 @@ The system runs as a single Docker Compose stack. One Django/Gunicorn process se
 | Every model owning org data uses `OrgScopedModel`; all queries use `.for_org(org)` | AD-2 |
 | Service layer accepts and returns plain Python objects only | AD-3 |
 | Two Celery queues: `pipeline` and `analysis` | AD-4 |
-| React SPA communicates only through the REST API | AD-5 |
-| Pixi is the project-wide umbrella: one root `pixi.toml` installs Python + Node and orchestrates both `backend/` and `frontend/` tasks | AD-13 |
+| ~~React SPA communicates only through the REST API~~ → server-rendered pages call the service layer directly, never `/api/v1/` | ~~AD-5~~ **AD-15** |
+| Pixi is the project-wide umbrella: one root `pixi.toml` — ~~Python + Node, `backend/` + `frontend/`~~ → Python only, `src/` layout | AD-13 (amended) |
 | Artifacts in S3; blobs never in PostgreSQL or Redis | AD-6 |
 | Per-org concurrency gate checked before enqueue | AD-7 |
 | API keys via `AbstractAPIKey` subclass (`djangorestframework-api-key`) | AD-8 |

@@ -475,7 +475,15 @@ development_status:
   22-2-fix-unregistered-beat-maintenance-tasks: review
   22-3-windows-ci-parity-full-gate: review
   22-4-prove-local-pipeline-end-to-end: review
-  22-5-state-the-no-container-contract: backlog
+  # The DECISION GATE is answered: the Compose path is KEPT, de-emphasised, and explicitly
+  # qualified as unavailable to developers whose organization blocks Docker/Podman. Retiring
+  # it was rejected — it is the only local way to exercise PostgreSQL/Redis/S3 against the
+  # real backing services before a deployment, and the people who CAN run it are the ones who
+  # need it. Recorded as AD-18 in the architecture spine, stated in CONTRIBUTING.md and
+  # setup.md, and enforced by tests/unit/test_no_container_contract.py, which walks the
+  # `pixi run ci` task graph transitively rather than trusting the eight names listed under
+  # [tasks.ci]. PENDING PRODUCT-OWNER CONFIRMATION of the keep decision.
+  22-5-state-the-no-container-contract: review
   # ADDED 2026-08-18 by product-owner direction, mid-epic: "remove the requirement to cleanup
   # expired artifacts — we can do that manually when we need to review." AMENDS FR-8.2 (which
   # specified a scheduled cleanup). Expiry is still TRACKED via artifacts_expire_at; only the

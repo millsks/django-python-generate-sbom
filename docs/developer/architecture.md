@@ -74,6 +74,10 @@ These are the load-bearing rules from the spine. Respect them when adding code.
 - **AD-16 — One reusable app.** All domain code is in `inventory`, imported unqualified.
 - **AD-17 — No concrete `User` import.** App code uses `settings.AUTH_USER_MODEL` and
   `get_user_model()`; the concrete model is owned by the host project.
+- **AD-18 — No container on the local path or the gate.** Nothing reachable from
+  `pixi run dev` or `pixi run ci` may invoke Docker or Podman, because neither is
+  permitted on Windows in the destination organization. Containers remain how
+  production runs; the Compose stack stays behind the opt-in `docker-*` tasks.
 
 ## Accounts, orgs, and the global-admin tier
 

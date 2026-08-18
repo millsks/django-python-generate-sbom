@@ -203,6 +203,15 @@ tests/               # at the repo ROOT, not under src/ — unit/ and integratio
   - `user_ref()` looks like a no-op and is not: it adapts a user to the ORM boundary where a concrete type would otherwise be required. Deleting it as dead code re-introduces exactly the coupling this decision exists to prevent.
   - Migrations that touch a user FK must carry the swappable dependency (`migrations.swappable_dependency(settings.AUTH_USER_MODEL)`), or a host project with a different user model cannot apply them.
 
+### AD-18 — No local workflow and no CI gate may require a container
+
+- **Binds:** every `pixi.toml` task reachable from `pixi run ci`, `pixi run dev` and the inner loop, `.github/workflows/ci.yml`
+- **Prevents:** a contributor on Windows being unable to run the application or validate their own change — the team splitting into people who can pass the gate and people who cannot
+- **Rule:** Docker and Podman are **unavailable on Windows in the destination organization by security policy**, not by choice. Therefore no task on the path from `pixi install` to a green `pixi run ci` may invoke a container runtime. `tests/unit/test_no_container_contract.py` walks the `ci` task graph transitively and fails if one does.
+  - This restricts the **local** path and the **gate**. It does **not** retire containers: Epic 19 ships the same image to OpenShift, and the Compose stack remains the optional prod-parity path locally.
+  - The container tasks stay behind the `docker-` prefix, which is what keeps them visibly opt-in. A step that needs a container belongs there, never in the `ci` chain.
+  - **Decision on the Compose path (Story 22.5): KEPT, de-emphasised, and explicitly qualified.** `docs/developer/setup.md` presents the containerless flow as the supported local path and states that Compose is unavailable to developers whose organization blocks Docker and Podman. Retiring it was rejected because it is the only local way to exercise PostgreSQL, Redis, and S3-compatible storage against the real backing services before a deployment — the people who *can* run it are the ones who need it.
+
 ---
 
 ## Dependency Direction

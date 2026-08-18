@@ -114,6 +114,7 @@ nav:
       - Testing: developer/testing.md
       - Code Reference: developer/code-reference.md
       - Rename Audit: developer/rename-audit.md
+      - Test-Parity Audit: developer/test-parity-audit.md
   - API Reference:
     - Overview: api/index.md
     - Authentication: api/authentication.md

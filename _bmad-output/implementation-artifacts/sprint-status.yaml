@@ -256,11 +256,15 @@ development_status:
   # 16.4 extends 16.3's engine to an admin-only arbitrary multi-select across App IDs. Merge tiering:
   # a manager merges only within ONE Application ID (16.3); an admin multi-selects across App IDs (16.4).
   # Build order: 16.1 -> 16.2 -> 8.26 -> 16.3 -> 16.4.
-  epic-16: in-progress
-  16-1-manager-role-and-management-view-access: ready-for-dev
-  16-2-application-id-rollup-view: ready-for-dev
-  16-3-consolidated-sbom-by-application-id: ready-for-dev
-  16-4-admin-multi-select-consolidated-sbom: ready-for-dev
+  # ⛔ BLOCKED — REQUIRES RE-AUTHORING (Story 21.23 AC #5, closed 2026-08-18). Every story below is
+  # written against the React SPA that Epic 21 deleted; 16-1 alone cites `frontend/src` or `.tsx` 13
+  # times. The stack they target no longer exists, so a dev agent picking one up would implement
+  # against files that are gone. Run bmad-correct-course on Epic 16 BEFORE any of these move.
+  epic-16: blocked-needs-correct-course
+  16-1-manager-role-and-management-view-access: blocked-needs-correct-course
+  16-2-application-id-rollup-view: blocked-needs-correct-course
+  16-3-consolidated-sbom-by-application-id: blocked-needs-correct-course
+  16-4-admin-multi-select-consolidated-sbom: blocked-needs-correct-course
 
   # Epic 17 — OIDC Authentication & OAuth2 API Authorization (Phase 1): migrate authentication to OIDC and ADD
   # OAuth2 to the DRF API, while authorization stays app-managed (org membership + roles unchanged — mapping
@@ -289,7 +293,10 @@ development_status:
   17-2-backend-oidc-login-bff-auth-code-pkce: ready-for-dev
   17-3-jit-user-provisioning-and-account-linking: ready-for-dev
   17-4-oidc-logout-and-session-lifecycle: ready-for-dev
-  17-5-frontend-sso-login: ready-for-dev
+  # ⛔ BLOCKED — REQUIRES RE-AUTHORING (Story 21.23 AC #5). Written against the React SPA's login
+  # screen, which Epic 21 deleted. Story 21.24 additionally removes local password auth entirely,
+  # so this story's premise changes twice over. Correct-course before it moves.
+  17-5-frontend-sso-login: blocked-needs-correct-course
   17-6-api-oauth2-resource-server: ready-for-dev
   17-7-oauth2-client-credentials-m2m: ready-for-dev
   17-8-coexistence-flag-rollout-and-cutover: ready-for-dev
@@ -437,7 +444,7 @@ development_status:
   21-20-architecture-reconciliation: review
   21-21-documentation-reconciliation-and-product-copy-rename: review
   21-22-distribution-identity-rename: ready-for-dev
-  21-23-test-parity-audit-and-epic-closeout: ready-for-dev
+  21-23-test-parity-audit-and-epic-closeout: review
   # ADDED 2026-08-18 by product-owner direction. 21.24 REMOVES the app's own authentication and access
   # control outright (hard removal, not a flag): mixins, login/register/logout pages + DRF endpoints, and the
   # HasSessionOrApiKey permission all go; anonymous requests act as a seeded default org with org-admin and

@@ -473,7 +473,7 @@ development_status:
   epic-22: in-progress
   22-1-containerless-env-template-default: review
   22-2-fix-unregistered-beat-maintenance-tasks: review
-  22-3-windows-ci-parity-full-gate: backlog
+  22-3-windows-ci-parity-full-gate: review
   22-4-prove-local-pipeline-end-to-end: backlog
   22-5-state-the-no-container-contract: backlog
   # ADDED 2026-08-18 by product-owner direction, mid-epic: "remove the requirement to cleanup

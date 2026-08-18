@@ -1,10 +1,22 @@
 # API Keys
 
-Organization API keys authenticate programmatic access (see
-[Authentication](authentication.md)). All endpoints require
-[authentication](authentication.md) and operate on the active organization
-(`404 no_active_org` when there is none). Creating and revoking keys is
-**admin only**.
+Organization API keys select the organization a programmatic caller acts as (see
+[Authentication](authentication.md)). All endpoints here operate on the active
+organization.
+
+!!! warning "The gates described below are not enforced"
+
+    Story 21.24 removed the app's authentication, so **every endpoint on this page is open
+    to an unauthenticated caller** — see [Authentication](authentication.md). The
+    admin markers are kept because they record the authorization each endpoint
+    is *meant* to carry, and Epics 17-18 restore that decision from host-supplied OIDC group
+    claims at the same seam. Until then, treat them as intent, not protection, and deploy
+    only on a trusted network.
+
+    One consequence is worth stating plainly: `403 not_admin` is still returned, but **only
+    when the deployment has no organization at all** — the caller is not being refused for
+    lack of privilege.
+
 
 ## `GET /api/v1/keys/`
 
@@ -31,7 +43,7 @@ short `prefix`.
 
 ## `POST /api/v1/keys/`
 
-Create a new API key. **Admin only.** The full plaintext key is returned
+Create a new API key. **Admin-scoped** (see the notice above). The full plaintext key is returned
 **exactly once** in the `key` field — store it now; it cannot be retrieved
 again.
 
@@ -47,7 +59,7 @@ again.
 
 ## `DELETE /api/v1/keys/{key_id}/`
 
-Revoke (soft-delete) an API key. **Admin only.** The key stops authenticating
+Revoke (soft-delete) an API key. **Admin-scoped** (see the notice above). The key stops authenticating
 immediately.
 
 **Response `204 No Content`.**

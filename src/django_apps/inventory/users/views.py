@@ -55,14 +55,17 @@ from .services import (
 
 logger = structlog.get_logger()
 
-_INVALID_CREDENTIALS = {"error": "Invalid email or password", "code": "invalid_credentials"}
 _NOT_ADMIN = {"error": "Admin privileges are required.", "code": "not_admin"}
 _NO_ACTIVE_ORG = {"error": "No active org.", "code": "no_active_org"}
-# Retained for the schema's 403 response shape on endpoints that can still refuse (there is no
-# global-admin GATE any more — Story 21.24 removed it, and Story 22.8 removed the copies that
-# survived inside DRF view bodies and made a logged-in ordinary user MORE restricted than an
-# anonymous one).
-_NOT_GLOBAL_ADMIN = {"error": "Global admin privileges are required.", "code": "not_global_admin"}
+# There is deliberately NO global-admin refusal constant here. Story 21.24 removed the
+# global-admin gate and Story 22.8 removed the last copies that survived inside view bodies, so
+# no code path can refuse on that basis — keeping the constant "for the schema" made it read as
+# though one still might. A test in `tests/unit/test_users_api_error_envelopes.py` pins that its
+# error code appears nowhere in `src/`, since coverage cannot see a dead module constant.
+#
+# `_NOT_ADMIN` below is a different case: it IS returned, though only when the deployment has no
+# organization at all, since `get_admin_org` is now `get_request_org`. Its wording is stale and
+# deliberately left alone — Epics 17-18 restore a real admin decision at that seam.
 
 
 def _validation_error(serializer_errors: object) -> Response:

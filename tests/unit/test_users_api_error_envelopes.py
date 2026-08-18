@@ -209,3 +209,49 @@ def test_the_no_org_403_still_claims_to_be_about_admin_privileges(no_organizatio
 
     assert response.status_code == 403
     assert response.json()["code"] == "not_admin"
+
+
+# --- Codes the app no longer returns --------------------------------------------------------
+
+RETIRED_CODES = ["not_global_admin", "invalid_credentials"]
+
+
+@pytest.mark.parametrize("code", RETIRED_CODES)
+def test_a_retired_error_code_appears_nowhere_in_the_source(code: str) -> None:
+    """`not_global_admin` and `invalid_credentials` are gone; keeping them was worse than dead code.
+
+    Both were left behind as module constants after Stories 21.24 and 22.8 removed the login
+    and the global-admin gate — `_NOT_GLOBAL_ADMIN` was even commented as "retained for the
+    schema", which no `@extend_schema` referenced. Coverage cannot catch this: a module-level
+    assignment always executes, so `users/views.py` read 100% while advertising a refusal the
+    app cannot make.
+
+    That is the same failure as the deleted `get_org_scoped_object_or_404` — a security-shaped
+    name that enforces nothing, and that the next reader would reasonably believe.
+    """
+    from pathlib import Path
+
+    src = Path(__file__).resolve().parents[2] / "src"
+    offenders = [str(path.relative_to(src)) for path in src.rglob("*.py") if code in path.read_text(encoding="utf-8")]
+
+    assert not offenders, f"'{code}' is no longer returned by anything but still appears in {offenders}"
+
+
+@pytest.mark.parametrize("code", RETIRED_CODES)
+def test_the_api_reference_does_not_promise_a_retired_code(code: str) -> None:
+    """The docs claimed 403 `not_global_admin` on endpoints that cannot return it.
+
+    Documenting protection the app does not have is worse than documenting nothing: a reader
+    concludes the endpoint is gated. The two mentions that remain are explicit statements that
+    the code was retired, which is why they are matched on rather than banned outright.
+    """
+    from pathlib import Path
+
+    docs = Path(__file__).resolve().parents[2] / "docs" / "api"
+    for page in docs.glob("*.md"):
+        for number, line in enumerate(page.read_text(encoding="utf-8").splitlines(), 1):
+            if code not in line:
+                continue
+            assert any(word in line.lower() for word in ("not returned", "removed", "retired", "no longer")), (
+                f"{page.name}:{number} mentions `{code}` without saying it is retired: {line.strip()}"
+            )

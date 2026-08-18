@@ -107,6 +107,7 @@ nav:
   - Developer:
       - developer/index.md
       - Architecture: developer/architecture.md
+      - Tech Stack: developer/tech-stack.md
       - Local Development: developer/setup.md
       - Project Layout: developer/project-layout.md
       - SBOM Pipeline: developer/pipeline.md

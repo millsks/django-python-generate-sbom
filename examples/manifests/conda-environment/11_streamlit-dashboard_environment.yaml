@@ -1,0 +1,17 @@
+# 11_streamlit-dashboard — interactive data app
+name: streamlit-dashboard
+channels:
+  - conda-forge
+dependencies:
+  - python=3.13
+  - streamlit=1.61
+  - pandas=3.0
+  - numpy=2.5
+  - plotly=6.9
+  - altair=6.2
+  - matplotlib=3.11
+  - pydeck=0.9
+  - sqlalchemy=2.0
+  - psycopg=3.3
+  - watchdog=6.0
+  - python-dotenv=1.2

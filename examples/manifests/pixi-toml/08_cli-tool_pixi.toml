@@ -1,0 +1,40 @@
+# 08_cli-tool — command line application
+# Generated manifest; run `pixi lock` to resolve against conda-forge.
+
+[workspace]
+name = "cli-tool"
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64"]
+
+[dependencies]
+python = "3.13.*"
+typer = ">=0.27"
+click = ">=8.4"
+rich = ">=15.0"
+questionary = ">=2.1"
+platformdirs = ">=4.11"
+pyyaml = ">=6.0"
+tomlkit = ">=0.15"
+pydantic = ">=2.13"
+structlog = ">=26.1"
+tqdm = ">=4.70"
+
+[feature.dev.dependencies]
+pytest = ">=8.3"
+pytest-cov = ">=6.0"
+ruff = ">=0.8"
+mypy = ">=1.14"
+pre-commit = ">=4.0"
+
+[feature.dev.tasks]
+bootstrap = "pre-commit install --install-hooks"
+fmt = "ruff format ."
+lint = "ruff check ."
+check = "mypy src/"
+test = "pytest tests/unit/"
+test-integration = "pytest tests/integration/"
+cov = "pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=90"
+ci = { depends-on = ["lint", "check", "cov"] }
+
+[environments]
+dev = { features = ["dev"] }

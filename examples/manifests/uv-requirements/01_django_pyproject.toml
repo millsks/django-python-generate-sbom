@@ -1,0 +1,40 @@
+# 01_django — Django web application (REST API + async tasks)
+# uv: `uv sync` to install, `uv lock` to produce uv.lock.
+
+[project]
+name = "django-app"
+version = "0.1.0"
+description = "Django web application (REST API + async tasks)"
+requires-python = ">=3.12"
+dependencies = [
+    "Django==6.1",
+    "djangorestframework==3.18.0",
+    "django-filter==26.1",
+    "django-cors-headers==4.9.0",
+    "drf-spectacular==0.30.0",
+    "django-environ==0.14.0",
+    "django-storages==1.14.6",
+    "psycopg[binary]==3.3.4",
+    "dj-database-url==3.1.2",
+    "celery==5.6.3",
+    "redis==8.1.0",
+    "django-redis==7.0.0",
+    "whitenoise==6.12.0",
+    "gunicorn==26.1.0",
+    "Pillow==12.3.0",
+    "sentry-sdk==2.68.0",
+    "python-dotenv==1.2.3",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "ruff>=0.8",
+    "mypy>=1.14",
+    "pre-commit>=4.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

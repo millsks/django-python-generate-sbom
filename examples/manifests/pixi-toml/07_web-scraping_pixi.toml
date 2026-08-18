@@ -1,0 +1,45 @@
+# 07_web-scraping — HTTP clients, parsers, and browser automation
+# Generated manifest; run `pixi lock` to resolve against conda-forge.
+
+[workspace]
+name = "web-scraping"
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64"]
+
+[dependencies]
+python = "3.13.*"
+requests = ">=2.34"
+httpx = ">=0.28"
+beautifulsoup4 = ">=4.15"
+lxml = ">=6.1"
+parsel = ">=1.11"
+scrapy = ">=2.17"
+selenium = ">=4.47"
+playwright = ">=1.62"
+html5lib = ">=1.1"
+tenacity = ">=9.1"
+python-dateutil = ">=2.9"
+urllib3 = ">=2.7"
+
+[pypi-dependencies]
+fake-useragent = ">=2.2.0"
+
+[feature.dev.dependencies]
+pytest = ">=8.3"
+pytest-cov = ">=6.0"
+ruff = ">=0.8"
+mypy = ">=1.14"
+pre-commit = ">=4.0"
+
+[feature.dev.tasks]
+bootstrap = "pre-commit install --install-hooks"
+fmt = "ruff format ."
+lint = "ruff check ."
+check = "mypy src/"
+test = "pytest tests/unit/"
+test-integration = "pytest tests/integration/"
+cov = "pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=90"
+ci = { depends-on = ["lint", "check", "cov"] }
+
+[environments]
+dev = { features = ["dev"] }

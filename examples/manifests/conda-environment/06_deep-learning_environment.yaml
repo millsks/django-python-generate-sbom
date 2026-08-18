@@ -1,0 +1,26 @@
+# 06_deep-learning — PyTorch + Hugging Face training/fine-tuning
+# GPU hosts: add `- pytorch-cuda=12.4` and the `nvidia` channel, or install torch
+# from the CUDA-matched wheel index instead of conda-forge.
+name: deep-learning
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pytorch=2.12
+  - torchvision=0.28
+  - torchaudio=2.11
+  - transformers=5.15
+  - tokenizers=0.22
+  - datasets=5.0
+  - accelerate=1.14
+  - safetensors=0.8
+  - sentencepiece=0.2
+  - einops=0.8
+  - tensorboard=2.20
+  - numpy=2.5
+  - ipykernel=7.3
+  - pip
+  - pip:
+      - peft==0.20.0
+      - evaluate==0.4.6
+      - wandb==0.28.2

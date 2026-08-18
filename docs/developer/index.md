@@ -5,6 +5,8 @@ and anyone extending the application.
 
 - **[Architecture](architecture.md)** — the layered modular monolith, the async
   pipeline, and the invariants that keep it consistent.
+- **[Tech Stack](tech-stack.md)** — the major frameworks and libraries, layer by
+  layer, and why each is here.
 - **[Local Development](setup.md)** — get the stack running containerless with
   `pixi run dev` on macOS or Windows (Docker Compose is the optional prod-parity
   path).

@@ -1,0 +1,35 @@
+# 07_web-scraping — HTTP clients, parsers, and browser automation
+# poetry: `poetry install` to install, `poetry lock` to produce poetry.lock.
+
+[tool.poetry]
+name = "web-scraping"
+version = "0.1.0"
+description = "HTTP clients, parsers, and browser automation"
+authors = ["Your Name <you@example.com>"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.12"
+requests = "^2.34.2"
+httpx = "^0.28.1"
+beautifulsoup4 = "^4.15.0"
+lxml = "^6.1.1"
+parsel = "^1.11.0"
+Scrapy = "^2.17.0"
+selenium = "^4.47.0"
+playwright = "^1.62.0"
+html5lib = "^1.1"
+tenacity = "^9.1.4"
+python-dateutil = "^2.9.0.post0"
+urllib3 = "^2.7.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3"
+pytest-cov = "^6.0"
+ruff = "^0.8"
+mypy = "^1.14"
+pre-commit = "^4.0"
+
+[build-system]
+requires = ["poetry-core>=2.0"]
+build-backend = "poetry.core.masonry.api"

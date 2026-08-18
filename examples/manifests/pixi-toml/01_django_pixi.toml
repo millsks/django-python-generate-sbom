@@ -1,0 +1,49 @@
+# 01_django — Django web application (REST API + async tasks)
+# Generated manifest; run `pixi lock` to resolve against conda-forge.
+
+[workspace]
+name = "django-app"
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64"]
+
+[dependencies]
+python = "3.13.*"
+django = ">=6.1"
+djangorestframework = ">=3.18"
+django-filter = ">=26.1"
+django-cors-headers = ">=4.9"
+django-environ = ">=0.14"
+django-storages = ">=1.14"
+psycopg = ">=3.3"
+celery = ">=5.6"
+redis-py = ">=8.1"
+whitenoise = ">=6.12"
+gunicorn = ">=26.1"
+pillow = ">=12.3"
+python-dotenv = ">=1.2"
+
+[pypi-dependencies]
+drf-spectacular = ">=0.30.0"
+dj-database-url = ">=3.1.2"
+django-redis = ">=7.0.0"
+sentry-sdk = ">=2.68.0"
+
+[feature.dev.dependencies]
+pytest = ">=8.3"
+pytest-cov = ">=6.0"
+ruff = ">=0.8"
+mypy = ">=1.14"
+pre-commit = ">=4.0"
+
+[feature.dev.tasks]
+bootstrap = "pre-commit install --install-hooks"
+fmt = "ruff format ."
+lint = "ruff check ."
+check = "mypy src/"
+test = "pytest tests/unit/"
+test-integration = "pytest tests/integration/"
+cov = "pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=90"
+ci = { depends-on = ["lint", "check", "cov"] }
+
+[environments]
+dev = { features = ["dev"] }

@@ -144,17 +144,20 @@ def test_each_tab_partial_renders(org_client, tab: str) -> None:  # type: ignore
 
 
 @pytest.mark.django_db
-def test_placeholder_tabs_are_neutral_not_errors(org_client) -> None:  # type: ignore[no-untyped-def]
-    """A partially-built branch must stay navigable rather than looking broken."""
+def test_no_tab_is_a_placeholder_any_more(org_client) -> None:  # type: ignore[no-untyped-def]
+    """Stories 21.13-21.16 filled in all four detail tabs.
+
+    This replaces the placeholder check rather than deleting it: the shell must now render
+    real content for every tab, and a reintroduced "arrives in Story" stub would mean a tab
+    regressed.
+    """
     client, org = org_client
     job = _job(org)
 
-    # `sbom` (21.13), `vulnerabilities` (21.14) and `licenses` (21.15) are filled in;
-    # `versions` follows in 21.16, which empties this list entirely.
-    for tab in ("versions",):
-        body = client.get(f"/results/{job.task_id}/tab/{tab}").content.decode().lower()
-        assert "arrives in story" in body
-        assert "error" not in body
+    for slug, _label in RESULT_TABS:
+        body = client.get(f"/results/{job.task_id}/tab/{slug}").content.decode().lower()
+        assert "arrives in story" not in body, f"{slug} is still a placeholder"
+        assert body.strip()
 
 
 @pytest.mark.django_db

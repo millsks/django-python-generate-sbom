@@ -358,3 +358,30 @@ def test_the_shell_renders_the_tab_server_side(org_client) -> None:  # type: ign
     html = client.get(f"/results/{job.task_id}?tab=vulnerabilities").content.decode()
 
     assert "critpkg" in html
+
+
+@pytest.mark.django_db
+def test_a_finding_with_no_advisory_url_renders_a_dash(org_client) -> None:  # type: ignore[no-untyped-def]
+    """Regression: this crashed until Story 21.16 hit the same shape elsewhere.
+
+    `render_advisory_url` returned `format_html("—")`, and format_html raises TypeError when
+    given no arguments. Every fixture here happened to supply an advisory URL, so the branch
+    was never taken — a latent 500 for any finding without one.
+    """
+    client, org = org_client
+    report = {
+        "packages": [
+            {
+                "name": "nolink",
+                "version": "1.0",
+                "vulnerabilities": [{"id": "GHSA-nolink", "aliases": [], "severity": "High", "advisory_url": None}],
+            }
+        ],
+        "summary": {"vulnerable_package_count": 1},
+    }
+    job = _job(org, report=report)
+
+    html = _tab(client, job)
+
+    assert "nolink" in html
+    assert "—" in html

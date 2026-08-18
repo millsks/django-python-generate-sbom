@@ -20,7 +20,13 @@ from django_tables2 import RequestConfig, SingleTableMixin
 from inventory.analysis.filters import filter_by_severity
 from inventory.analysis.models import AnalysisReport
 from inventory.analysis.reports import read_report
-from inventory.analysis.tables import SEVERITY_CHOICES, VulnerabilityTable, vulnerability_rows
+from inventory.analysis.tables import (
+    SEVERITY_CHOICES,
+    VersionTable,
+    VulnerabilityTable,
+    version_rows,
+    vulnerability_rows,
+)
 from inventory.common.access import OrgAdminRequiredMixin, OrgMemberRequiredMixin
 from inventory.common.users import UserT
 from inventory.manifests.detection import ManifestParseError, UnsupportedFormatError
@@ -419,11 +425,26 @@ def licenses_tab_context(request: HttpRequest, job: SBOMJob) -> dict[str, Any]:
     }
 
 
+def versions_tab_context(request: HttpRequest, job: SBOMJob) -> dict[str, Any]:
+    """Build the Version Currency tab's context (Story 21.16)."""
+    result = read_report(job, AnalysisReport.ReportType.VERSION)
+    if result.failed:
+        return {"report_state": "failed", "failure_reason": result.failure_reason}
+    if not result.ok:
+        return {"report_state": "missing"}
+
+    rows = version_rows(result.data or {})
+    table = VersionTable(rows)
+    RequestConfig(request, paginate=False).configure(table)
+    return {"report_state": "ok", "version_table": table, "version_package_count": len(rows)}
+
+
 #: Per-tab context builders. A tab with no entry needs none — the placeholders do not.
 TAB_CONTEXT_BUILDERS = {
     "sbom": sbom_tab_context,
     "vulnerabilities": vulnerabilities_tab_context,
     "licenses": licenses_tab_context,
+    "versions": versions_tab_context,
 }
 
 

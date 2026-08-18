@@ -1,8 +1,26 @@
-{% comment %} Placeholder — Story 21.16 fills this tab in.
+{% load render_table from django_tables2 %}
+{% comment %} Version Currency tab (Story 5.6 / 8.7 / 8.9 / 8.10 / 8.23 → 21.16).
 
-  A NEUTRAL waiting state, deliberately not an error: the epic merges as one branch, so a
-  partially-built results page must stay navigable rather than looking broken.
+  Seven columns in a load-bearing order: PyPI Latest sits immediately before conda-forge
+  Latest so the two can be compared at a glance (Story 8.23).
+
+  Status sorts by CLASS RANK, never alphabetically — see the note on the currency column in
+  tables.py. Sorting the string would read "behind-1, behind-2+, current, unknown", which
+  looks sorted and puts the most outdated packages in the middle.
 {% endcomment %}
-<p class="text-body-secondary mb-0">
-  The Version currency view arrives in Story 21.16.
-</p>
+
+{% if report_state == 'failed' %}
+  {% include "inventory/sbom/tabs/_failure_notice.html" %}
+
+{% elif report_state == 'missing' %}
+  <div class="alert alert-secondary mb-0" role="status">
+    No version-currency report is available for this job. Its artifacts may have been removed
+    under the retention policy.
+  </div>
+
+{% else %}
+  <p class="small text-body-secondary">{{ version_package_count }} package(s) checked.</p>
+  <div style="max-height: 600px; overflow: auto;">
+    {% render_table version_table %}
+  </div>
+{% endif %}

@@ -35,7 +35,11 @@
       </dl>
     {% endif %}
 
-    <p class="small text-body-secondary">{{ sbom_component_count }} component(s).</p>
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+      <p class="small text-body-secondary mb-0">{{ sbom_component_count }} component(s).</p>
+      <a class="btn btn-sm btn-outline-secondary"
+         href="{% url 'ui-job-export' task_id=job.task_id kind='sbom' %}">Export to Excel</a>
+    </div>
     <div style="max-height: 600px; overflow: auto;">
       {% render_table sbom_table %}
     </div>

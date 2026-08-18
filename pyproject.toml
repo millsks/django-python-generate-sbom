@@ -98,6 +98,8 @@ module = [
     # django-environ ships no py.typed marker; surfaced when `check` widened to src/config/.
     "environ.*",
     "lib4sbom.*",
+    # openpyxl ships no py.typed marker (Story 21.17).
+    "openpyxl.*",
     "storages.*",
     "requests_cache.*",
     "requests_ratelimiter.*",

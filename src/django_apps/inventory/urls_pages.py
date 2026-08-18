@@ -17,6 +17,7 @@ Every path added here must also be added to the SPA catch-all's negative lookahe
 from django.urls import path
 
 from inventory.sbom.pages import (
+    CombinedExportView,
     JobArtifactsDeleteAllView,
     JobArtifactsDeleteView,
     JobHistoryView,
@@ -24,6 +25,7 @@ from inventory.sbom.pages import (
     JobResultsView,
     JobRowPartialView,
     JobTabPartialView,
+    ReportExportView,
     SbomRawView,
     UploadPageView,
 )
@@ -93,4 +95,8 @@ urlpatterns = [
     # Story 21.13 — the raw document has its own endpoint so it never rides along in the
     # SBOM tab's payload.
     path("results/<uuid:task_id>/sbom/raw", SbomRawView.as_view(), name="ui-job-sbom-raw"),
+    # Story 21.17 — Excel exports. Generated on demand and streamed; never stored, so AD-6 is
+    # unaffected.
+    path("results/<uuid:task_id>/export/<str:kind>.xlsx", ReportExportView.as_view(), name="ui-job-export"),
+    path("results/<uuid:task_id>/export.xlsx", CombinedExportView.as_view(), name="ui-job-export-all"),
 ]

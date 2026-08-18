@@ -423,7 +423,7 @@ development_status:
   21-14-vulnerabilities-tab: review
   21-15-licenses-tab: review
   21-16-version-currency-tab: review
-  21-17-server-side-excel-export: ready-for-dev
+  21-17-server-side-excel-export: review
   21-18-landing-page-and-visual-identity: ready-for-dev
   21-19-retire-react-spa-and-node-toolchain: ready-for-dev
   21-20-architecture-reconciliation: ready-for-dev

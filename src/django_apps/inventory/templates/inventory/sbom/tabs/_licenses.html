@@ -25,6 +25,8 @@
     <p class="small text-body-secondary mb-0">
       {{ licensed_package_count }} package(s) classified.
     </p>
+    <a class="btn btn-sm btn-outline-secondary"
+       href="{% url 'ui-job-export' task_id=job.task_id kind='licenses' %}">Export to Excel</a>
     <div class="btn-group btn-group-sm" role="group" aria-label="Expand or collapse all tiers">
       <button type="button" class="btn btn-outline-secondary" data-license-toggle="open">Expand all</button>
       <button type="button" class="btn btn-outline-secondary" data-license-toggle="close">Collapse all</button>

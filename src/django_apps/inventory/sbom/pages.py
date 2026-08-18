@@ -6,6 +6,7 @@ render HTML and call the same services the API calls — directly, never over HT
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from django.contrib import messages
@@ -17,6 +18,14 @@ from django.views.generic import FormView
 from django_filters.views import FilterView
 from django_tables2 import RequestConfig, SingleTableMixin
 
+from inventory.analysis.excel import (
+    SheetSpec,
+    build_workbook,
+    licenses_sheet,
+    sbom_components_sheet,
+    version_currency_sheet,
+    vulnerabilities_sheet,
+)
 from inventory.analysis.filters import filter_by_severity
 from inventory.analysis.models import AnalysisReport
 from inventory.analysis.reports import read_report
@@ -456,3 +465,75 @@ def tab_context(request: HttpRequest, job: SBOMJob, tab: str) -> dict[str, Any]:
     """
     builder = TAB_CONTEXT_BUILDERS.get(tab)
     return builder(request, job) if builder else {}
+
+
+# --- Excel export (Story 21.17) -------------------------------------------------------------
+
+XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+#: Which report backs each exportable sheet, and how to turn it into one. `sbom` is absent
+#: because its data comes from the SBOM document rather than an analysis report.
+#: The version builder takes the package list while the other two take the whole report, so
+#: each entry carries a callable that already accounts for that.
+_REPORT_SHEETS: dict[str, tuple[str, Callable[[dict[str, Any]], SheetSpec]]] = {
+    "vulnerabilities": (AnalysisReport.ReportType.VULN, vulnerabilities_sheet),
+    "licenses": (AnalysisReport.ReportType.LICENSE, licenses_sheet),
+    "versions": (AnalysisReport.ReportType.VERSION, lambda data: version_currency_sheet(data.get("packages") or [])),
+}
+
+
+def _sheet_for(job: SBOMJob, kind: str) -> SheetSpec | None:
+    """Build one report's sheet, or None when there is nothing to export.
+
+    Returns None for a **failed** phase as well as a missing one: AC #4 requires a failed
+    report to be omitted from the workbook rather than emitted as an empty sheet, which would
+    read as "we checked and found nothing".
+    """
+    if kind == "sbom":
+        document = read_inline_document(job)
+        return sbom_components_sheet(document.components) if document else None
+
+    report_type, builder = _REPORT_SHEETS[kind]
+    result = read_report(job, report_type)
+    if not result.ok:
+        return None
+    return builder(result.data or {})
+
+
+def _xlsx_response(sheets: list[SheetSpec], filename: str) -> HttpResponse:
+    """Stream a workbook as a download.
+
+    Generated on demand and never stored: exports are not artifacts, so AD-6's storage triad
+    is untouched by this endpoint.
+    """
+    response = HttpResponse(build_workbook(sheets), content_type=XLSX_CONTENT_TYPE)
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+class ReportExportView(_JobScopedView):
+    """Download one report as .xlsx. Org-scoped by ``_JobScopedView`` (AC #5)."""
+
+    def get(self, request: HttpRequest, task_id: str, kind: str) -> HttpResponse:
+        """Return the sheet for ``kind``, or 404 when it has nothing to export."""
+        if kind not in {"sbom", *_REPORT_SHEETS}:
+            raise Http404
+        job = self.get_job_or_404(task_id)
+        sheet = _sheet_for(job, kind)
+        if sheet is None:
+            # Same response as an unknown job: a failed or purged report has no export, and
+            # saying which would distinguish it from a job the caller cannot see.
+            raise Http404
+        return _xlsx_response([sheet], f"{kind}-{job.task_id}.xlsx")
+
+
+class CombinedExportView(_JobScopedView):
+    """Download every available report in one workbook (Story 8.15's "export all")."""
+
+    def get(self, request: HttpRequest, task_id: str) -> HttpResponse:
+        """Return a workbook of whatever is available; failed phases are omitted."""
+        job = self.get_job_or_404(task_id)
+        sheets = [sheet for sheet in (_sheet_for(job, kind) for kind in ("sbom", *_REPORT_SHEETS)) if sheet]
+        if not sheets:
+            raise Http404
+        return _xlsx_response(sheets, f"report-{job.task_id}.xlsx")

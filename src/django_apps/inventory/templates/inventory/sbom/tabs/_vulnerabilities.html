@@ -42,7 +42,13 @@
     </div>
   </form>
 
-  <p class="small text-body-secondary">{{ finding_count }} finding(s) in this report.</p>
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <p class="small text-body-secondary mb-0">{{ finding_count }} finding(s) in this report.</p>
+    {% comment %} Exports the FULL report, not the filtered view — matching the SPA, whose
+      export button ignored the severity filter. {% endcomment %}
+    <a class="btn btn-sm btn-outline-secondary"
+       href="{% url 'ui-job-export' task_id=job.task_id kind='vulnerabilities' %}">Export to Excel</a>
+  </div>
   <div style="max-height: 600px; overflow: auto;">
     {% render_table vuln_table %}
   </div>

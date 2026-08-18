@@ -94,11 +94,10 @@ Invalidate the current session. **Authentication required.**
 ## `GET /api/v1/auth/me/`
 
 Return the currently authenticated user's identity and role flags.
-**Authentication required.** This is the SPA's identity signal — a logged-in user
-with **zero organizations** is still authenticated and gets a `200` here. The two
-boolean flags are the client's single source of truth for gating admin-only nav,
-routes, and affordances, so it never has to probe an admin-only endpoint to learn
-its role.
+**Authentication required.** A logged-in user with **zero organizations** is still
+authenticated and gets a `200` here — identity is independent of org membership. The
+two boolean flags let a client gate admin-only affordances without probing an
+admin-only endpoint to learn its role.
 
 **Response `200 OK`**
 

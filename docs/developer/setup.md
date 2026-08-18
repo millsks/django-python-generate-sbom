@@ -13,10 +13,11 @@ containerless flow is the primary way to develop.
 
 ## Prerequisites
 
-- [**pixi**](https://pixi.sh) — the single toolchain manager for the whole project
-  (Python **and** Node). You do not need a separate `pip`, `conda`, `nvm`, or `npm`
-  install step; pixi manages all of them. pixi resolves a native environment for
-  your platform, so the same commands run on macOS and Windows.
+- [**pixi**](https://pixi.sh) — the single toolchain manager for the whole project.
+  You do not need a separate `pip`, `conda`, or `uv` install step; pixi manages
+  everything. There is no Node: the UI is server-rendered Django templates with
+  vendored assets, so there is nothing to build. pixi resolves a native environment
+  for your platform, so the same commands run on macOS and Windows.
 
 That is the only hard prerequisite for containerless local dev. Docker + Docker
 Compose are needed **only** for the optional prod-parity stack.
@@ -24,7 +25,7 @@ Compose are needed **only** for the optional prod-parity stack.
 ## First-time setup
 
 ```sh
-pixi install          # resolve and install the full environment (Python + Node)
+pixi install          # resolve and install the environment
 pixi run bootstrap    # install the pre-commit + commit-msg git hooks
 ```
 
@@ -77,27 +78,23 @@ migration. The one thing that did **not** change is `AUTH_USER_MODEL`, which is 
 re-took it.
 
 `pixi run dev` runs [honcho](https://honcho.readthedocs.io) against the repo-root
-`Procfile`, launching four processes in one foreground terminal:
+`Procfile`, launching three processes in one foreground terminal:
 
 | Process | Command | What it is |
 |---|---|---|
 | `web` | `pixi run runserver` | Django's `runserver` on `:8000` (not gunicorn) |
 | `worker` | `pixi run worker` | A **real** Celery worker draining the `pipeline` + `analysis` queues |
 | `beat` | `pixi run beat` | Celery Beat scheduler for maintenance jobs |
-| `frontend` | `pixi run fe-dev` | The Vite HMR dev server on `:5173`, proxying `/api` to Django on `:8000` |
 
 honcho is pure-Python and cross-platform, so this single command behaves the same
 on macOS and Windows. `pixi run dev` sets `DJANGO_SETTINGS_MODULE=config.settings.local`
 for the whole process tree, so no child process falls back to the
 production-defaulting `wsgi.py`.
 
-**Open the app at [http://localhost:5173](http://localhost:5173)** — the Vite dev
-server serves the hot-reloading UI and proxies `/api` (and `/admin`, `/static`) to
-Django on `:8000`, so the SPA's API calls reach the real backend. Editing a file
-under `frontend/src/` reloads instantly with no rebuild. (The Django server on
-`:8000` serves the API directly; it only serves the built SPA from `frontend/dist/`
-when you have run `pixi run fe-build` — the dev server on `:5173` is the primary UI
-during development.)
+**Open the app at [http://localhost:8000](http://localhost:8000).** Django serves the
+UI, the REST API, and static assets from that one port — there is no second dev server
+and no build step. `runserver` reloads on Python changes, and template and static edits
+are picked up on the next request.
 
 > **Port conflict — `:8000`.** Both `pixi run dev` and the Docker Compose
 > prod-parity stack bind port `:8000`. Do not run them at the same time — stop one
@@ -113,13 +110,9 @@ pixi run runserver          # Django runserver on :8000 (local settings)
 pixi run worker             # Celery worker: pipeline + analysis queues
 pixi run beat               # Celery Beat scheduler
 pixi run flower             # Celery monitoring UI on :5555
-pixi run fe-dev             # Vite HMR dev server on :5173 (proxies /api → :8000)
 ```
 
-`pixi run fe-dev` runs the frontend on its own — useful when the backend is already
-up (via `pixi run dev`, a container, or the individual tasks above) and you only
-want to iterate on the UI. Other frontend tasks (`fe-build`, `fe-lint`, `fe-test`,
-`fe-typecheck`, …) run through their own `fe-*` pixi tasks; see `pixi task list`.
+See `pixi task list` for the full set.
 
 ## Windows specifics
 
@@ -135,14 +128,10 @@ things differ from Unix:
 - **`runserver`, not gunicorn.** gunicorn is a Unix-only WSGI server and is not
   installed on Windows. Local web always uses Django's `runserver` (cross-platform);
   gunicorn is used only on the containerized OCP/prod path.
-- **Frontend dev server.** `pixi run fe-dev` (and the `frontend` process in
-  `pixi run dev`) runs Vite/npm through the pixi-provided Node runtime, so the HMR
-  server on `:5173` and its `/api → :8000` proxy behave identically on macOS and
-  Windows — no separate Node/nvm install.
 - **Portable broker/beat paths.** The filesystem Celery broker and the Beat
-  schedule live under a git-ignored `backend/.celery/` tree (broker messages under
-  `backend/.celery/broker/`, the Beat schedule at
-  `backend/.celery/celerybeat-schedule`). These paths are built with `pathlib`, so
+  schedule live under a git-ignored `.celery/` tree at the repo root (broker messages
+  under `.celery/broker/`, the Beat schedule at `.celery/celerybeat-schedule`). These
+  paths are built with `pathlib`, so
   they are correct on Windows — nothing is written to POSIX-only `/tmp`, which does
   not exist there. The folders are created on import, so a fresh checkout can start
   a worker without a manual `mkdir`.
@@ -158,9 +147,9 @@ prod topology and the
 | Concern | Local (containerless) | OCP / production |
 |---|---|---|
 | **Settings module** | `config.settings.local` | `config.settings.production` |
-| **Database** | SQLite (`backend/db.sqlite3`) | Enterprise-managed **PostgreSQL** |
-| **Object storage** | `FileSystemStorage` (`backend/media/`) | Enterprise **S3**-compatible object storage |
-| **Celery broker** | Kombu `filesystem://` (`backend/.celery/broker/`) | Enterprise **Redis** |
+| **Database** | SQLite (`db.sqlite3`) | Enterprise-managed **PostgreSQL** |
+| **Object storage** | `FileSystemStorage` (`media/`) | Enterprise **S3**-compatible object storage |
+| **Celery broker** | Kombu `filesystem://` (`.celery/broker/`) | Enterprise **Redis** |
 | **Celery result backend** | `django-db` (results in SQLite) | Enterprise **Redis** |
 | **Web server** | Django `runserver` | **gunicorn** |
 | **Worker pool** | prefork (`-c 4`) on macOS/Linux, `--pool=solo` on Windows | prefork |
@@ -188,7 +177,7 @@ pixi run docker-logs    # follow the logs
 pixi run docker-down    # stop everything
 ```
 
-The API and the built SPA are served by the `web` container (gunicorn); MinIO's
+The UI and the API are served by the `web` container (gunicorn); MinIO's
 console and the Postgres/Redis ports are exposed for local inspection (see
 `docker-compose.yml`). For migrations and management commands, run them inside the
 `web` container:
@@ -239,7 +228,7 @@ then the same `python manage.py …` commands).
 
 ## Settings
 
-Django settings are split under `backend/config/settings/`:
+Django settings are split under `src/config/settings/`:
 
 | Module | Used for |
 |---|---|
@@ -253,8 +242,7 @@ Configuration is environment-driven; never commit secrets or `.env` files.
 
 | Task | What it does |
 |---|---|
-| `pixi run dev` | Start the containerless stack (web + worker + beat + frontend HMR) |
-| `pixi run fe-dev` | Start just the Vite HMR frontend on :5173 (proxies `/api` → :8000) |
+| `pixi run dev` | Start the containerless stack (web + worker + beat) |
 | `pixi run migrate` | Apply database migrations |
 | `pixi run test` | Backend unit tests (fast) |
 | `pixi run test-integration` | Backend integration tests |

@@ -32,4 +32,4 @@ artifact to hand to other tools or attach to a release.
     and request the download again.
 
 !!! info "Screenshots"
-    _Screenshots of the export actions are added with the UI polish work._
+    Not captured. See the note in the [User Guide index](index.md).

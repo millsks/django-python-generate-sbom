@@ -17,7 +17,8 @@ The app has three role tiers:
 
 ## Register
 
-1. Open the app and choose **Register** in the top navigation.
+1. Open the app, choose **Sign in** at the top-right, then **Create one** on the login
+   page. (You can also go straight to `/register`.)
 2. Provide your account details and submit.
 3. Registration creates your user account only — no organization is created for you.
 4. You are then sent to the login page automatically. If you would rather not wait, use
@@ -25,7 +26,7 @@ The app has three role tiers:
 
 ## Log in
 
-1. Choose **Login** in the top navigation.
+1. Choose **Sign in** at the top-right of the header.
 2. Enter your credentials and submit.
 3. On success you are taken to the page you were trying to reach (or the home page if you
    went straight to the login page).
@@ -110,9 +111,11 @@ only). It opens a management screen where a global admin can:
 
 ## Log out
 
-Open the **account menu** in the top-right of the header and choose **Logout**. You are
-returned to the login page and the navigation reverts to its signed-out state.
+Open the **account menu** in the top-right of the header and choose **Sign out**. You are
+returned to the login page and the header reverts to its signed-out **Sign in** button.
+
+Signing out is a form submission rather than a link, so it cannot be triggered by
+something else on the page prefetching a URL.
 
 !!! info "Screenshots"
-    _Screenshots of registration, login, the organization switcher, and the admin screens
-    are added with the UI polish work._
+    Not captured. See the note in the [User Guide index](index.md).

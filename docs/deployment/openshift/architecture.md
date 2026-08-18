@@ -10,8 +10,9 @@ glossary.
 Locally, `docker-compose.yml` runs eight services on named volumes. All Django and
 Celery processes share **one umbrella image** (`Dockerfile`, `FROM
 ghcr.io/prefix-dev/pixi`); each service just selects a different `pixi run <task>`
-command (`pixi.toml`). The SPA is built into the image and served by the same `web`
-process via WhiteNoise — there is **no separate frontend/nginx container**.
+command (`pixi.toml`). The UI is server-rendered by the same `web` process, with static
+assets served through WhiteNoise — there is **no separate frontend/nginx container** and
+no build step in the image.
 
 ```mermaid
 flowchart TB
@@ -19,7 +20,7 @@ flowchart TB
     browser -->|"localhost:9000 presigned"| minio
 
     subgraph app[Umbrella image: pixi run &lt;task&gt;]
-        web["web<br/>migrate + seed-superuser + gunicorn :8000<br/>(API + SPA via WhiteNoise)"]
+        web["web<br/>migrate + seed-superuser + gunicorn :8000<br/>(UI + API, static via WhiteNoise)"]
         wp[worker-pipeline<br/>celery -Q pipeline]
         wa[worker-analysis<br/>celery -Q analysis]
         beat[beat<br/>celery beat]
@@ -75,7 +76,7 @@ flowchart TB
 
     subgraph project[OpenShift Project]
         route --> websvc[Service: web]
-        websvc --> web["web Deployment (N replicas)<br/>gunicorn :8000<br/>API + SPA via WhiteNoise"]
+        websvc --> web["web Deployment (N replicas)<br/>gunicorn :8000<br/>UI + API, static via WhiteNoise"]
         wp[worker-pipeline Deployment<br/>N replicas]
         wa[worker-analysis Deployment<br/>N replicas]
         beat["beat Deployment<br/>exactly 1 replica"]
@@ -105,7 +106,7 @@ Every Compose service maps to either an OpenShift object or an enterprise endpoi
 
 | Compose service | Target | Notes |
 |---|---|---|
-| `web` | **Deployment** + **Service** + **Route** | Scale to N replicas (stateless). Serves both the REST API and the React SPA/static via WhiteNoise — no nginx sidecar. Liveness/readiness probe → `GET /health/`. |
+| `web` | **Deployment** + **Service** + **Route** | Scale to N replicas (stateless). Serves the server-rendered UI and the REST API, with static assets via WhiteNoise — no nginx sidecar. Liveness/readiness probe → `GET /health/`. |
 | `worker-pipeline` | **Deployment** | `celery -Q pipeline`. Scale horizontally. No Service/Route (no inbound traffic). |
 | `worker-analysis` | **Deployment** | `celery -Q analysis`. Scale horizontally. No Service/Route. |
 | `beat` | **Deployment, `replicas: 1`** | Scheduler singleton — never more than one. Writes `/tmp/celerybeat-schedule`; that path must be writable by the arbitrary UID. |
@@ -125,7 +126,7 @@ sit. For a given SBOM generation:
 
 ```mermaid
 sequenceDiagram
-    actor U as Browser (SPA)
+    actor U as Browser
     participant R as Route
     participant W as web (gunicorn)
     participant Q as Redis (broker)

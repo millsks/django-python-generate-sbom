@@ -7,25 +7,32 @@ day-to-day development; when the two disagree, the spine wins.
 ## Design paradigm
 
 **Layered modular monolith with an async pipeline.** The system is a single
-deployable Django application. Module boundaries are Django apps; cross-module calls
-go through Python **service functions**, never HTTP. A Celery pipeline runs those same
-service functions asynchronously, so there is no duplicate business logic between the
-HTTP and async paths.
+deployable Django application. Module boundaries are packages inside the single
+`inventory` app; cross-module calls go through Python **service functions**, never HTTP.
+A Celery pipeline runs those same service functions asynchronously, so there is no
+duplicate business logic between the HTTP and async paths.
 
 ```
-HTTP / React SPA   →   DRF Views   →   Service Layer   →   ORM / External APIs
-                                ↑
+Browser      →   Page views  ┐
+                             ├→   Service Layer   →   ORM / External APIs
+API client   →   DRF Views   ┘          ↑
                         Celery Tasks (same service layer, no HTTP)
 ```
 
-The React SPA is the only UI. It talks to the backend exclusively through the
-versioned REST API — there is no server-side rendering of business data.
+The UI is **server-rendered Django templates**. Page views and DRF views are peers on
+the same service layer: a page view calls `services.py` / `selectors.py` directly and
+**never** issues an HTTP request to `/api/v1/` — that would be an in-process network hop,
+which AD-1 forbids. Where the HTML and JSON paths need the same behaviour, it is extracted
+into a shared service function so the two cannot drift apart.
+
+`/api/v1/` remains the contract for scripted and CI/CD clients; it is not a private
+backend for the UI.
 
 ## Containers
 
 | Container | Role |
 |---|---|
-| `web` | Django + DRF (gunicorn) — serves the REST API and the built SPA assets |
+| `web` | Django + DRF (gunicorn) — serves the server-rendered UI, the REST API, and static assets |
 | `worker-pipeline` | Celery worker on the `pipeline` queue (sequential SBOM phases) |
 | `worker-analysis` | Celery worker on the `analysis` queue (parallel enrichment) |
 | `beat` | Celery Beat — scheduled maintenance (artifact expiry, mapping refresh) |
@@ -45,7 +52,8 @@ These are the load-bearing rules from the spine. Respect them when adding code.
   take plain arguments and are callable from both views and tasks.
 - **AD-4 — Two Celery queues.** `pipeline` (sequential generation) and `analysis`
   (parallel enrichment) — see [the pipeline](pipeline.md).
-- **AD-5 — React SPA, REST only.** No Django template coupling to business data.
+- **AD-15 — Server-rendered UI.** Page views call the service layer directly and never
+  the HTTP API. (This supersedes **AD-5**, which mandated a React SPA; Epic 21 reversed it.)
 - **AD-6 — Storage triad.** Artifact **blobs live in S3/MinIO only** — never in
   PostgreSQL or Redis. The pipeline passes storage **keys**, not blobs, between phases.
 - **AD-7 — Per-org concurrency gate at enqueue.** The generate endpoint gates
@@ -57,8 +65,11 @@ These are the load-bearing rules from the spine. Respect them when adding code.
 - **AD-11 — Artifact downloads via presigned URL**, never proxied through Django.
 - **AD-12 — `SBOMJob.status` is written exclusively by Celery task code**, never by a
   view.
-- **AD-13 — Monorepo layout.** `backend/` and `frontend/` are project-root peers under
-  a pixi umbrella (see [Project Layout](project-layout.md)).
+- **AD-13 — `src/` layout under a pixi umbrella** — `src/{config,django_service,django_apps}`
+  with `tests/` at the root (see [Project Layout](project-layout.md)).
+- **AD-16 — One reusable app.** All domain code is in `inventory`, imported unqualified.
+- **AD-17 — No concrete `User` import.** App code uses `settings.AUTH_USER_MODEL` and
+  `get_user_model()`; the concrete model is owned by the host project.
 
 ## Accounts, orgs, and the global-admin tier
 
@@ -68,22 +79,21 @@ role (`admin` or `member`). See the [Data Model](data-model.md) for the fields.
 
 - **Zero-org identity.** A freshly registered user has **no** memberships —
   registration creates the account only, never a "personal" org. Authentication
-  is therefore independent of org membership: the SPA establishes identity through
-  `GET /auth/me/`, which succeeds for a user with no orgs and returns
-  `{id, email, is_admin, is_global_admin}`. Anything org-scoped resolves the active
-  org separately (`get_request_org`), and returns `None` when the user belongs to
-  no org. A signed-in user with no active org is **restricted to the home page**
-  (Story 2.18): the SPA hides the org-scoped destinations and renders the shared
+  is therefore independent of org membership. Anything org-scoped resolves the active
+  org separately (`get_request_org`), and returns `None` when the user belongs to no
+  org. `GET /auth/me/` exposes the same identity to API clients, returning
+  `{id, email, is_admin, is_global_admin}` and succeeding for a user with no orgs.
+  A signed-in user with no active org is **restricted to the home page** (Story 2.18):
+  the nav hides the org-scoped destinations and the home page renders the shared
   no-org empty state instead of an error.
 
 - **Admin authorization, gated twice.** Admin-only surfaces (Members, Organization,
-  and the global-admin screen) are enforced at **both** layers (Story 2.17): the
-  React routes wrap the page in `AdminRoute` / `GlobalAdminRoute`, and the matching
-  API endpoints independently return `403` for a non-admin — the route guard is
-  UX, not security. `auth/me`'s `is_admin` (admin of the active org) and
-  `is_global_admin` flags are the SPA's single source of truth for gating nav,
-  routes, and affordances, so the client never probes an admin-only endpoint to
-  learn its role.
+  and the global-admin screen) are enforced at **both** layers (Story 2.17): page
+  views mix in `OrgAdminRequiredMixin` / `GlobalAdminRequiredMixin` from
+  `inventory/common/access.py`, and the matching API endpoints independently return
+  `403` for a non-admin. Hiding a nav link is UX, not security. Admin-ness is
+  **per-org** and re-evaluated against the active org, so switching org can change
+  the answer.
 
 - **Per-org promote / demote.** Admins add or remove *per-org* admins with
   `promote_member_to_admin` (Story 2.16) and `demote_admin_to_member` (Story 2.20);

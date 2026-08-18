@@ -56,7 +56,7 @@ into every existing org. See [Architecture](architecture.md) for the tier's desi
 | `manifest` | FK → `ManifestUpload` |
 | `user` | FK → the submitting user |
 | `status` | `PENDING → PROGRESS → SUCCESS`/`FAILED` — **written only by task code** (AD-12) |
-| `progress` / `current_step` | Live progress for SPA polling |
+| `progress` / `current_step` | Live progress for the results page and status polling |
 | `output_format` | Internal serializer id for the SBOM |
 | `result_key` | Storage key of the generated SBOM blob (not the blob itself, AD-6) |
 | `summary_stats` | JSON roll-up for the results overview |

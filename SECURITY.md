@@ -2,8 +2,8 @@
 
 ## Supported Versions
 
-This project is under active development. Security fixes are applied to the latest
-release and the `main` branch.
+**Python Inventory Supply Lens** is under active development. Security fixes are
+applied to the latest release and the `main` branch.
 
 ## Reporting a Vulnerability
 
@@ -23,7 +23,7 @@ with the details.
 Please include, where possible:
 
 - The type of issue (e.g. injection, authentication bypass, information disclosure)
-- The affected component (backend API, Celery pipeline, frontend, dependency)
+- The affected component (web UI, REST API, Celery pipeline, dependency)
 - Step-by-step instructions to reproduce
 - The potential impact
 

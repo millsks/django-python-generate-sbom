@@ -1,6 +1,6 @@
 # Deploying to OpenShift
 
-This section explains how to move django-python-generate-sbom from the local
+This section explains how to move Python Inventory Supply Lens from the local
 Docker Compose stack (see [Local Development](../../developer/setup.md)) onto the
 **Red Hat OpenShift Container Platform (OCP)**. It is written for a first-time
 OpenShift deployer: no prior Kubernetes or OpenShift experience is assumed, and
@@ -54,8 +54,8 @@ what does not**:
 The app reaches all three purely through environment-driven configuration
 (connection URLs, bucket name, credentials) — no application code changes are
 required to repoint them, because the settings are already read from the
-environment (`backend/config/settings/base.py`,
-`backend/config/settings/production.py`).
+environment (`src/config/settings/base.py`,
+`src/config/settings/production.py`).
 
 !!! note "Why push state out of the cluster?"
     Databases, brokers, and object stores need durable storage, backups, tuning,
@@ -68,7 +68,7 @@ environment (`backend/config/settings/base.py`,
 flowchart LR
     user([User browser]) -->|HTTPS| route[OpenShift Route]
     subgraph ocp[OpenShift Project]
-        route --> web[web Deployment<br/>API + React SPA]
+        route --> web[web Deployment<br/>UI + REST API]
         web -.-> worker1[worker-pipeline]
         web -.-> worker2[worker-analysis]
         beat[beat<br/>single replica]

@@ -7,7 +7,7 @@ autoscaling settings, resource sizing, TLS, and observability. Pair this with th
 ## Environment variables
 
 Every value below is read from the environment by Django
-(`backend/config/settings/base.py` and `backend/config/settings/production.py`).
+(`src/config/settings/base.py` and `src/config/settings/production.py`).
 The **Where** column is the recommendation for OpenShift: put non-sensitive values
 in a **ConfigMap**, sensitive values in a **Secret** (or an
 [ESO/Vault-backed](migration-guide.md#configuration-and-secrets) source).
@@ -80,7 +80,7 @@ OpenShift, where those services are external:
 ## Health probes
 
 The app exposes an unauthenticated `GET /health/` endpoint
-(`backend/generate_sbom/common/views.py`) that returns `{"status": "ok"}` and
+(`src/django_apps/inventory/common/views.py`) that returns `{"status": "ok"}` and
 deliberately **does not touch the database**. That makes it safe for both probe
 types on the `web` Deployment:
 

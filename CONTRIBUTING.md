@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in improving **django-python-generate-sbom**. This guide
+Thanks for your interest in improving **Python Inventory Supply Lens**. This guide
 covers how to set up the project, the development workflow, and how to get a change
 merged.
 
@@ -12,13 +12,13 @@ rather than opening a public issue.
 
 ## Prerequisites
 
-The whole project (Python backend and React frontend) is managed with
-[Pixi](https://pixi.sh) — a single toolchain, no separate `pip`/`npm` bootstrapping.
+The whole project is managed with [Pixi](https://pixi.sh) — one language, one
+environment, one runner. There is no `pip`, `uv`, or `npm` bootstrapping step.
 
 ```sh
 git clone https://github.com/millsks/django-python-generate-sbom.git
 cd django-python-generate-sbom
-pixi install        # resolve and install the environment (Python + Node)
+pixi install        # resolve and install the environment
 pixi run bootstrap  # install the pre-commit and commit-msg hooks (one-time)
 ```
 
@@ -44,17 +44,14 @@ Documentation, chores, and refactors may use `docs/`, `chore/`, or `refactor/`.
 
 | Task                       | What it does                                                        |
 | -------------------------- | ------------------------------------------------------------------ |
-| `pixi run test`            | Backend unit tests (fast)                                          |
-| `pixi run test-integration`| Backend integration tests                                         |
-| `pixi run cov`             | Full backend suite with coverage gate (≥ 90%)                     |
-| `pixi run fmt`             | Format backend code (`ruff format`)                               |
-| `pixi run lint`            | Lint backend code (`ruff check`)                                  |
-| `pixi run check`           | Type-check the backend (`mypy`)                                   |
-| `pixi run security`        | Backend security scan (`bandit`)                                  |
-| `pixi run fe-test`         | Frontend tests (`vitest`)                                         |
-| `pixi run fe-lint`         | Frontend lint (`oxlint`)                                          |
-| `pixi run fe-typecheck`    | Frontend type-check (`tsc`)                                       |
-| `pixi run fe-build`        | Frontend production build                                         |
+| `pixi run dev`             | Run web + worker + beat together (containerless)                  |
+| `pixi run test`            | Unit tests (fast)                                                 |
+| `pixi run test-integration`| Integration tests                                                 |
+| `pixi run cov`             | Full suite with coverage gate (≥ 90%)                             |
+| `pixi run fmt`             | Format (`ruff format`)                                            |
+| `pixi run lint`            | Lint (`ruff check`)                                               |
+| `pixi run check`           | Type-check (`mypy`)                                               |
+| `pixi run security`        | Security scan (`bandit`)                                          |
 | `pixi run docs-serve`      | Live-preview the documentation site                              |
 | `pixi run docs-build`      | Build the docs strictly (`mkdocs build --strict`)                |
 | `pixi run ci`              | **The full gate** — everything below must pass before a merge     |
@@ -62,9 +59,9 @@ Documentation, chores, and refactors may use `docs/`, `chore/`, or `refactor/`.
 ## The CI gate
 
 `pixi run ci` is the authoritative check. It runs, in order: pre-commit hooks, the
-backend build, `mypy`, `ruff` (lint + format check), `bandit`, the backend coverage
-suite, the frontend lint/type-check/test/build, and a strict docs build. A change is
-not done until `pixi run ci` exits `0`, and CI runs the same gate on every pull request.
+wheel build, `mypy`, `ruff` (lint + format check), `bandit`, the coverage suite, and a
+strict docs build. A change is not done until `pixi run ci` exits `0`, and CI runs the
+same gate on every pull request.
 
 Never bypass hooks with `--no-verify`; fix the underlying failure instead.
 

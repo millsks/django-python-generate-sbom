@@ -5,12 +5,10 @@ from __future__ import annotations
 from typing import cast
 
 import structlog
-from django.contrib.auth import authenticate, login, logout
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
-from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -19,7 +17,7 @@ from inventory.common.users import UserT, user_model
 
 from .auth import SESSION_ACTIVE_ORG, get_admin_org, get_request_org, set_active_org_by_slug
 from .models import OrgApiKey, OrgMembership
-from .selectors import get_api_keys, get_org_members, get_user_orgs
+from .selectors import get_api_keys, get_org_members, get_switchable_orgs
 from .serializers import (
     AddMemberSerializer,
     AuthMeResponseSerializer,
@@ -31,15 +29,11 @@ from .serializers import (
     GlobalAdminItemSerializer,
     GlobalAdminsResponseSerializer,
     KeyItemSerializer,
-    LoginResponseSerializer,
-    LoginSerializer,
     MemberCreatedResponseSerializer,
     MembersResponseSerializer,
     OrgListItemSerializer,
     OrgSummarySerializer,
     OrgSwitchSerializer,
-    RegisterResponseSerializer,
-    RegistrationSerializer,
     UserIdSerializer,
 )
 from .services import (
@@ -102,59 +96,34 @@ def _key_data(key: OrgApiKey) -> dict[str, object]:
     }
 
 
-class RegisterView(APIView):
-    """Unauthenticated registration endpoint (POST /api/v1/auth/register/)."""
-
-    authentication_classes = []  # noqa: RUF012
-    permission_classes = [AllowAny]  # noqa: RUF012
-
-    @extend_schema(
-        request=RegistrationSerializer,
-        responses={201: RegisterResponseSerializer, 400: ErrorResponseSerializer},
-    )
-    def post(self, request: Request) -> Response:
-        """Create a zero-org user, or return a 400 error envelope (Story 2.6)."""
-        serializer = RegistrationSerializer(data=request.data)
-        if not serializer.is_valid():
-            first_error = next(iter(serializer.errors.values()))[0]
-            return Response(
-                {"error": str(first_error), "code": "validation_error"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        user = serializer.save()
-        return Response(
-            {
-                "user": {"id": user.pk, "email": user.email},
-                "org": None,
-            },
-            status=status.HTTP_201_CREATED,
-        )
-
-
 class AuthMeView(APIView):
-    """Return the authenticated user's identity (GET /api/v1/auth/me/).
+    """Return the caller's identity (GET /api/v1/auth/me/).
 
-    The identity signal for the SPA (Story 2.6): a logged-in user with zero orgs
-    is still authenticated. Requires authentication (default classes), so an
-    anonymous request receives a 403. Includes ``is_global_admin`` (Story 2.12) so
-    the SPA can gate global-admin-only affordances such as creating an org.
+    Kept by Story 21.24 even though the app no longer authenticates: it is part of the
+    frozen ``/api/v1/`` contract (AC #9) and is documented. It now answers for an
+    **anonymous** caller — the ordinary case — with ``id`` and ``email`` null and both
+    admin flags true, rather than 403-ing or raising on ``AnonymousUser``.
+
+    Epics 17-18 reintroduce identity from the host platform, and this is the endpoint that
+    will report it. Until then a null identity is the truthful answer, not an error.
     """
 
     @extend_schema(responses={200: AuthMeResponseSerializer})
     def get(self, request: Request) -> Response:
         """Return the current user's ``id``, ``email``, and admin flags.
 
-        ``is_admin`` (admin of the active org) and ``is_global_admin`` are the SPA's
-        single source of truth for gating admin-only nav, routes, and affordances —
-        so the client never has to probe an admin-only endpoint to learn its role.
+        The field names are unchanged (AC #9). ``id`` and ``email`` are null for an
+        anonymous caller; the flags are true because Story 21.24 made admin capability
+        universal.
         """
-        user = cast(UserT, request.user)
+        user = request.user
+        authenticated = user.is_authenticated
         return Response(
             {
-                "id": user.pk,
-                "email": user.email,
+                "id": user.pk if authenticated else None,
+                "email": getattr(user, "email", None) if authenticated else None,
                 "is_admin": get_admin_org(request) is not None,
-                "is_global_admin": is_global_admin(user),
+                "is_global_admin": is_global_admin(cast("UserT", user) if authenticated else user),
             }
         )
 
@@ -228,56 +197,6 @@ class GlobalAdminDetailView(APIView):
 
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
-class LoginView(APIView):
-    """Session login (POST /api/v1/auth/login/). Web UI only.
-
-    ``ensure_csrf_cookie`` sets the ``csrftoken`` cookie on the login response so
-    the SPA can send ``X-CSRFToken`` on subsequent session-authenticated writes.
-    """
-
-    authentication_classes = []  # noqa: RUF012
-    permission_classes = [AllowAny]  # noqa: RUF012
-
-    @extend_schema(
-        request=LoginSerializer,
-        responses={200: LoginResponseSerializer, 400: ErrorResponseSerializer, 401: ErrorResponseSerializer},
-    )
-    def post(self, request: Request) -> Response:
-        """Exchange email+password for a session and set the active org."""
-        serializer = LoginSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(_INVALID_CREDENTIALS, status=status.HTTP_400_BAD_REQUEST)
-
-        user = authenticate(
-            request._request,
-            username=serializer.validated_data["email"],
-            password=serializer.validated_data["password"],
-        )
-        if user is None:
-            return Response(_INVALID_CREDENTIALS, status=status.HTTP_401_UNAUTHORIZED)
-
-        login(request._request, user)
-        membership = OrgMembership.objects.filter(user=user).select_related("org").first()
-        org = membership.org if membership is not None else None
-        if org is not None:
-            request.session[SESSION_ACTIVE_ORG] = org.pk
-        logger.info("user_logged_in", user_id=user.pk, org_id=None if org is None else org.pk)
-        return Response(
-            {"org": None if org is None else {"slug": org.slug, "name": org.name}},
-            status=status.HTTP_200_OK,
-        )
-
-
-class LogoutView(APIView):
-    """Invalidate the session (POST /api/v1/auth/logout/)."""
-
-    @extend_schema(request=None, responses={204: OpenApiResponse(description="Session cleared.")})
-    def post(self, request: Request) -> Response:
-        """Log the user out and clear the session."""
-        logout(request._request)
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-
 class OrgListView(APIView):
     """List the orgs the user belongs to, flagging the active one (GET /orgs/)."""
 
@@ -287,8 +206,7 @@ class OrgListView(APIView):
         active = get_request_org(request)
         active_slug = active.slug if active is not None else None
         data = [
-            {"slug": org.slug, "name": org.name, "active": org.slug == active_slug}
-            for org in get_user_orgs(cast(UserT, request.user))
+            {"slug": org.slug, "name": org.name, "active": org.slug == active_slug} for org in get_switchable_orgs()
         ]
         return Response(data)
 

@@ -122,20 +122,18 @@ Wait until the `web` service is healthy, then open:
 | <http://localhost:8000/health/> | Health check (JSON) |
 | <http://localhost:9001> | MinIO console (login with `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` from `.env`) |
 
-Then **register** at `/register` — new accounts start **without** an organization,
-so you'll be sent to **sign in** at `/login`. A new user is **restricted to the
-home page** until an admin adds them to an organization (creating an organization
-is reserved for **global admins**). The seeded superuser is a global admin and can
-create the first organization and add members from there. Once you have an active
-org, **upload** a manifest at `/upload`; all SBOM data is scoped to your active
-organization. See the
+> **⚠ This application does not require authentication.** There is no login page and no
+> password: every page and every `/api/v1/` endpoint is open to anyone who can reach the
+> server, and every action is available to every caller. Identity is intended to be supplied
+> by the host platform via OIDC and group claims; until that lands, **deploy only on a
+> trusted network.**
+
+A default organization is seeded on first migrate. **Upload** a manifest at `/upload`,
+choosing the organization it belongs to on the form. Organizations remain the isolation
+boundary — one organization's jobs are never visible from another — they simply are not
+gated by identity. See the
 [User Guide](https://millsks.github.io/django-python-generate-sbom/user-guide/)
 for the full walkthrough.
-
-The app has three role tiers: **members** (work within their orgs),
-**organization admins** (manage an org's membership and API keys), and **global
-admins** (platform admins who belong to a system **Admin** org, are an admin of
-every organization, and can create orgs and manage the global-admin tier).
 
 To reach the Django admin at `/admin/`, create a superuser in the running `web`
 container:

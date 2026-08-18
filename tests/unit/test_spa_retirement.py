@@ -31,10 +31,11 @@ PASSWORD = "pw12345678"
 
 # Transcribed from `frontend/src/App.tsx` before deletion. `/results/:taskId` is parameterised,
 # so a placeholder id is enough to check that the PATTERN still has an owner.
+#: `/register` and `/login` are deliberately absent: Story 21.24 removed the app's own
+#: authentication, so those two SPA routes have no successor by design rather than by
+#: oversight. They are listed in RETIRED_ROUTES below and asserted to 404.
 SPA_ROUTES = (
     "/",
-    "/register",
-    "/login",
     "/organization",
     "/members",
     "/keys",

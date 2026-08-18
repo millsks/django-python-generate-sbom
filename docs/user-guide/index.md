@@ -17,7 +17,7 @@ browser, export any of them to Excel, and download the SBOM document itself.
 
 | Step | Page |
 |---|---|
-| 1. Create an account and organization | [Accounts & Organizations](accounts-and-organizations.md) |
+| 1. Choose an organization | [Accounts & Organizations](accounts-and-organizations.md) |
 | 2. Upload a manifest and start a job | [Generating an SBOM](generating-an-sbom.md) |
 | 3. Read the results | [Reading the Results](reading-the-results.md) |
 | 4. Export reports and download the SBOM | [Exporting & Downloading](exporting-and-downloading.md) |

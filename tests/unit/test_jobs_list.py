@@ -43,7 +43,10 @@ def _job(org: Org, user: User, *, fmt: str = "pixi_lock", status: str = "SUCCESS
 
 def _login(email: str) -> APIClient:
     client = APIClient()
-    client.post("/api/v1/auth/login/", {"email": email, "password": "pw12345678"}, format="json")
+    # Story 21.24 deleted POST /api/v1/auth/login/. Django's session login still works
+    # (the user model and SessionAuthentication both survive), so these tests keep
+    # exercising a real principal rather than the anonymous default-org path.
+    client.login(email=email, password="pw12345678")
     return client
 
 

@@ -13,18 +13,15 @@ from __future__ import annotations
 from typing import Any, cast
 
 from django.contrib import messages
-from django.contrib.auth import login as auth_login
-from django.contrib.auth import logout as auth_logout
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.http.response import HttpResponseBase
 from django.shortcuts import render
-from django.urls import reverse, reverse_lazy
-from django.utils.http import url_has_allowed_host_and_scheme
+from django.urls import reverse
 from django.views import View
 from django.views.generic import FormView, TemplateView
 
-from inventory.common.access import GlobalAdminRequiredMixin, OrgAdminRequiredMixin, OrgMemberRequiredMixin
-from inventory.common.users import UserT, user_ref
+from inventory.common.access import OrgContextMixin
+from inventory.common.users import UserT
 from inventory.users.auth import SESSION_ACTIVE_ORG, set_active_org_by_slug
 from inventory.users.forms import (
     AddExistingMemberForm,
@@ -32,8 +29,6 @@ from inventory.users.forms import (
     CreateMemberUserForm,
     CreateOrgForm,
     GrantGlobalAdminForm,
-    LoginForm,
-    RegistrationForm,
 )
 from inventory.users.models import Org, OrgMembership
 from inventory.users.selectors import get_api_keys, get_org_members
@@ -48,7 +43,6 @@ from inventory.users.services import (
     leave_org,
     list_global_admins,
     promote_member_to_admin,
-    register_user,
     remove_member,
     revoke_api_key,
     revoke_global_admin,
@@ -62,104 +56,7 @@ DEFAULT_AFTER_LOGIN = "/"
 REDIRECT_FIELD_NAME = "next"
 
 
-def _safe_redirect_target(request: HttpRequest, default: str) -> str:
-    """Return a validated same-host redirect target, or ``default``.
-
-    Validating the host is what stops ``?next=`` becoming an open redirect — the
-    parameter is attacker-controlled by construction, since it arrives in a URL that
-    anyone can hand to a victim.
-    """
-    target = request.POST.get(REDIRECT_FIELD_NAME) or request.GET.get(REDIRECT_FIELD_NAME) or ""
-    if target and url_has_allowed_host_and_scheme(
-        target, allowed_hosts={request.get_host()}, require_https=request.is_secure()
-    ):
-        return target
-    return default
-
-
-# django-stubs declares FormView generic, but Django's runtime class is NOT subscriptable
-# (`FormView[LoginForm]` raises TypeError at import). So the parameter is omitted and the
-# resulting `type-arg` complaint suppressed — a stubs/runtime mismatch, not a design choice.
-class LoginPageView(FormView):  # type: ignore[type-arg]
-    """Email + password sign-in (Story 10.2, 10.4, 10.6)."""
-
-    template_name = "inventory/auth/login.html"
-    form_class = LoginForm
-
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
-        """Send an already-signed-in user on rather than showing them a login form."""
-        if request.user.is_authenticated:
-            return HttpResponseRedirect(_safe_redirect_target(request, DEFAULT_AFTER_LOGIN))
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_form_kwargs(self) -> dict[str, Any]:
-        """Pass the request through so the authentication backends receive it."""
-        kwargs = super().get_form_kwargs()
-        kwargs["request"] = self.request
-        return kwargs
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Expose `next` so the template can round-trip it through the POST."""
-        context = super().get_context_data(**kwargs)
-        context["next"] = self.request.GET.get(REDIRECT_FIELD_NAME, "")
-        return context
-
-    def form_valid(self, form: LoginForm) -> HttpResponse:
-        """Start the session and continue to the intended destination."""
-        user = form.user
-        if user is None:  # pragma: no cover - LoginForm.clean guarantees a user here
-            return self.form_invalid(form)
-        # django.contrib.auth.login cycles the session key, which is what prevents session
-        # fixation. Never set the session user by hand here.
-        auth_login(self.request, user_ref(user))
-        return HttpResponseRedirect(_safe_redirect_target(self.request, DEFAULT_AFTER_LOGIN))
-
-
-class RegisterPageView(FormView):  # type: ignore[type-arg]  # see LoginPageView
-    """Create an account, then send the user to sign in (Story 10.3)."""
-
-    template_name = "inventory/auth/register.html"
-    form_class = RegistrationForm
-    success_url = reverse_lazy("ui-login")
-
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
-        """An authenticated user has no business on the registration page."""
-        if request.user.is_authenticated:
-            return HttpResponseRedirect(DEFAULT_AFTER_LOGIN)
-        return super().dispatch(request, *args, **kwargs)
-
-    def form_valid(self, form: RegistrationForm) -> HttpResponse:
-        """Create the account (no org — Story 2.6) and redirect to login."""
-        register_user(
-            email=form.cleaned_data["email"],
-            password=form.cleaned_data["password"],
-        )
-        # The SPA showed a success panel then auto-navigated after a delay (Story 10.3).
-        # Server-side the equivalent is a flash message carried through the redirect, which
-        # is both instant and accessible.
-        messages.success(self.request, "Account created. Please sign in.")
-        return super().form_valid(form)
-
-
-class LogoutPageView(View):
-    """End the session (Story 10.5, AC #5).
-
-    POST-only and CSRF-protected: a GET-reachable logout can be triggered by any link,
-    image, or prefetcher on a page the user visits, which makes it a nuisance CSRF target.
-    """
-
-    def post(self, request: HttpRequest) -> HttpResponse:
-        """Flush the session and return to the index."""
-        # auth_logout flushes the session entirely, so nothing from the old session
-        # survives into the next one.
-        auth_logout(request)
-        return HttpResponseRedirect(DEFAULT_AFTER_LOGIN)
-
-
-# --- Organisation administration (Story 21.6) -------------------------------------------
-
-
-class OrganizationHubView(OrgAdminRequiredMixin, TemplateView):
+class OrganizationHubView(OrgContextMixin, TemplateView):
     """The admin-facing hub (Story 2.11), converted from ``OrganizationPage.tsx``.
 
     It **links** to the management pages rather than duplicating their logic — the SPA page's
@@ -170,7 +67,7 @@ class OrganizationHubView(OrgAdminRequiredMixin, TemplateView):
     template_name = "inventory/orgs/hub.html"
 
 
-class CreateOrgView(GlobalAdminRequiredMixin, FormView):  # type: ignore[type-arg]  # see LoginPageView
+class CreateOrgView(FormView):  # type: ignore[type-arg]  # see LoginPageView
     """Create an organisation — global admins only (Story 2.12)."""
 
     template_name = "inventory/orgs/create.html"
@@ -208,7 +105,7 @@ def _members_context(request: HttpRequest, org: Org, **forms: Any) -> dict[str, 
     return context
 
 
-class MembersView(OrgAdminRequiredMixin, TemplateView):
+class MembersView(OrgContextMixin, TemplateView):
     """The member roster plus the two add-member forms (Story 2.7 + 2.10)."""
 
     template_name = MEMBERS_TEMPLATE
@@ -220,7 +117,7 @@ class MembersView(OrgAdminRequiredMixin, TemplateView):
         return context
 
 
-class _MemberActionView(OrgAdminRequiredMixin, View):
+class _MemberActionView(OrgContextMixin, View):
     """Shared POST handling for the member mutations.
 
     Every membership invariant — last admin, global-admin protection, ADMIN-org protection —
@@ -246,7 +143,7 @@ class _MemberActionView(OrgAdminRequiredMixin, View):
         return HttpResponseRedirect(reverse("ui-members"))
 
 
-class MemberAddExistingView(OrgAdminRequiredMixin, View):
+class MemberAddExistingView(OrgContextMixin, View):
     """Add an already-registered user by email (Story 2.7)."""
 
     def post(self, request: HttpRequest) -> HttpResponseBase:
@@ -265,7 +162,7 @@ class MemberAddExistingView(OrgAdminRequiredMixin, View):
         return render(request, MEMBERS_TEMPLATE, _members_context(request, self.org, add_form=form))
 
 
-class MemberCreateUserView(OrgAdminRequiredMixin, View):
+class MemberCreateUserView(OrgContextMixin, View):
     """Provision a new account and add it to the org (Story 2.10, FR-1.3)."""
 
     def post(self, request: HttpRequest) -> HttpResponseBase:
@@ -347,7 +244,7 @@ class MemberDemoteView(_MemberActionView):
         return self._redirect()
 
 
-class LeaveOrgView(OrgMemberRequiredMixin, View):
+class LeaveOrgView(OrgContextMixin, View):
     """Leave the active org (FR-1.7).
 
     Gated on membership, not admin: any member may leave. The org itself always survives —
@@ -388,7 +285,7 @@ def _keys_context(request: HttpRequest, org: Org, form: CreateApiKeyForm | None 
     }
 
 
-class ApiKeysView(OrgMemberRequiredMixin, TemplateView):
+class ApiKeysView(OrgContextMixin, TemplateView):
     """List the active org's API keys.
 
     Gated on **membership**, not admin: ``KeysPage.tsx`` says so explicitly — "API Keys is
@@ -405,7 +302,7 @@ class ApiKeysView(OrgMemberRequiredMixin, TemplateView):
         return context
 
 
-class ApiKeyCreateView(OrgAdminRequiredMixin, View):
+class ApiKeyCreateView(OrgContextMixin, View):
     """Create a key and reveal the plaintext exactly once (AC #2, NFR-3.3)."""
 
     def post(self, request: HttpRequest) -> HttpResponseBase:
@@ -430,7 +327,7 @@ class ApiKeyCreateView(OrgAdminRequiredMixin, View):
         return render(request, KEYS_TEMPLATE, _keys_context(request, self.org, form))
 
 
-class ApiKeyRevokeView(OrgAdminRequiredMixin, View):
+class ApiKeyRevokeView(OrgContextMixin, View):
     """Soft-revoke a key belonging to the active org (FR-2.3)."""
 
     def post(self, request: HttpRequest) -> HttpResponse:
@@ -464,12 +361,12 @@ def _global_admins_context(request: HttpRequest, form: GrantGlobalAdminForm | No
     }
 
 
-class GlobalAdminsView(GlobalAdminRequiredMixin, TemplateView):
+class GlobalAdminsView(TemplateView):
     """List the platform-admin tier (Story 13.1).
 
-    Gated by ``GlobalAdminRequiredMixin`` — which requires **no active org**, deliberately:
-    the ADMIN org is not a workspace (Story 2.18), so a global admin typically has no active
-    org at all and an org-scoped gate would lock them out of their own page.
+    Deliberately **not** org-scoped: the ADMIN org is a platform tier rather than a
+    workspace (Story 2.18), so this page is about the tier itself. Story 21.24 removed the
+    global-admin gate along with the rest of the app's access control.
     """
 
     template_name = GLOBAL_ADMINS_TEMPLATE
@@ -481,7 +378,7 @@ class GlobalAdminsView(GlobalAdminRequiredMixin, TemplateView):
         return context
 
 
-class GlobalAdminGrantView(GlobalAdminRequiredMixin, View):
+class GlobalAdminGrantView(View):
     """Grant global admin to a registered user, by email."""
 
     def post(self, request: HttpRequest) -> HttpResponseBase:
@@ -498,7 +395,7 @@ class GlobalAdminGrantView(GlobalAdminRequiredMixin, View):
         return render(request, GLOBAL_ADMINS_TEMPLATE, _global_admins_context(request, form))
 
 
-class GlobalAdminRevokeView(GlobalAdminRequiredMixin, View):
+class GlobalAdminRevokeView(View):
     """Revoke the global-admin flag (Story 13.1)."""
 
     def post(self, request: HttpRequest) -> HttpResponse:

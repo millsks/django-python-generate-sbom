@@ -33,7 +33,10 @@ def _login(email: str = "alice@example.com") -> APIClient:
     user = register_user(email=email, password="pw12345678")
     create_org(name=email.split("@")[0], admin_user=user)
     client = APIClient()
-    client.post("/api/v1/auth/login/", {"email": email, "password": "pw12345678"}, format="json")
+    # Story 21.24 deleted POST /api/v1/auth/login/. Django's session login still works
+    # (the user model and SessionAuthentication both survive), so these tests keep
+    # exercising a real principal rather than the anonymous default-org path.
+    client.login(email=email, password="pw12345678")
     return client
 
 
@@ -156,10 +159,3 @@ def test_generate_via_api_key_creates_userless_job() -> None:
     job = SBOMJob.objects.select_related("manifest").get(task_id=response.data["task_id"])
     assert job.user is None
     assert job.manifest.user is None
-
-
-@pytest.mark.django_db
-def test_generate_requires_authentication() -> None:
-    file = SimpleUploadedFile("requirements.txt", b"django==5.2\n")
-    response = APIClient().post("/api/v1/sbom/generate/", {"file": file, **META}, format="multipart")
-    assert response.status_code in (401, 403)

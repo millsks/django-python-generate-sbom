@@ -119,7 +119,10 @@ def test_full_pipeline_partial_failure_keeps_sbom(settings: pytest.FixtureReques
 
     # The failed-report endpoint conveys the reason (AC #6).
     client = APIClient()
-    client.post("/api/v1/auth/login/", {"email": "alice@example.com", "password": "pw12345678"}, format="json")
+    # Story 21.24 deleted POST /api/v1/auth/login/. Django's session login still works
+    # (the user model and SessionAuthentication both survive), so these tests keep
+    # exercising a real principal rather than the anonymous default-org path.
+    client.login(email="alice@example.com", password="pw12345678")
     response = client.get(f"/api/v1/sbom/result/{job.task_id}/reports/vulnerabilities/")
     assert response.status_code == 404
     assert response.data["code"] == "report_failed"

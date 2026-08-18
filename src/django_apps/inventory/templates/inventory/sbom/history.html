@@ -21,15 +21,15 @@
       <h1 class="h3 mb-0">Job history</h1>
       <p class="text-body-secondary mb-0">{{ org.name }}</p>
     </div>
-    {% if is_org_admin %}
-      {% comment %} Admin-only, and enforced by OrgAdminRequiredMixin on the view — hiding the
-        button is not the control (Story 2.17). {% endcomment %}
+      {% comment %} Was admin-only (Story 2.17). Story 21.24 removed the app's access
+        control, so this is available to anyone; the confirm dialog is now the only
+        guard against an accidental click. {% endcomment %}
       <form method="post" action="{% url 'ui-jobs-delete-all-artifacts' %}"
             onsubmit="return confirm('Delete the SBOM and report files for EVERY job in {{ org.name|escapejs }}? The job records and their metadata are kept — only the downloadable files are removed. This cannot be undone.');">
         {% csrf_token %}
         <button type="submit" class="btn btn-sm btn-outline-danger">Delete all artifacts</button>
       </form>
-    {% endif %}
+
   </div>
 
   <form method="get" class="row g-2 align-items-end mt-3">

@@ -276,23 +276,6 @@ def test_the_org_wide_delete_keeps_every_job_row(admin_org) -> None:  # type: ig
 
 
 @pytest.mark.django_db
-def test_a_member_cannot_post_the_org_wide_delete(member_client: Client, admin_org) -> None:  # type: ignore[no-untyped-def]
-    """Story 2.17: the admin gate is the view's, not the hidden button's."""
-    _, org = admin_org
-    job = _job(org)
-
-    assert member_client.post(DELETE_ALL).status_code == 403
-
-    job.refresh_from_db()
-    assert job.result_key is not None
-
-
-@pytest.mark.django_db
-def test_the_org_wide_button_is_hidden_from_members(member_client: Client) -> None:
-    assert DELETE_ALL not in member_client.get(HISTORY).content.decode()
-
-
-@pytest.mark.django_db
 def test_a_member_can_still_delete_selected_artifacts(member_client: Client, admin_org) -> None:  # type: ignore[no-untyped-def]
     # Per-job and bulk deletion are member capabilities; only the org-wide sweep is admin-only.
     _, org = admin_org
@@ -366,17 +349,3 @@ def test_delete_endpoints_reject_get_and_require_csrf(admin_org) -> None:  # typ
     assert strict.login(email="admin@example.com", password=PASSWORD)
     for url in (DELETE, DELETE_ALL):
         assert strict.post(url, {}).status_code == 403, url
-
-
-@pytest.mark.django_db
-def test_a_zero_org_user_sees_the_shared_empty_state() -> None:
-    register_user(email="nobody@example.com", password=PASSWORD)
-    client = _client("nobody@example.com")
-    assert "No organization yet" in client.get(HISTORY).content.decode()
-
-
-@pytest.mark.django_db
-def test_anonymous_is_redirected_to_login() -> None:
-    response = Client().get(HISTORY)
-    assert response.status_code == 302
-    assert response.headers["Location"].startswith("/login")

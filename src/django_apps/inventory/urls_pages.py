@@ -38,8 +38,6 @@ from inventory.users.pages import (
     GlobalAdminRevokeView,
     GlobalAdminsView,
     LeaveOrgView,
-    LoginPageView,
-    LogoutPageView,
     MemberAddExistingView,
     MemberCreateUserView,
     MemberDemoteView,
@@ -47,14 +45,10 @@ from inventory.users.pages import (
     MemberRemoveView,
     MembersView,
     OrganizationHubView,
-    RegisterPageView,
 )
 
 urlpatterns = [
     # Story 21.5 — authentication
-    path("login", LoginPageView.as_view(), name="ui-login"),
-    path("register", RegisterPageView.as_view(), name="ui-register"),
-    path("logout", LogoutPageView.as_view(), name="ui-logout"),
     # Story 21.6 — organisation administration
     path("organization", OrganizationHubView.as_view(), name="ui-organization"),
     path("organization/create", CreateOrgView.as_view(), name="ui-org-create"),

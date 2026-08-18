@@ -39,10 +39,23 @@ def _member_of(email: str, *org_names: str) -> tuple[Client, list[Org]]:
 
 
 @pytest.mark.django_db
-def test_switcher_is_hidden_for_a_single_org_user() -> None:
-    # With one org there is nothing to switch to, so the control is absent entirely rather
-    # than rendered disabled.
-    client, _ = _member_of("solo@example.com", "Only Org")
+def test_switcher_is_hidden_when_only_one_org_exists() -> None:
+    """Story 2.19's rule, restated against orgs rather than memberships.
+
+    Story 21.24 removed the membership filter, so "fewer than two" now counts orgs that
+    **exist** rather than orgs the user belongs to. The migration-seeded default org is
+    therefore the single org here, and no extra one is created.
+
+    Deliberately does not delete an Org to get to one: `_ScopedThing` in
+    `test_common_models.py` is a table-less model with an `org` FK, so an `Org.delete()`
+    drags it into the cascade collector and fails with "no such table" — but only once that
+    module has been imported, which makes it pass in isolation and fail in a full run.
+    """
+    register_user(email="solo@example.com", password=PASSWORD)
+    client = Client()
+    assert client.login(email="solo@example.com", password=PASSWORD)
+
+    assert Org.objects.filter(is_admin_org=False).count() == 1
     assert 'id="org-switcher"' not in client.get(SHELL_URL).content.decode()
 
 
@@ -103,15 +116,32 @@ def test_switching_sets_the_session_org_and_returns_to_the_page() -> None:
 
 
 @pytest.mark.django_db
-def test_switching_to_an_org_the_user_does_not_belong_to_changes_nothing() -> None:
-    """A tampered slug must not switch, and must not confirm the org exists."""
-    client, _ = _member_of("outsider@example.com", "Alpha")
-    stranger = Org.objects.create(name="Not Mine", slug="not-mine")
+def test_switching_into_the_admin_org_changes_nothing() -> None:
+    """The ADMIN org is a platform tier, not a workspace (Story 2.12).
 
-    response = client.post(SWITCH_URL, {"slug": stranger.slug, "next": SHELL_URL})
+    Was "an org the user does not belong to" — Story 21.24 removed memberships from the
+    switch, so every ordinary org is now a legitimate target. The rule that survived is the
+    one about the ADMIN org, and it is the one worth pinning: it must never become the
+    acting org, or org-scoped pages would start writing into the meta org.
+    """
+    client, _ = _member_of("outsider@example.com", "Alpha")
+    admin_org = Org.objects.get(is_admin_org=True)
+
+    response = client.post(SWITCH_URL, {"slug": admin_org.slug, "next": SHELL_URL})
 
     assert response.status_code == 302  # same response as a successful switch
-    assert client.session.get(SESSION_ACTIVE_ORG) != stranger.pk
+    assert client.session.get(SESSION_ACTIVE_ORG) != admin_org.pk
+
+
+@pytest.mark.django_db
+def test_switching_to_any_ordinary_org_now_succeeds() -> None:
+    """The replacement for the membership check: every non-ADMIN org is switchable."""
+    client, _ = _member_of("outsider2@example.com", "Alpha")
+    other = Org.objects.create(name="Not Mine", slug="not-mine")
+
+    client.post(SWITCH_URL, {"slug": other.slug, "next": SHELL_URL})
+
+    assert client.session.get(SESSION_ACTIVE_ORG) == other.pk
 
 
 @pytest.mark.django_db
@@ -136,13 +166,6 @@ def test_get_is_not_allowed() -> None:
     # A GET-reachable switch could be triggered by a link, an <img>, or a prefetcher.
     client, _ = _member_of("getonly@example.com", "Alpha", "Beta")
     assert client.get(SWITCH_URL).status_code == 405
-
-
-@pytest.mark.django_db
-def test_anonymous_cannot_switch() -> None:
-    response = Client().post(SWITCH_URL, {"slug": "anything"})
-    assert response.status_code == 302
-    assert response.headers["Location"].startswith("/login")
 
 
 @pytest.mark.django_db

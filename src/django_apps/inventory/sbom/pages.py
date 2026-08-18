@@ -36,7 +36,7 @@ from inventory.analysis.tables import (
     version_rows,
     vulnerability_rows,
 )
-from inventory.common.access import OrgAdminRequiredMixin, OrgMemberRequiredMixin
+from inventory.common.access import OrgContextMixin
 from inventory.common.users import UserT
 from inventory.manifests.detection import ManifestParseError, UnsupportedFormatError
 
@@ -49,16 +49,23 @@ from .services import TERMINAL_STATUSES, ConcurrencyLimitError, delete_artifacts
 from .tables import JobTable, SbomComponentTable
 
 
-class UploadPageView(OrgMemberRequiredMixin, FormView):  # type: ignore[type-arg]
+class UploadPageView(OrgContextMixin, FormView):  # type: ignore[type-arg]
     """Upload a manifest and start an SBOM job (converted from ``UploadPage.tsx``).
 
-    ``OrgMemberRequiredMixin`` supplies ``self.org`` and renders the shared zero-org state in
-    place of this page for a user with no organisation (AC #6) — nothing here handles that
-    case, which is the point of enforcing it at the mixin layer.
+    ``OrgContextMixin`` supplies ``self.org``. It is not a gate — Story 21.24 removed the
+    app's authentication — so this page is reachable by anyone; ``self.org`` only supplies
+    the form's **preselected** organization, and the form's own field decides where the job
+    is actually filed.
     """
 
     template_name = "inventory/sbom/upload.html"
     form_class = ManifestUploadForm
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Preselect the acting org in the organization field."""
+        kwargs: dict[str, Any] = super().get_form_kwargs()
+        kwargs["active_org"] = self.org
+        return kwargs
 
     def form_valid(self, form: ManifestUploadForm) -> HttpResponse:
         """Submit the job, or re-display the form with the reason it was refused.
@@ -69,9 +76,11 @@ class UploadPageView(OrgMemberRequiredMixin, FormView):  # type: ignore[type-arg
         on the limit or on dispatch semantics.
         """
         user: UserT | None = self.request.user if self.request.user.is_authenticated else None
+        # The CHOSEN org, not `self.org`: the form field is the decision, and filing a job
+        # against the session's org while the form showed another would be a silent lie.
         try:
             job, _upload = submit_job(
-                self.org,
+                form.cleaned_data["org"],
                 user,
                 file_obj=form.cleaned_data["file"],
                 application_id=form.cleaned_data["application_id"],
@@ -108,7 +117,7 @@ class UploadPageView(OrgMemberRequiredMixin, FormView):  # type: ignore[type-arg
 JOBS_PER_PAGE = 25
 
 
-class JobHistoryView(OrgMemberRequiredMixin, SingleTableMixin, FilterView):
+class JobHistoryView(OrgContextMixin, SingleTableMixin, FilterView):
     """Filterable, paginated job history (converted from ``HistoryPage.tsx``).
 
     Sorting and paging are **server-side**, via the querystring, so a filtered view is
@@ -127,7 +136,7 @@ class JobHistoryView(OrgMemberRequiredMixin, SingleTableMixin, FilterView):
         return get_jobs(self.org)
 
 
-class _ArtifactDeleteMixin(OrgMemberRequiredMixin):
+class _ArtifactDeleteMixin(OrgContextMixin):
     """Shared redirect target for the delete actions."""
 
     def _back(self) -> HttpResponse:
@@ -160,7 +169,7 @@ class JobArtifactsDeleteView(_ArtifactDeleteMixin, View):
         return self._back()
 
 
-class JobArtifactsDeleteAllView(OrgAdminRequiredMixin, View):
+class JobArtifactsDeleteAllView(OrgContextMixin, View):
     """Delete every artifact in the active org (FR-8.5) — **admin only**.
 
     The gate is this mixin, not the hidden button. Story 2.17 exists because an admin-only
@@ -179,7 +188,7 @@ class JobArtifactsDeleteAllView(OrgAdminRequiredMixin, View):
 # --- Live progress (Story 21.11) -----------------------------------------------------------
 
 
-class JobRowPartialView(OrgMemberRequiredMixin, View):
+class JobRowPartialView(OrgContextMixin, View):
     """Re-render one history row (the polling endpoint for the table).
 
     Org-scoped through ``get_job``, so a cross-org or unknown task id is a 404 — identical
@@ -227,7 +236,7 @@ def _tab_template(tab: str) -> str:
     return f"inventory/sbom/tabs/_{tab}.html"
 
 
-class _JobScopedView(OrgMemberRequiredMixin, View):
+class _JobScopedView(OrgContextMixin, View):
     """Look a job up within the active org, 404ing identically for missing and cross-org.
 
     AD-2: an unauthorised request must be indistinguishable from a nonexistent one — the SPA

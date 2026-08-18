@@ -288,18 +288,24 @@ development_status:
   # login screens that will not exist, and 17.8's "coexistence flag then cutover from local password
   # auth" has nothing left to cut over from. Run bmad-correct-course on Epic 17 (and Epic 18, which
   # depends on it) once 21.24 lands; do not let a dev agent pick up 17.x meanwhile.
-  epic-17: in-progress
-  17-1-oidc-provider-configuration-and-discovery: ready-for-dev
-  17-2-backend-oidc-login-bff-auth-code-pkce: ready-for-dev
-  17-3-jit-user-provisioning-and-account-linking: ready-for-dev
-  17-4-oidc-logout-and-session-lifecycle: ready-for-dev
+  # ⛔ BLOCKED — REQUIRES RE-AUTHORING (Story 21.24 AC #11, landed 2026-08-18). Story 21.24
+  # DELETED the app's own authentication: the login/register/logout pages and DRF endpoints,
+  # the access-control mixins, and HasSessionOrApiKey are gone, and every route is open.
+  # 17.2-17.5 assume login screens that no longer exist, and 17.8's "coexistence flag, then
+  # cut over from local password auth" has nothing left to cut over FROM. Epic 18 depends on
+  # this epic and inherits the block. Run bmad-correct-course on both before any of these move.
+  epic-17: blocked-needs-correct-course
+  17-1-oidc-provider-configuration-and-discovery: blocked-needs-correct-course
+  17-2-backend-oidc-login-bff-auth-code-pkce: blocked-needs-correct-course
+  17-3-jit-user-provisioning-and-account-linking: blocked-needs-correct-course
+  17-4-oidc-logout-and-session-lifecycle: blocked-needs-correct-course
   # ⛔ BLOCKED — REQUIRES RE-AUTHORING (Story 21.23 AC #5). Written against the React SPA's login
   # screen, which Epic 21 deleted. Story 21.24 additionally removes local password auth entirely,
   # so this story's premise changes twice over. Correct-course before it moves.
   17-5-frontend-sso-login: blocked-needs-correct-course
-  17-6-api-oauth2-resource-server: ready-for-dev
-  17-7-oauth2-client-credentials-m2m: ready-for-dev
-  17-8-coexistence-flag-rollout-and-cutover: ready-for-dev
+  17-6-api-oauth2-resource-server: blocked-needs-correct-course
+  17-7-oauth2-client-credentials-m2m: blocked-needs-correct-course
+  17-8-coexistence-flag-rollout-and-cutover: blocked-needs-correct-course
 
   # Epic 18 — IdP Claims -> Entitlements (Phase 2). DEPENDS ON EPIC 17 SHIPPING. Maps IdP groups/claims (read
   # from django-allauth's SocialAccount.extra_data / adapter hooks) to entitlements — org membership + roles —
@@ -311,10 +317,10 @@ development_status:
   # handling, and — over EVERY mode — preservation of the guarded invariants (org keeps >=1 admin; platform
   # keeps >=1 global-admin; Stories 2.9/2.16/13.1): the invariant always wins over the IdP. Build order:
   # 18.1 -> 18.2 -> 18.3 (18.2 calls into 18.3's pure reconcile(current, target, mode) diff).
-  epic-18: in-progress
-  18-1-claim-group-to-role-mapping-configuration: ready-for-dev
-  18-2-apply-mappings-on-login: ready-for-dev
-  18-3-precedence-and-reconciliation: ready-for-dev
+  epic-18: blocked-needs-correct-course
+  18-1-claim-group-to-role-mapping-configuration: blocked-needs-correct-course
+  18-2-apply-mappings-on-login: blocked-needs-correct-course
+  18-3-precedence-and-reconciliation: blocked-needs-correct-course
 
   # Epic 19 — OpenShift (OCP) Deployment. Implementation of the OCP migration the companion docs describe
   # (design source: docs/deployment/openshift/, branch docs/openshift-migration-guide — implement AFTER it lands).
@@ -453,4 +459,4 @@ development_status:
   # 21.5. Runs AFTER 21.18 (in flight; avoids a base.html conflict) and BEFORE 21.19, so Phase G retires,
   # documents, and audits an app that is already open. Org isolation (AD-2), API keys (AD-8), CSRF, and the
   # whole org/member/key model are RETAINED — this removes the identity gate, not the tenancy model.
-  21-24-remove-authentication-requirement: ready-for-dev
+  21-24-remove-authentication-requirement: review

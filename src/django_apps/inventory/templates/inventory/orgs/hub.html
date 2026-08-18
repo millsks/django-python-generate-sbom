@@ -44,9 +44,8 @@
       </div>
     </div>
 
-    {% if is_global_admin %}
-      {% comment %} Story 2.12 restricted org creation to GLOBAL admins; the affordance is
-        hidden for everyone else, and CreateOrgView enforces it server-side. {% endcomment %}
+      {% comment %} Story 2.12 restricted org creation to the global-admin tier; Story
+        21.24 removed that gate with the rest of the app's access control. {% endcomment %}
       <div class="col-md-6">
         <div class="card h-100">
           <div class="card-body">
@@ -61,7 +60,6 @@
           </div>
         </div>
       </div>
-    {% endif %}
   </div>
 
   <hr class="my-4">

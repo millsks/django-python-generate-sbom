@@ -73,27 +73,37 @@ These are the load-bearing rules from the spine. Respect them when adding code.
 
 ## Accounts, orgs, and the global-admin tier
 
-Identity and tenancy are deliberately **decoupled**. A `User` is a standalone
-account; an `Org` is a tenant boundary; an `OrgMembership` links the two with a
-role (`admin` or `member`). See the [Data Model](data-model.md) for the fields.
+!!! warning "The app has no authentication of its own"
 
-- **Zero-org identity.** A freshly registered user has **no** memberships —
-  registration creates the account only, never a "personal" org. Authentication
-  is therefore independent of org membership. Anything org-scoped resolves the active
-  org separately (`get_request_org`), and returns `None` when the user belongs to no
-  org. `GET /auth/me/` exposes the same identity to API clients, returning
-  `{id, email, is_admin, is_global_admin}` and succeeding for a user with no orgs.
-  A signed-in user with no active org is **restricted to the home page** (Story 2.18):
-  the nav hides the org-scoped destinations and the home page renders the shared
-  no-org empty state instead of an error.
+    Story 21.24 **deleted** the login, registration, and logout surface, the access-control
+    mixins, and the DRF permission class. Every page and endpoint is open, and an anonymous
+    caller acts as the organization named by `INVENTORY_DEFAULT_ORG_SLUG` (seeded by
+    migration `0003`).
 
-- **Admin authorization, gated twice.** Admin-only surfaces (Members, Organization,
-  and the global-admin screen) are enforced at **both** layers (Story 2.17): page
-  views mix in `OrgAdminRequiredMixin` / `GlobalAdminRequiredMixin` from
-  `inventory/common/access.py`, and the matching API endpoints independently return
-  `403` for a non-admin. Hiding a nav link is UX, not security. Admin-ness is
-  **per-org** and re-evaluated against the active org, so switching org can change
-  the answer.
+    Identity is the **host platform's** responsibility, supplied via OIDC and group claims
+    when `inventory` is contributed to it (Epics 17-18). The enforcement that was removed
+    was the wrong shape for that destination — Django session plus local `OrgMembership`
+    roles — so it was deleted rather than flagged off.
+
+    Do not re-add an app-owned session or role gate: that rebuilds exactly what was removed.
+    `AD-14` in the architecture spine carries the dated decision.
+
+Identity and tenancy were always **decoupled**, and tenancy is the half that survives. An
+`Org` is a tenant boundary; an `OrgMembership` records who belongs to it. See the
+[Data Model](data-model.md) for the fields.
+
+- **Org isolation is untouched (AD-2).** It is a tenancy invariant, not an authentication
+  one. Every org-scoped query still goes through `.for_org(org)`, and
+  `get_org_scoped_object_or_404` still makes another org's object indistinguishable from a
+  missing one. Removing the login did **not** make organizations visible to each other.
+
+- **The acting org.** `get_request_org` resolves it, in one place, for both the pages and
+  the API (AD-2). A presented API key wins and pins the caller to that key's org; otherwise
+  a Django-admin session's org applies; otherwise the default org. The system ADMIN org is
+  never the acting org (Story 2.18) — it is a platform tier, not a workspace.
+
+- **Membership and the global-admin tier still exist and are still editable.** They no
+  longer gate anything, and are the seam that host-supplied group claims will re-attach to.
 
 - **Per-org promote / demote.** Admins add or remove *per-org* admins with
   `promote_member_to_admin` (Story 2.16) and `demote_admin_to_member` (Story 2.20);

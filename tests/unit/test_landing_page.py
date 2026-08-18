@@ -44,8 +44,8 @@ def test_an_anonymous_visitor_sees_the_landing_page() -> None:
     assert "Generate Software Bills of Materials" in html
     assert "What you get" in html
     assert "How it works" in html
-    # Not gated: an anonymous visitor is the audience.
-    assert "Sign in" in html
+    # Story 21.24 removed the sign-in control along with the app's authentication.
+    assert "Sign in" not in html
 
 
 @pytest.mark.django_db
@@ -79,23 +79,28 @@ def test_a_signed_in_user_with_an_org_sees_the_landing_page() -> None:
     html = client.get(HOME).content.decode()
 
     assert "What you get" in html
-    assert "dev@example.com" in html  # the account menu, i.e. the signed-in shell
+    # The shell no longer differs by authentication state (Story 21.24), so the nav — not
+    # an account menu — is what proves the page rendered inside it.
+    assert ">Upload</span>" in html
 
 
 # --- AC #4: a signed-in user with no org ---------------------------------------------------
 
 
 @pytest.mark.django_db
-def test_a_zero_org_user_gets_the_shared_empty_state_not_the_landing_page() -> None:
-    """Story 2.18 restricts them to home, so home has to tell them what to do next."""
+def test_a_user_with_no_membership_still_sees_the_landing_page() -> None:
+    """Was the zero-org state, which Story 21.24 deleted.
+
+    There is no longer a principal who can be "not in an organization": a user without a
+    membership resolves to the default org exactly as an anonymous visitor does, so the
+    landing page is what they get.
+    """
     register_user(email="nobody@example.com", password=PASSWORD)
     client = _client("nobody@example.com")
 
     html = client.get(HOME).content.decode()
 
-    assert "No organization yet" in html
-    # Not the marketing page — its CTA points at a route they cannot use.
-    assert "What you get" not in html
+    assert "What you get" in html
 
 
 # --- AC #2: the visual identity ------------------------------------------------------------

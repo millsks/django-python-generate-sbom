@@ -6,15 +6,12 @@ pages live in the app (``src/django_apps/inventory/``) and are added by Stories 
 
 from typing import Any
 
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
-from django.shortcuts import render
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 from django.views.generic import TemplateView
 
-from inventory.common.access import NO_ORG_TEMPLATE
-from inventory.users.auth import get_request_org, set_active_org_by_slug
+from inventory.users.auth import set_active_org_by_slug
 
 
 class ShellPreviewView(TemplateView):
@@ -33,23 +30,24 @@ class ShellPreviewView(TemplateView):
         return context
 
 
-class OrgSwitchView(LoginRequiredMixin, View):
+class OrgSwitchView(View):
     """Set the caller's active organisation (Story 21.4, AC #3).
 
-    POST-only on purpose: this mutates session state, so it must carry CSRF and must not be
-    reachable by a GET (which a link, a prefetcher, or an image tag could trigger).
+    **POST-only, and still CSRF-protected.** Story 21.24 removed the login requirement, not
+    CSRF: this mutates session state, so it must not be reachable by a GET that a link, a
+    prefetcher, or an image tag could trigger. Removing *who you are* does not remove
+    *what a browser may be made to do on your behalf*.
 
-    Calls ``set_active_org_by_slug`` **directly** rather than posting to ``/api/v1/orgs/switch/``
-    — AD-1 forbids the app talking to itself over HTTP, and the service already validates
-    membership, so an unauthorised slug simply does not switch.
+    Calls ``set_active_org_by_slug`` **directly** rather than posting to
+    ``/api/v1/orgs/switch/`` — AD-1 forbids the app talking to itself over HTTP.
     """
 
     def post(self, request: HttpRequest) -> HttpResponse:
         """Switch the active org, then return to the page the user came from."""
         slug = request.POST.get("slug", "")
-        # A slug the user is not a member of returns None and changes nothing. Failing
-        # silently is correct here: the switcher only ever offers orgs the user belongs to,
-        # so a miss means a tampered request, and it should not be told the org exists.
+        # An unknown slug — or the system ADMIN org, which is not a workspace (Story 2.12)
+        # — returns None and changes nothing. Failing silently is correct: a miss means a
+        # hand-edited request, and it should not be told which orgs exist.
         set_active_org_by_slug(request, slug)
         return HttpResponseRedirect(self._safe_next(request))
 
@@ -117,17 +115,6 @@ class LandingPageView(TemplateView):
     """
 
     template_name = "landing.html"
-
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Render the landing page, or the zero-org state for a signed-in user without an org.
-
-        Story 2.18 restricts zero-org users to the home page, so this is where they land. The
-        landing CTA points at an org-scoped route they cannot use, and an empty dashboard
-        would explain nothing — the shared empty state says what to do next instead.
-        """
-        if request.user.is_authenticated and get_request_org(request) is None:
-            return render(request, NO_ORG_TEMPLATE)
-        return super().get(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Supply the feature cards and steps."""

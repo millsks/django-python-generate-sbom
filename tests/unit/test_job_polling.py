@@ -264,17 +264,6 @@ def test_the_progress_endpoint_is_org_scoped_too(org_client) -> None:  # type: i
 
 
 @pytest.mark.django_db
-def test_anonymous_polling_is_redirected_not_served(org_client) -> None:  # type: ignore[no-untyped-def]
-    _, org = org_client
-    job = _job(org, status=SBOMJob.Status.PROGRESS)
-
-    response = Client().get(f"/history/row/{job.task_id}")
-
-    assert response.status_code == 302
-    assert response.headers["Location"].startswith("/login")
-
-
-@pytest.mark.django_db
 def test_polling_endpoints_reject_post(org_client) -> None:  # type: ignore[no-untyped-def]
     client, org = org_client
     job = _job(org, status=SBOMJob.Status.PROGRESS)

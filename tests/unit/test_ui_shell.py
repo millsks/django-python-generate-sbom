@@ -48,30 +48,31 @@ def _logged_in(email: str, *, org: str | None = None, admin: bool = False, globa
 
 
 @pytest.mark.django_db
-def test_shell_renders_for_an_anonymous_visitor() -> None:
+def test_every_nav_item_renders_for_an_anonymous_visitor() -> None:
+    """Story 21.24 removed the role gates; all seven destinations render for everyone.
+
+    Was three tests asserting a nav that shrank per role. That gating is gone, so what is
+    worth pinning now is the opposite: nothing is hidden, and no sign-in control appears.
+    Forgetting the context processor's `is_authenticated` early return would produce pages
+    that are reachable but invisible, which this catches.
+    """
     html = _nav_html(Client())
-    # No nav at all when unauthenticated — there is nothing to navigate to yet.
-    assert "Sign in" in html
-    for label in ADMIN_ONLY + GLOBAL_ADMIN_ONLY:
-        assert f">{label}</span>" not in html
+
+    for label in ALWAYS_VISIBLE + ADMIN_ONLY + GLOBAL_ADMIN_ONLY:
+        assert f">{label}</span>" in html, label
+    assert "Sign in" not in html
+    assert "Sign out" not in html
 
 
 @pytest.mark.django_db
-def test_plain_member_sees_only_the_ungated_items() -> None:
-    html = _nav_html(_logged_in("member@example.com", org="Acme"))
-    for label in ALWAYS_VISIBLE:
-        assert f">{label}</span>" in html
-    for label in ADMIN_ONLY + GLOBAL_ADMIN_ONLY:
-        assert f">{label}</span>" not in html
+def test_the_nav_is_the_same_for_a_signed_in_user() -> None:
+    """A logged-in Django-admin user must not see a different app than a visitor."""
+    anonymous = _nav_html(Client())
+    signed_in = _nav_html(_logged_in("member@example.com", org="Acme"))
 
-
-@pytest.mark.django_db
-def test_org_admin_sees_the_admin_items_but_not_global_admins() -> None:
-    html = _nav_html(_logged_in("admin@example.com", org="Acme", admin=True))
-    for label in ALWAYS_VISIBLE + ADMIN_ONLY:
-        assert f">{label}</span>" in html
-    for label in GLOBAL_ADMIN_ONLY:
-        assert f">{label}</span>" not in html
+    for label in ALWAYS_VISIBLE + ADMIN_ONLY + GLOBAL_ADMIN_ONLY:
+        assert f">{label}</span>" in anonymous, label
+        assert f">{label}</span>" in signed_in, label
 
 
 @pytest.mark.django_db

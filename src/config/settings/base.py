@@ -82,7 +82,11 @@ REST_FRAMEWORK = {
         "inventory.users.authentication.OrgApiKeyAuthentication",
         "rest_framework.authentication.SessionAuthentication",
     ],
-    "DEFAULT_PERMISSION_CLASSES": ["inventory.users.authentication.HasSessionOrApiKey"],
+    # Story 21.24 removed the app's own authentication: every endpoint is open, and
+    # identity becomes the host platform's job via OIDC + group claims (Epics 17-18).
+    # `OrgApiKeyAuthentication` above stays registered, so a caller who DOES present a key
+    # is still pinned to that key's org rather than to the anonymous default.
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
     # OpenAPI schema generation for the interactive docs (Story 11.9, drf-spectacular).
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
@@ -195,13 +199,9 @@ STATICFILES_DIRS = [APPS_DIR / "static"]
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# --- Authentication redirects (Story 21.4) ---
-# Django defaults LOGIN_URL to /accounts/login/, which this project has never served. The
-# access-control mixins send anonymous users here (with `next`), so it has to be right.
-# Story 21.5 replaces the SPA's /login with the server-rendered page at the same path.
-LOGIN_URL = "/login"
-LOGIN_REDIRECT_URL = "/"
-LOGOUT_REDIRECT_URL = "/"
+# No LOGIN_URL / LOGIN_REDIRECT_URL / LOGOUT_REDIRECT_URL: Story 21.24 removed the app's
+# own authentication, so nothing redirects to a login page and none of them has a target.
+# `django.contrib.admin` keeps its own login at /admin/, which Django wires itself.
 
 # --- Server-rendered UI configuration (Story 21.3) ---
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
@@ -229,6 +229,12 @@ try:
 except PackageNotFoundError:  # pragma: no cover - only when running from a bare checkout
     _DISTRIBUTION_VERSION = "0.0.0"
 PRODUCT_VERSION = env.str("PRODUCT_VERSION", default=_DISTRIBUTION_VERSION)
+# The org an ANONYMOUS caller acts as (Story 21.24). The app has no authentication of its
+# own: every page and endpoint is open, and identity becomes the host platform's job when
+# `inventory` is contributed to it (Epics 17-18). AD-2 still makes the org the tenancy
+# boundary, so an anonymous request must still resolve to one. Migration 0003 seeds it.
+INVENTORY_DEFAULT_ORG_SLUG = env.str("INVENTORY_DEFAULT_ORG_SLUG", default="enterprise-wells-fargo-technology")
+
 REPO_URL = env.str("REPO_URL", default="https://github.com/millsks/django-python-generate-sbom")
 DOCS_URL = env.str("DOCS_URL", default="https://millsks.github.io/django-python-generate-sbom/")
 

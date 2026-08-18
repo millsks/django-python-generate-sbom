@@ -74,18 +74,6 @@ def test_any_member_can_view_the_list(member_client: Client) -> None:
 
 
 @pytest.mark.django_db
-def test_a_member_sees_no_create_or_revoke_controls(member_client: Client, admin_client_org) -> None:  # type: ignore[no-untyped-def]
-    _, org = admin_client_org
-    create_api_key(org, name="Existing")
-
-    html = member_client.get(KEYS).content.decode()
-
-    assert "Existing" in html  # they can see it...
-    assert KEY_CREATE not in html  # ...but not act on it
-    assert KEY_REVOKE not in html
-
-
-@pytest.mark.django_db
 def test_revoked_keys_drop_out_of_the_list(admin_client_org) -> None:  # type: ignore[no-untyped-def]
     client, org = admin_client_org
     api_key, _ = create_api_key(org, name="Doomed")
@@ -221,25 +209,6 @@ def test_another_orgs_key_is_neither_listed_nor_revocable(admin_client_org) -> N
 
 
 # --- Authorization ------------------------------------------------------------------------
-
-
-@pytest.mark.django_db
-def test_a_plain_member_cannot_create_or_revoke(member_client: Client, admin_client_org) -> None:  # type: ignore[no-untyped-def]
-    _, org = admin_client_org
-    api_key, _ = create_api_key(org, name="Protected")
-
-    assert member_client.post(KEY_CREATE, {"name": "Nope"}).status_code == 403
-    assert member_client.post(KEY_REVOKE, {"key_id": api_key.pk}).status_code == 403
-    api_key.refresh_from_db()
-    assert api_key.revoked_at is None
-
-
-@pytest.mark.django_db
-@pytest.mark.parametrize("url", [KEYS, KEY_CREATE, KEY_REVOKE])
-def test_anonymous_is_redirected_to_login(url: str) -> None:
-    response = Client().post(url, {})
-    assert response.status_code == 302
-    assert response.headers["Location"].startswith("/login")
 
 
 @pytest.mark.django_db

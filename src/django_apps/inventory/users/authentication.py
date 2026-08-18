@@ -14,13 +14,12 @@ from django.contrib.auth.models import AnonymousUser
 from django.utils import timezone
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
-from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
 
 from .models import OrgApiKey
 
 if TYPE_CHECKING:
-    from rest_framework.views import APIView
+    pass
 
 _KEYWORD = "Api-Key"
 _INVALID_KEY = "Invalid or revoked API key."
@@ -48,13 +47,3 @@ class OrgApiKeyAuthentication(BaseAuthentication):
     def authenticate_header(self, request: Request) -> str:
         """Return the WWW-Authenticate header value so failures render as 401."""
         return _KEYWORD
-
-
-class HasSessionOrApiKey(BasePermission):
-    """Allow either a session-authenticated user or a valid OrgApiKey."""
-
-    def has_permission(self, request: Request, view: APIView) -> bool:
-        """Pass when the caller has a session user or a resolved API key."""
-        if request.user and request.user.is_authenticated:
-            return True
-        return isinstance(request.auth, OrgApiKey)

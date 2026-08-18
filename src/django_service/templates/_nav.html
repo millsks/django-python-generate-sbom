@@ -1,19 +1,17 @@
 {% load static %}
 {% comment %} The seven navigation destinations, in the Story 2.15 / 10.8 order that SideNav.tsx
-  established: Home first, then Upload, History, the admin-only Members, API Keys, the
-  admin-only Organization last, and Global Admins for the global-admin tier.
+  established: Home first, then Upload, History, Members, API Keys, Organization, and
+  Global Admins.
 
   Included twice by base.html — once for the md+ sidebar and once for the mobile
-  offcanvas — so the two can never drift apart.
+  offcanvas — so the two can never drift apart. Edit this partial, never the include sites.
 
-  `is_org_admin` / `is_global_admin` come from django_service.context_processors.ui.
-  Hiding a link is PRESENTATION, never authorization: the views enforce access
-  themselves (Story 21.4 adds the mixins).
-
-  Converted destinations reverse their named URL; the rest are still literal paths owned by
-  the SPA catch-all, and each story swaps one over as it lands the view. The names are
-  resolved once at the top rather than inline, because {% include %} cannot take a
-  {% url %} expression as an argument.
+  Story 21.24 removed the app's own access control, so all seven render unconditionally.
+  The `{% templatetag openblock %} if is_org_admin {% templatetag closeblock %}` gates that
+  used to wrap Members, Organization, and Global Admins were removed rather than left as
+  conditions that are always true — a tautology reads like a live rule and invites someone
+  to trust it. When identity comes back from the host platform (Epics 17-18), the gates come
+  back here, fed by the same context-processor names.
 {% endcomment %}
 {% url 'ui-members' as members_url %}
 {% url 'ui-organization' as organization_url %}
@@ -25,14 +23,8 @@
   {% include "_nav_item.html" with url="/" label="Home" icon="nav.home" %}
   {% include "_nav_item.html" with url=upload_url label="Upload" icon="nav.upload" %}
   {% include "_nav_item.html" with url=history_url label="History" icon="nav.history" %}
-  {% if is_org_admin %}
-    {% include "_nav_item.html" with url=members_url label="Members" icon="nav.members" %}
-  {% endif %}
+  {% include "_nav_item.html" with url=members_url label="Members" icon="nav.members" %}
   {% include "_nav_item.html" with url=keys_url label="API Keys" icon="nav.keys" %}
-  {% if is_org_admin %}
-    {% include "_nav_item.html" with url=organization_url label="Organization" icon="nav.organization" %}
-  {% endif %}
-  {% if is_global_admin %}
-    {% include "_nav_item.html" with url=global_admins_url label="Global Admins" icon="nav.global_admins" %}
-  {% endif %}
+  {% include "_nav_item.html" with url=organization_url label="Organization" icon="nav.organization" %}
+  {% include "_nav_item.html" with url=global_admins_url label="Global Admins" icon="nav.global_admins" %}
 </nav>

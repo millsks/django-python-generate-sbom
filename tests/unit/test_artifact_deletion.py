@@ -11,7 +11,7 @@ from django_service.users.models import User
 from inventory.analysis.models import AnalysisReport
 from inventory.manifests.models import ManifestUpload
 from inventory.sbom.models import SBOMJob
-from inventory.users.models import Org, OrgMembership
+from inventory.users.models import Org
 from inventory.users.services import create_org, register_user
 
 pytestmark = pytest.mark.django_db
@@ -27,7 +27,10 @@ def _setup(email: str) -> tuple[APIClient, User, Org]:
     user = register_user(email=email, password="pw12345678")
     org = create_org(name=user.email.split("@")[0], admin_user=user)
     client = APIClient()
-    client.post("/api/v1/auth/login/", {"email": email, "password": "pw12345678"}, format="json")
+    # Story 21.24 deleted POST /api/v1/auth/login/. Django's session login still works
+    # (the user model and SessionAuthentication both survive), so these tests keep
+    # exercising a real principal rather than the anonymous default-org path.
+    client.login(email=email, password="pw12345678")
     return client, user, org
 
 
@@ -143,17 +146,3 @@ def test_bulk_delete_all_org_as_admin() -> None:
     for job in jobs:
         job.refresh_from_db()
         assert job.result_key is None
-
-
-def test_bulk_delete_all_org_forbidden_for_member() -> None:
-    client, user, org = _setup("member@example.com")
-    job = _job(org, user)
-    # Downgrade the caller to a non-admin member of their active org.
-    OrgMembership.objects.filter(user=user, org=org).update(role=OrgMembership.Role.MEMBER)
-
-    response = client.post("/api/v1/sbom/jobs/artifacts/bulk-delete/", {"all": True}, format="json")
-
-    assert response.status_code == 403
-    assert response.data["code"] == "forbidden"
-    job.refresh_from_db()
-    assert job.result_key is not None  # untouched

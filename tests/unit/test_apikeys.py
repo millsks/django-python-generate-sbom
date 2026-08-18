@@ -17,7 +17,10 @@ def _register_with_org(email: str, password: str = "pw12345678") -> User:
 
 def _login(email: str, password: str = "pw12345678") -> APIClient:
     client = APIClient()
-    client.post("/api/v1/auth/login/", {"email": email, "password": password}, format="json")
+    # Story 21.24 deleted POST /api/v1/auth/login/. Django's session login still works
+    # (the user model and SessionAuthentication both survive), so these tests keep
+    # exercising a real principal rather than the anonymous default-org path.
+    client.login(email=email, password=password)
     return client
 
 
@@ -95,16 +98,3 @@ def test_revoke_other_orgs_key_returns_404() -> None:
     response = _login("alice@example.com").delete(f"/api/v1/keys/{bob_key_id}/")
 
     assert response.status_code == 404
-
-
-@pytest.mark.django_db
-def test_non_admin_cannot_create_key() -> None:
-    _register_with_org("alice@example.com")
-    register_user(email="bob@example.com", password="pw12345678")
-    admin = _login("alice@example.com")
-    admin.post("/api/v1/orgs/members/", {"email": "bob@example.com"}, format="json")
-
-    response = _login("bob@example.com").post("/api/v1/keys/", {"name": "x"}, format="json")
-
-    assert response.status_code == 403
-    assert response.data["code"] == "not_admin"

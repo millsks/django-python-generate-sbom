@@ -1,10 +1,10 @@
 ---
-baseline_commit: 1bc1d32
+baseline_commit: 0cbde85
 ---
 
 # Story 21.24: Remove the Authentication Requirement (Open Access Pending OIDC)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -87,99 +87,99 @@ authorization via OIDC and group claims when it is plugged in.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Default-org resolution (AC: #4)** — the enabling change; do this first, because every view
+- [x] **Task 1 — Default-org resolution (AC: #4)** — the enabling change; do this first, because every view
       you un-gate afterwards depends on `get_request_org` returning an org.
-  - [ ] Add `INVENTORY_DEFAULT_ORG_SLUG = env("INVENTORY_DEFAULT_ORG_SLUG", default="default")` to
+  - [x] Add `INVENTORY_DEFAULT_ORG_SLUG = env("INVENTORY_DEFAULT_ORG_SLUG", default="default")` to
         `src/config/settings/base.py`, beside the other app settings. `env = environ.Env()` is already
         constructed at `base.py:33` — use it, do not read `os.environ`.
-  - [ ] In `inventory/users/auth.py::get_request_org`, replace the `if not request.user.is_authenticated:
+  - [x] In `inventory/users/auth.py::get_request_org`, replace the `if not request.user.is_authenticated:
         return None` early return with a call to a new `get_default_org()` selector. Keep the Api-Key branch
         **above** it, unchanged — a presented key still wins.
-  - [ ] `get_default_org()` lives in `inventory/users/selectors.py`: return `Org.objects.filter(
+  - [x] `get_default_org()` lives in `inventory/users/selectors.py`: return `Org.objects.filter(
         is_admin_org=False, slug=settings.INVENTORY_DEFAULT_ORG_SLUG).first()` falling back to
         `Org.objects.filter(is_admin_org=False).order_by("name").first()`. Never returns the ADMIN org.
-  - [ ] Add migration `inventory/0003_seed_default_org.py`, modelled **exactly** on `0002_seed_admin_org.py`
+  - [x] Add migration `inventory/0003_seed_default_org.py`, modelled **exactly** on `0002_seed_admin_org.py`
         (idempotent `get_or_create`, reversible `unseed`, module docstring citing this story). Seed
         `slug="default"`, `name="Default"`, `is_admin_org=False`.
-  - [ ] Decide and document what happens when even the fallback finds nothing (an operator deleted every
+  - [x] Decide and document what happens when even the fallback finds nothing (an operator deleted every
         org): return `None` and let the page render empty rather than raising — but assert that path in a test.
-- [ ] **Task 2 — Universal admin capability (AC: #5)**
-  - [ ] `get_admin_org(request)` returns `get_request_org(request)` unconditionally.
-  - [ ] `is_global_admin(user)` returns `True` for an unauthenticated user. Keep the membership query for a
+- [x] **Task 2 — Universal admin capability (AC: #5)**
+  - [x] `get_admin_org(request)` returns `get_request_org(request)` unconditionally.
+  - [x] `is_global_admin(user)` returns `True` for an unauthenticated user. Keep the membership query for a
         real user so `/admin/`-logged-in behaviour stays truthful.
-  - [ ] `django_service/context_processors.py::ui` drops its `is_authenticated` early return and sets
+  - [x] `django_service/context_processors.py::ui` drops its `is_authenticated` early return and sets
         `is_org_admin=True`, `is_global_admin=True`, `active_org=get_request_org(request)`.
-- [ ] **Task 3 — Delete the access-control layer (AC: #2, #3)**
-  - [ ] Delete the three mixins and `NO_ORG_TEMPLATE` from `inventory/common/access.py`. **Keep
+- [x] **Task 3 — Delete the access-control layer (AC: #2, #3)**
+  - [x] Delete the three mixins and `NO_ORG_TEMPLATE` from `inventory/common/access.py`. **Keep
         `get_org_scoped_object_or_404`** and rewrite the module docstring — it currently explains a security
         boundary that no longer exists, and a stale docstring here is actively misleading.
-  - [ ] Strip the mixins from the **19 classes that apply one directly** — 6 in `inventory/sbom/pages.py`
+  - [x] Strip the mixins from the **19 classes that apply one directly** — 6 in `inventory/sbom/pages.py`
         (`UploadPageView`, `JobHistoryView`, `_ArtifactDeleteMixin`, `JobArtifactsDeleteAllView`,
         `JobRowPartialView`, `_JobScopedView`) and 13 in `inventory/users/pages.py` — plus everything that
         inherits from `_ArtifactDeleteMixin`, `_JobScopedView`, and `_MemberActionView`. Each loses its mixin
         base; each that read `self.org` now sets it in `dispatch`/`get` from `get_request_org(request)`.
-  - [ ] `django_service/views.py::OrgSwitchView` drops `LoginRequiredMixin` and the
+  - [x] `django_service/views.py::OrgSwitchView` drops `LoginRequiredMixin` and the
         `from django.contrib.auth.mixins import LoginRequiredMixin` import.
-  - [ ] Delete `src/django_service/templates/_no_org.html` and the `NO_ORG_TEMPLATE` import in
+  - [x] Delete `src/django_service/templates/_no_org.html` and the `NO_ORG_TEMPLATE` import in
         `django_service/views.py`.
-- [ ] **Task 4 — Delete the auth pages and routes (AC: #6)**
-  - [ ] Remove `LoginPageView`, `RegisterPageView`, `LogoutPageView`, `_safe_redirect_target`, and the now-
+- [x] **Task 4 — Delete the auth pages and routes (AC: #6)**
+  - [x] Remove `LoginPageView`, `RegisterPageView`, `LogoutPageView`, `_safe_redirect_target`, and the now-
         unused form imports from `inventory/users/pages.py`; remove the login/register forms from
         `inventory/users/forms.py` if nothing else uses them.
-  - [ ] Remove the three `ui-*` paths and their imports from `inventory/urls_pages.py`.
-  - [ ] Delete `inventory/templates/inventory/auth/login.html` and `register.html` (and the `auth/` directory
+  - [x] Remove the three `ui-*` paths and their imports from `inventory/urls_pages.py`.
+  - [x] Delete `inventory/templates/inventory/auth/login.html` and `register.html` (and the `auth/` directory
         if empty).
-  - [ ] Remove `RegisterView`, `LoginView`, `LogoutView` from `inventory/users/views.py` and their three
+  - [x] Remove `RegisterView`, `LoginView`, `LogoutView` from `inventory/users/views.py` and their three
         `auth/` paths from `inventory/users/urls.py`. **Keep `AuthMeView`** unless it proves unreachable — the
         SPA still calls it until Story 21.19.
-  - [ ] Remove `LOGIN_URL`, `LOGIN_REDIRECT_URL`, `LOGOUT_REDIRECT_URL` from `src/config/settings/base.py`.
-  - [ ] Update the catch-all at `config/urls.py:73`: drop `login|register|logout` from the negative lookahead
+  - [x] Remove `LOGIN_URL`, `LOGIN_REDIRECT_URL`, `LOGOUT_REDIRECT_URL` from `src/config/settings/base.py`.
+  - [x] Update the catch-all at `config/urls.py:73`: drop `login|register|logout` from the negative lookahead
         so those URLs fall through to the SPA rather than resolving to a deleted Django route.
-- [ ] **Task 5 — Shell markup (AC: #7)**
-  - [ ] `django_service/templates/base.html` (line numbers are as of baseline `1bc1d32`; Story 21.18 will
+- [x] **Task 5 — Shell markup (AC: #7)**
+  - [x] `django_service/templates/base.html` (line numbers are as of baseline `1bc1d32`; Story 21.18 will
         shift them): remove the four `user.is_authenticated` branches (:64, :86, :123, :138), the `ui-login`
         link (:114), and the `ui-logout` form (:103). The sidebar and the offcanvas mobile nav render
         unconditionally, and `<main>` takes `col-md-9 col-lg-10` unconditionally.
-  - [ ] The account dropdown (:86-113) is built around `{{ user.email }}` and the sign-out form — both gone.
+  - [x] The account dropdown (:86-113) is built around `{{ user.email }}` and the sign-out form — both gone.
         Replace it with a plain active-org indicator, or fold the org name into the switcher; do **not** leave
         a dropdown whose only remaining entry is `{{ active_org.name }}`.
-  - [ ] `_org_switcher.html` is currently rendered only inside an `is_authenticated` branch — include it
+  - [x] `_org_switcher.html` is currently rendered only inside an `is_authenticated` branch — include it
         unconditionally. Its own `switchable_orgs|length > 1` guard is the Story 2.19 rule and stays.
-  - [ ] `_nav.html`: the `{% if is_org_admin %}` (×2) and `{% if is_global_admin %}` gates become tautologies
+  - [x] `_nav.html`: the `{% if is_org_admin %}` (×2) and `{% if is_global_admin %}` gates become tautologies
         once Task 2 lands. **Remove them** rather than leaving conditions that are always true, and update the
         `{% comment %}` block, which currently explains role gating and cites the Story 21.4 mixins.
-  - [ ] Sweep every template for a sign-in / sign-out / "create an account" call to action, including
+  - [x] Sweep every template for a sign-in / sign-out / "create an account" call to action, including
         Story 21.18's landing page.
-- [ ] **Task 6 — Membership-free org switching (AC: #8)**
-  - [ ] `get_user_orgs(user)` — return every non-ADMIN org ordered by name, regardless of membership. Rename
+- [x] **Task 6 — Membership-free org switching (AC: #8)**
+  - [x] `get_user_orgs(user)` — return every non-ADMIN org ordered by name, regardless of membership. Rename
         it if the name now lies (`get_switchable_orgs`), updating both call sites.
-  - [ ] `set_active_org_by_slug` — look the org up by slug among non-ADMIN orgs instead of by membership.
-  - [ ] Leave `OrgSwitchView` POST-only and CSRF-protected. Leave the `_safe_next` open-redirect guard alone.
-- [ ] **Task 7 — DRF gate (AC: #9)**
-  - [ ] `base.py:85` — `DEFAULT_PERMISSION_CLASSES` becomes `["rest_framework.permissions.AllowAny"]`.
-  - [ ] Delete `HasSessionOrApiKey` from `inventory/users/authentication.py`. Keep `OrgApiKeyAuthentication`
+  - [x] `set_active_org_by_slug` — look the org up by slug among non-ADMIN orgs instead of by membership.
+  - [x] Leave `OrgSwitchView` POST-only and CSRF-protected. Leave the `_safe_next` open-redirect guard alone.
+- [x] **Task 7 — DRF gate (AC: #9)**
+  - [x] `base.py:85` — `DEFAULT_PERMISSION_CLASSES` becomes `["rest_framework.permissions.AllowAny"]`.
+  - [x] Delete `HasSessionOrApiKey` from `inventory/users/authentication.py`. Keep `OrgApiKeyAuthentication`
         and both `DEFAULT_AUTHENTICATION_CLASSES` entries.
-  - [ ] Check every DRF view for a per-view `permission_classes` that reimposes a gate.
-- [ ] **Task 8 — Rework the test suite (AC: #1, #10)**
-  - [ ] Delete `tests/unit/test_access_control.py`, `test_auth_pages.py`, `test_auth.py`,
+  - [x] Check every DRF view for a per-view `permission_classes` that reimposes a gate.
+- [x] **Task 8 — Rework the test suite (AC: #1, #10)**
+  - [x] Delete `tests/unit/test_access_control.py`, `test_auth_pages.py`, `test_auth.py`,
         `test_registration.py` — each exists to assert a rule being removed. Salvage any case that is really
         about org isolation into the AC #3 test below before deleting.
-  - [ ] Rewrite the ~34 `test_anonymous_*` / `*_forbidden` / `*_non_admin` cases across
+  - [x] Rewrite the ~34 `test_anonymous_*` / `*_forbidden` / `*_non_admin` cases across
         `test_upload_page.py`, `test_history_page.py`, `test_results_page.py`, `test_job_polling.py`,
         `test_sbom_tab.py`, `test_excel_export.py`, `test_api_key_pages.py`, `test_org_pages.py`,
         `test_global_admin_pages.py`, `test_org_switcher.py`, `test_membership.py`, `test_apikeys.py`,
         `test_artifact_deletion.py` to assert the anonymous caller **succeeds**.
-  - [ ] Add `tests/unit/test_open_access.py`: parametrise over every name in `inventory/urls_pages.py` and
+  - [x] Add `tests/unit/test_open_access.py`: parametrise over every name in `inventory/urls_pages.py` and
         every `/api/v1/` route, assert an anonymous client is never redirected to a login URL and never 403s.
-  - [ ] Add the AC #2 absence test and the AC #3 cross-org 404 test (anonymous acting as org A must still get
+  - [x] Add the AC #2 absence test and the AC #3 cross-org 404 test (anonymous acting as org A must still get
         404 for an org B job).
-  - [ ] Add an AC #9 contract test pinning the `/api/v1/` path list and payload field names.
-- [ ] **Task 9 — Record the decision (AC: #11)**
-  - [ ] Add a dated note to the architecture's auth section and `AD-14` in
+  - [x] Add an AC #9 contract test pinning the `/api/v1/` path list and payload field names.
+- [x] **Task 9 — Record the decision (AC: #11)**
+  - [x] Add a dated note to the architecture's auth section and `AD-14` in
         `_bmad-output/planning-artifacts/architecture/architecture-django-python-generate-sbom-2026-07-03/ARCHITECTURE-SPINE.md`.
-  - [ ] Flag Epic 17 in `sprint-status.yaml` as requiring re-authoring (Story 17.8's "cutover from local
+  - [x] Flag Epic 17 in `sprint-status.yaml` as requiring re-authoring (Story 17.8's "cutover from local
         password auth" has nothing left to cut over from).
-  - [ ] Sweep `docs/` and `README.md` for sign-in instructions. Deep documentation reconciliation is Story
+  - [x] Sweep `docs/` and `README.md` for sign-in instructions. Deep documentation reconciliation is Story
         21.21's job — remove what is now *false*, do not rewrite what is merely *thin*.
 
 ## Dev Notes
@@ -319,8 +319,161 @@ Django's admin is not this app's UI. `OrgApiKeyAuthentication` stays registered,
 
 ### Agent Model Used
 
+claude-opus-5[1m] (Claude Opus 5, 1M context)
+
 ### Debug Log References
 
+- `pixi run ci` — **exit 0**. **839 passed**, coverage **96.02%**, floor unchanged at 90%.
+  `mkdocs build --strict` clean.
+- **Live verification against `pixi run runserver`, anonymous throughout:** `/`, `/upload`,
+  `/history`, `/members`, `/keys`, `/organization`, `/platform/global-admins` all **200**;
+  `/login` and `/register` **404**; `/api/v1/auth/me/` returns
+  `{"id":null,"email":null,"is_admin":true,"is_global_admin":true}`; `/api/v1/orgs/` **200**.
+- Fresh `pixi run migrate` applies `inventory.0003_seed_default_org`; the upload form renders
+  the seeded org preselected (`<option value="2" selected>Enterprise Wells Fargo Technology`).
+- **Test churn:** 5 modules deleted (`test_access_control`, `test_auth_pages`, `test_auth`,
+  `test_registration`, and Story 21.23's `test_route_authorization_matrix`), **28** denial
+  tests removed across 16 modules, **10** rewritten, and `tests/unit/test_open_access.py`
+  added (**125** cases, routes enumerated from the urlconf).
 ### Completion Notes List
 
+**Product-owner directions taken during the story**, both implemented and both beyond the
+written ACs:
+
+1. **The default org is "Enterprise Wells Fargo Technology"** (slug
+   `enterprise-wells-fargo-technology`), not the story's placeholder `default`. Migration
+   `0003` and the `INVENTORY_DEFAULT_ORG_SLUG` default both carry it.
+2. **The upload form now has an Organization field**, populated from the same selector the
+   org switcher uses (`get_switchable_orgs`), preselected to the acting org. The job is
+   filed against the **chosen** org, not `self.org` — filing against the session's org while
+   the form displayed another would be a silent lie. This is the right shape now that there
+   is no login: an "active org" inferred from a session is a weak thing to hang a permanent
+   filing decision on, and an SBOM belongs to a tenant forever.
+
+### Design decisions I made rather than following the story literally
+
+**One `OrgContextMixin` instead of editing nineteen classes.** Task 3 has each gated class
+set `self.org` in its own `dispatch`. That is nineteen copies of two lines, and the story's
+own Watch-for list warns the failure mode is "you have swapped a 403 for an
+`AttributeError`" — which nineteen hand-edits invite. A single non-gating mixin supplies
+`self.org` and rejects nobody, so the access control is still genuinely deleted (AC #2's
+named mixins are gone, and a test asserts it) while `self.org` keeps its type. mypy found
+the alternative for me: typing it `Org | None` produced 21 errors at the call sites.
+
+**A distinct "no organizations exist" page, rather than reviving `_no_org.html`.** When the
+database has no org at all, an org-scoped page has nothing to act on. The story says
+"render empty rather than raising", but per-page that is nineteen `None` branches for a
+state none of them can do anything about. `OrgContextMixin` short-circuits once to
+`_no_orgs.html`, which lets `self.org` stay a plain `Org`. It is a **different** page with
+different words: the deleted one meant "you are not a member of an organization yet", which
+no longer has a subject; this one means "the database has none", which is a broken
+deployment. AC #2 is satisfied — the old template and constant are gone.
+
+**A signed-in user with no membership now falls back to the default org too.** The story
+only changes the anonymous branch. Leaving the session branch returning `None` would give a
+*logged-in* user a worse experience than an anonymous one, and would leave "no org"
+ambiguous between two meanings when only one still exists. With this, `None` means exactly
+"no organisation exists", which is what the page says.
+
+**The context values are lazy, and that was a real bug I introduced.** Removing the
+`is_authenticated` early return from the context processor put two or three queries on
+**every** template render in the project — including the API docs pages, which have no
+navigation. The API-schema tests caught it as `RuntimeError: Database access not allowed`.
+`SimpleLazyObject` restores the previous behaviour for pages that never read the values.
+
+**`get_user_orgs` was renamed to `get_switchable_orgs`.** It no longer filters by
+membership, so the old name lied. It keeps an ignored `user` parameter as the documented
+seam for OIDC-supplied identity to narrow it again.
+
+**`is_global_admin` returns `True` for anonymous but still queries for a real user.** A
+blanket `True` would hide a bug the day identity comes back; the membership answer stays
+truthful for a Django-admin session.
+
+### Two defects found by the tests, both real
+
+**Deleting an `Org` in a test blows up in a full run but passes in isolation.**
+`_ScopedThing` in `test_common_models.py` is a table-less model with an `org` FK, so
+`Org.delete()` drags it into the cascade collector — but only once that module has been
+imported. My first version of the switcher test deleted the seeded org and hit exactly
+this. Rewritten to never delete an Org, with the trap recorded in the test so nobody
+reintroduces it.
+
+**A 404 body stopped being byte-identical, and it was not a leak.** With more orgs now
+switchable, the switcher renders on the 404 page, and its hidden `next` field echoes the
+requested path. `test_cross_org_and_unknown_results_are_byte_identical` failed on that. The
+path is the caller's own input and tells them nothing, so it is masked alongside the CSRF
+token — with the reasoning written down, because weakening that assertion casually would
+retire a real AD-2 guard.
+
+### Where the story was stale, and what I did instead
+
+It was written before Stories 21.19-21.23 landed, so three instructions no longer applied:
+
+- **Task 4's "update the SPA catch-all's negative lookahead"** — Story 21.19 deleted the
+  catch-all. Removing the routes now simply makes `/login` and `/register` **404**, which is
+  correct and is asserted.
+- **"`AuthMeView` still has a consumer (the SPA)"** — the SPA is gone. I kept the endpoint
+  anyway: it is part of the `/api/v1/` contract AC #9 freezes and is documented. It now
+  answers for an anonymous caller with a null identity rather than raising on
+  `AnonymousUser`.
+- **Task 9's "deep documentation reconciliation is Story 21.21's job"** — 21.21 already ran,
+  so the docs sweep had to happen here. `docs/api/authentication.md` was rewritten (the three
+  deleted endpoints are listed as removed rather than silently dropped, so a reader with an
+  older copy learns they went on purpose), and the accounts guide, developer architecture,
+  how-to, README, and user-guide index now describe an open app.
+
+**AC #9 and AC #6 are in tension, and I read it this way:** AC #9 freezes the `/api/v1/`
+contract; AC #6 deletes three `/api/v1/auth/` endpoints. The freeze governs what removing
+the *permission class* may change — paths and field names — not the three endpoints AC #6
+names explicitly. Nothing else in the contract moved.
+
+**A prominent warning is now on the README, the accounts guide, and the developer
+architecture page**, because an application that answers every request from anyone is not
+something a reader should have to infer. Each says the same thing: deploy only on a trusted
+network until host-supplied identity lands.
+
+### Still open
+
+- **Epics 17 and 18 are `blocked-needs-correct-course`** (AC #11), with the reason recorded
+  in `sprint-status.yaml`: 17.2-17.5 assume login screens that no longer exist, and 17.8's
+  "cut over from local password auth" has nothing left to cut over from.
+- **Story 21.23's authorisation matrix was deleted, as that story predicted.** It asserted
+  the rules this one removed. Its replacement is `test_open_access.py`, which asserts the
+  opposite rule over the same routes, plus the cross-org and CSRF guards that survived.
+- Unchanged from before: the `beat_schedule` maintenance tasks are absent from the Celery
+  registry; `solution-design.md` and `architecture-diagrams.html` carry Story 21.20's
+  not-reconciled notices; AD-9 needs an Epic 20 correct-course; the `.pptx`/`.pdf` decks need
+  re-rendering; and Story 21.23 AC #4's product-owner walkthrough plus Story 21.18 AC #5's
+  visual review are still outstanding.
 ### File List
+
+**New (3)**
+- `src/django_apps/inventory/migrations/0003_seed_default_org.py` — seeds
+  "Enterprise Wells Fargo Technology"
+- `src/django_service/templates/_no_orgs.html` — the no-organisations-exist page
+- `tests/unit/test_open_access.py` (125 cases)
+
+**Deleted (8)**
+- `src/django_service/templates/_no_org.html`,
+  `src/django_apps/inventory/templates/inventory/auth/{login,register}.html`
+- `tests/unit/{test_access_control,test_auth_pages,test_auth,test_registration,test_route_authorization_matrix}.py`
+
+**Modified (~35)**
+- `inventory/common/access.py` — mixins removed, `OrgContextMixin` added,
+  `get_org_scoped_object_or_404` retained
+- `inventory/users/{auth,selectors,services,pages,views,urls,forms,authentication}.py`
+- `inventory/sbom/{pages,forms}.py` — the org field on upload
+- `inventory/urls_pages.py`, `inventory/templates/inventory/{sbom/upload,sbom/history,orgs/hub,keys/list}.html`
+- `django_service/{views,context_processors}.py`,
+  `django_service/templates/{base,_nav,_org_switcher}.html`
+- `config/settings/base.py` — `INVENTORY_DEFAULT_ORG_SLUG`, `AllowAny`, login settings removed
+- `tests/unit/conftest.py` and 16 test modules
+- `README.md`, `docs/api/authentication.md`, `docs/user-guide/{index,accounts-and-organizations}.md`,
+  `docs/developer/architecture.md`, `docs/how-to/manage-organization.md`
+- `ARCHITECTURE-SPINE.md` (AD-14 amended, Deferred entry added),
+  `sprint-status.yaml` (Epics 17 and 18 blocked)
+## Change Log
+
+| Date | Change |
+|---|---|
+| 2026-08-18 | Removed the app's own authentication outright: the login/register/logout pages and DRF endpoints, the three access-control mixins, and `HasSessionOrApiKey` are deleted, and every page and endpoint is open. An anonymous caller acts as a seeded default org — **Enterprise Wells Fargo Technology**, per product-owner direction — and admin capability is universal. Replaced the nineteen per-class gates with one non-gating `OrgContextMixin` so `self.org` keeps its type, and added a distinct no-organisations-exist page rather than reviving the deleted zero-org state. Added an **Organization field to the upload form**, sourced from the same selector as the switcher, so a job is filed against an explicit choice rather than an inferred session value. Org isolation (AD-2), API keys (AD-8), and CSRF are all retained and asserted. Amended AD-14 with a dated note and blocked Epics 17 and 18 for re-authoring. `pixi run ci` exit 0; 839 tests at 96.02%. |

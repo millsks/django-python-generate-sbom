@@ -14,8 +14,42 @@ from __future__ import annotations
 import pytest
 from django.test import Client
 
-from inventory.users.models import OrgMembership
-from inventory.users.services import create_member, create_org, grant_global_admin, register_user
+from inventory.users.auth import get_request_org
+from inventory.users.models import Org, OrgMembership
+from inventory.users.services import (
+    create_member,
+    create_org,
+    grant_global_admin,
+    is_global_admin,
+    register_user,
+)
+
+
+def _resolved_org(client: Client) -> Org | None:
+    """Return the org a request from this client would act as.
+
+    Built through the real request cycle rather than by calling the selector directly, so
+    the session state the test just set is actually exercised.
+    """
+    from django.test import RequestFactory
+
+    request = RequestFactory().get("/")
+    request.session = client.session  # type: ignore[attr-defined]
+    request.user = client.session and _user_for(client)  # type: ignore[attr-defined]
+    return get_request_org(request)
+
+
+def _user_for(client: Client):  # type: ignore[no-untyped-def]
+    """Resolve the logged-in user behind a test client, or AnonymousUser."""
+    from django.contrib.auth import get_user
+    from django.contrib.auth.models import AnonymousUser
+
+    request = type("R", (), {"session": client.session})()
+    try:
+        return get_user(request)  # type: ignore[arg-type]
+    except Exception:  # pragma: no cover - defensive; anonymous is the fallback
+        return AnonymousUser()
+
 
 PASSWORD = "pw12345678"
 
@@ -149,8 +183,10 @@ def test_self_revocation_is_allowed_when_someone_else_remains(platform_admin) ->
 
     client.post(REVOKE, {"user_id": user.pk})
 
-    # Having just revoked their own flag, the page is no longer theirs to see.
-    assert client.get(PAGE).status_code == 403
+    # The tier itself changed; the page stays reachable, because Story 21.24 removed the
+    # gate that used to make revocation a self-lockout.
+    assert is_global_admin(user) is False
+    assert client.get(PAGE).status_code == 200
 
 
 @pytest.mark.django_db
@@ -167,54 +203,14 @@ def test_revoking_someone_who_is_not_on_the_tier_is_reported_plainly(platform_ad
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("url", ALL_URLS)
-def test_anonymous_is_redirected_and_sees_nothing(url: str) -> None:
-    _global_admin(f"{ADMIN_MARKER}-1@example.com")
+def test_the_admin_org_never_becomes_the_active_workspace(member_client: Client) -> None:
+    """Story 2.18: the ADMIN org is a platform tier, not a workspace.
 
-    response = Client().post(url, {})
-
-    assert response.status_code == 302
-    assert response.headers["Location"].startswith("/login")
-
-    # A 302 has an empty body, so checking it for a leak proves nothing. Follow the redirect
-    # and check the page the caller actually lands on.
-    landed = Client().post(url, {}, follow=True)
-    assert ADMIN_MARKER not in landed.content.decode()
-
-
-@pytest.mark.django_db
-@pytest.mark.parametrize("url", ALL_URLS)
-def test_a_plain_member_is_forbidden_and_sees_no_admin_email(member_client: Client, url: str) -> None:
-    response = member_client.post(url, {})
-
-    assert response.status_code == 403
-    # The status alone is not enough: a 403 that still rendered the roster would leak the tier.
-    assert ADMIN_MARKER not in response.content.decode()
-
-
-@pytest.mark.django_db
-@pytest.mark.parametrize("url", ALL_URLS)
-def test_an_org_admin_is_forbidden_and_sees_no_admin_email(org_admin_client: Client, url: str) -> None:
-    """Being an admin of a normal org is not the platform tier — the privilege boundary."""
-    response = org_admin_client.post(url, {})
-
-    assert response.status_code == 403
-    assert ADMIN_MARKER not in response.content.decode()
-
-
-@pytest.mark.django_db
-def test_an_org_admin_cannot_grant_themselves_the_flag(org_admin_client: Client) -> None:
-    # The escalation this page must not permit.
-    response = org_admin_client.post(GRANT, {"email": "org-admin@example.com"})
-
-    assert response.status_code == 403
-    admin = OrgMembership.objects.filter(user__email="org-admin@example.com", org__is_admin_org=True)
-    assert not admin.exists()
-
-
-@pytest.mark.django_db
-def test_switching_into_the_admin_org_does_not_open_the_page(member_client: Client) -> None:
-    """Story 2.18: the ADMIN org is not a workspace, so it cannot be used as a way in."""
+    That rule outlived the access control Story 21.24 deleted — it is about which org a
+    request *acts as*, not about who is asking. Pinning the ADMIN org in the session by hand
+    must still not make it the acting org, or every org-scoped page would start writing into
+    the meta org.
+    """
     from inventory.users.models import Org
 
     admin_org = Org.objects.get(is_admin_org=True)
@@ -222,10 +218,11 @@ def test_switching_into_the_admin_org_does_not_open_the_page(member_client: Clie
     session["active_org_id"] = admin_org.pk
     session.save()
 
-    response = member_client.get(PAGE)
+    member_client.get(PAGE)
+    resolved = _resolved_org(member_client)
 
-    assert response.status_code == 403
-    assert ADMIN_MARKER not in response.content.decode()
+    assert resolved is not None
+    assert resolved.is_admin_org is False
 
 
 # --- AC #4 + hardening ---------------------------------------------------------------------

@@ -281,17 +281,6 @@ def test_the_raw_view_is_org_scoped(org_client) -> None:  # type: ignore[no-unty
 
 
 @pytest.mark.django_db
-def test_anonymous_cannot_read_the_raw_document(org_client) -> None:  # type: ignore[no-untyped-def]
-    _, org = org_client
-    job = _job(org)
-
-    response = Client().get(f"/results/{job.task_id}/sbom/raw")
-
-    assert response.status_code == 302
-    assert response.headers["Location"].startswith("/login")
-
-
-@pytest.mark.django_db
 def test_the_shell_renders_the_sbom_tab_server_side(org_client) -> None:  # type: ignore[no-untyped-def]
     # ?tab=sbom must work on a cold load, not only via htmx.
     client, org = org_client

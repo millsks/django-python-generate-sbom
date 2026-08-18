@@ -172,7 +172,13 @@ def test_an_unrecognised_tab_partial_is_404(org_client) -> None:  # type: ignore
 
 @pytest.mark.django_db
 def test_cross_org_and_unknown_results_are_byte_identical(org_client) -> None:  # type: ignore[no-untyped-def]
-    """AD-2. The SPA showed one message for both cases on purpose; so does this."""
+    """AD-2. The SPA showed one message for both cases on purpose; so does this.
+
+    Two things are masked before comparing, and neither is a leak. The CSRF token is
+    re-salted per render. The org switcher's hidden ``next`` field echoes **the path the
+    caller just requested** — their own input, which tells them nothing they did not
+    already know. What must not differ is anything derived from whether the job exists.
+    """
     client, _ = org_client
     outsider = register_user(email="outsider@example.com", password=PASSWORD)
     other_org = create_org(name="Other", admin_user=outsider)
@@ -181,8 +187,12 @@ def test_cross_org_and_unknown_results_are_byte_identical(org_client) -> None:  
     cross_org = client.get(f"/results/{theirs.task_id}")
     missing = client.get("/results/00000000-0000-0000-0000-000000000000")
 
+    def normalise(response: object) -> str:
+        body = CSRF.sub("MASKED", response.content.decode())  # type: ignore[attr-defined]
+        return re.sub(r"/results/[0-9a-f-]{36}", "/results/REQUESTED", body)
+
     assert cross_org.status_code == missing.status_code == 404
-    assert CSRF.sub("MASKED", cross_org.content.decode()) == CSRF.sub("MASKED", missing.content.decode())
+    assert normalise(cross_org) == normalise(missing)
 
 
 @pytest.mark.django_db
@@ -338,14 +348,3 @@ def test_a_running_job_still_shows_the_progress_gate(org_client) -> None:  # typ
 
     assert 'hx-trigger="every 5s"' in html
     assert "Total packages" not in html
-
-
-@pytest.mark.django_db
-def test_anonymous_is_redirected_to_login(org_client) -> None:  # type: ignore[no-untyped-def]
-    _, org = org_client
-    job = _job(org)
-
-    response = Client().get(f"/results/{job.task_id}")
-
-    assert response.status_code == 302
-    assert response.headers["Location"].startswith("/login")

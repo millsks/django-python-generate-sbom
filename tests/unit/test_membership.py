@@ -29,7 +29,10 @@ def _register_with_org(email: str, org_name: str, password: str = "pw12345678") 
 
 def _client(email: str, password: str = "pw12345678") -> APIClient:
     client = APIClient()
-    client.post("/api/v1/auth/login/", {"email": email, "password": password}, format="json")
+    # Story 21.24 deleted POST /api/v1/auth/login/. Django's session login still works
+    # (the user model and SessionAuthentication both survive), so these tests keep
+    # exercising a real principal rather than the anonymous default-org path.
+    client.login(email=email, password=password)
     return client
 
 
@@ -143,25 +146,6 @@ def test_create_user_duplicate_email_rejected() -> None:
 
 
 @pytest.mark.django_db
-def test_create_user_forbidden_for_non_admin() -> None:
-    """create-user is admin-gated: a plain member gets 403 (Story 2.10)."""
-    _register_with_org("alice@example.com", "Alice")
-    admin = _client("alice@example.com")
-    _add_member(admin, "bob@example.com")
-    bob_client = _client("bob@example.com")
-
-    response = bob_client.post(
-        "/api/v1/orgs/members/create-user/",
-        {"email": "newbie@example.com", "temp_password": "temp12345"},
-        format="json",
-    )
-
-    assert response.status_code == 403
-    assert response.data["code"] == "not_admin"
-    assert not User.objects.filter(email="newbie@example.com").exists()
-
-
-@pytest.mark.django_db
 def test_remove_member() -> None:
     _register_with_org("alice@example.com", "Alice")
     client = _client("alice@example.com")
@@ -209,18 +193,6 @@ def test_promote_non_member_is_rejected() -> None:
 
     assert response.status_code == 400
     assert response.data["code"] == "not_a_member"
-
-
-@pytest.mark.django_db
-def test_promote_admin_requires_admin() -> None:
-    _register_with_org("alice@example.com", "Alice")
-    admin_client = _client("alice@example.com")
-    bob = _add_member(admin_client, "bob@example.com")
-
-    response = _client("bob@example.com").post("/api/v1/orgs/promote-admin/", {"user_id": bob.pk}, format="json")
-
-    assert response.status_code == 403
-    assert response.data["code"] == "not_admin"
 
 
 @pytest.mark.django_db
@@ -318,20 +290,6 @@ def test_demote_is_per_org_only() -> None:
 
 
 @pytest.mark.django_db
-def test_demote_requires_admin() -> None:
-    """demote-admin is admin-gated: a plain member gets 403 (Story 2.20)."""
-    alice = _register_with_org("alice@example.com", "Alice")
-    admin_client = _client("alice@example.com")
-    _add_member(admin_client, "bob@example.com")
-
-    response = _client("bob@example.com").post("/api/v1/orgs/demote-admin/", {"user_id": alice.pk}, format="json")
-
-    assert response.status_code == 403
-    assert response.data["code"] == "not_admin"
-    assert OrgMembership.objects.get(org__slug="alice", user=alice).role == "admin"
-
-
-@pytest.mark.django_db
 def test_demote_non_member_rejected() -> None:
     """Demoting a user who is not a member of the org returns not_a_member (Story 2.20)."""
     _register_with_org("alice@example.com", "Alice")
@@ -381,23 +339,6 @@ def test_list_members_is_org_scoped_and_flags_admin() -> None:
     emails = {m["email"] for m in response.data["members"]}
     assert emails == {"alice@example.com", "bob@example.com"}
     assert response.data["is_admin"] is True
-
-
-@pytest.mark.django_db
-def test_non_admin_blocked_from_admin_actions() -> None:
-    _register_with_org("alice@example.com", "Alice")
-    admin_client = _client("alice@example.com")
-    _add_member(admin_client, "bob@example.com")
-
-    bob_client = _client("bob@example.com")
-    add = bob_client.post("/api/v1/orgs/members/", {"email": "eve@example.com"}, format="json")
-    roster = bob_client.get("/api/v1/orgs/members/")
-
-    assert add.status_code == 403
-    assert add.data["code"] == "not_admin"
-    # The roster is admin-only now (Story 2.17): a non-admin is refused, not just flagged.
-    assert roster.status_code == 403
-    assert roster.data["code"] == "not_admin"
 
 
 # --- Story 2.9: membership edge cases -------------------------------------

@@ -61,7 +61,7 @@
           </a>
 
           <div class="ms-auto d-flex align-items-center gap-1">
-            {% if user.is_authenticated %}{% include "_org_switcher.html" %}{% endif %}
+            {% include "_org_switcher.html" %}
             {% if api_docs_url %}
               <a class="btn btn-link link-body-emphasis p-2" href="{{ api_docs_url }}"
                  target="_blank" rel="noopener noreferrer" aria-label="API docs" title="API docs">
@@ -83,36 +83,6 @@
               {% icon 'chrome.theme_dark' 18 %}
             </button>
 
-            {% if user.is_authenticated %}
-              <div class="dropdown">
-                <button class="btn btn-link link-body-emphasis p-2 d-flex align-items-center gap-2 dropdown-toggle"
-                        type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                  {% icon 'chrome.account' 20 %}
-                  <span class="d-none d-lg-inline small">{{ user.email }}</span>
-                </button>
-                <ul class="dropdown-menu dropdown-menu-end">
-                  <li><span class="dropdown-item-text small text-body-secondary">{{ user.email }}</span></li>
-                  {% if active_org %}
-                    <li><span class="dropdown-item-text small text-body-secondary">{{ active_org.name }}</span></li>
-                  {% endif %}
-                  <li><hr class="dropdown-divider"></li>
-                  <li>
-                    {% comment %} POST, not a link (Story 21.5 AC #5): a GET-reachable logout
-                      can be triggered by any link, image, or prefetcher on a page the user
-                      visits. {% endcomment %}
-                    <form method="post" action="{% url 'ui-logout' %}">
-                      {% csrf_token %}
-                      <button type="submit" class="dropdown-item d-flex align-items-center gap-2">
-                        {% icon 'action.logout' 16 %}
-                        Sign out
-                      </button>
-                    </form>
-                  </li>
-                </ul>
-              </div>
-            {% else %}
-              <a class="btn btn-sm btn-primary ms-1" href="{% url 'ui-login' %}">Sign in</a>
-            {% endif %}
           </div>
         </div>
       </nav>
@@ -120,22 +90,23 @@
 
     <div class="container-fluid flex-grow-1">
       <div class="row h-100">
-        {% if user.is_authenticated %}
-          <aside class="col-md-3 col-lg-2 d-none d-md-block border-end py-3">
-            {% include "_nav.html" %}
-          </aside>
+        {% comment %} The nav renders unconditionally since Story 21.24: there is no
+          authentication state left to gate it on. `_nav.html` is included TWICE — the md+
+          sidebar and the mobile offcanvas — precisely so the two cannot drift; edit the
+          partial, never these two include sites. {% endcomment %}
+        <aside class="col-md-3 col-lg-2 d-none d-md-block border-end py-3">
+          {% include "_nav.html" %}
+        </aside>
 
-          <div class="offcanvas offcanvas-start" tabindex="-1" id="mobile-nav" aria-labelledby="mobile-nav-label">
-            <div class="offcanvas-header">
-              <h2 class="offcanvas-title h6" id="mobile-nav-label">{{ product_name_short }}</h2>
-              <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-            </div>
-            <div class="offcanvas-body">{% include "_nav.html" %}</div>
+        <div class="offcanvas offcanvas-start" tabindex="-1" id="mobile-nav" aria-labelledby="mobile-nav-label">
+          <div class="offcanvas-header">
+            <h2 class="offcanvas-title h6" id="mobile-nav-label">{{ product_name_short }}</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
           </div>
-        {% endif %}
+          <div class="offcanvas-body">{% include "_nav.html" %}</div>
+        </div>
 
-        <main id="main-content"
-              class="{% if user.is_authenticated %}col-md-9 col-lg-10{% else %}col-12{% endif %} py-3">
+        <main id="main-content" class="col-md-9 col-lg-10 py-3">
           {% if messages %}
             <div aria-live="polite">
               {% for message in messages %}

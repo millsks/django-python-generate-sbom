@@ -31,7 +31,7 @@
           <th scope="col">Prefix</th>
           <th scope="col">Created</th>
           <th scope="col">Last used</th>
-          {% if is_org_admin %}<th scope="col" class="text-end">Actions</th>{% endif %}
+          <th scope="col" class="text-end">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -41,7 +41,6 @@
             <td><code>{{ key.prefix }}&hellip;</code></td>
             <td>{{ key.created|date:"Y-m-d" }}</td>
             <td>{% if key.last_used_at %}{{ key.last_used_at|date:"Y-m-d" }}{% else %}<span class="text-body-secondary">never</span>{% endif %}</td>
-            {% if is_org_admin %}
               <td class="text-end">
                 <form method="post" action="{% url 'ui-key-revoke' %}" class="d-inline"
                       onsubmit="return confirm('Revoke {{ key.name|escapejs }}? Anything using this key stops working immediately.');">
@@ -50,11 +49,10 @@
                   <button type="submit" class="btn btn-sm btn-outline-danger">Revoke</button>
                 </form>
               </td>
-            {% endif %}
           </tr>
         {% empty %}
           <tr>
-            <td colspan="{% if is_org_admin %}5{% else %}4{% endif %}" class="text-body-secondary">
+            <td colspan="5" class="text-body-secondary">
               No active API keys.
             </td>
           </tr>
@@ -63,7 +61,6 @@
     </table>
   </div>
 
-  {% if is_org_admin %}
     <div class="row mt-2">
       <div class="col-12 col-md-7 col-lg-5">
         <div class="card">
@@ -81,9 +78,4 @@
         </div>
       </div>
     </div>
-  {% else %}
-    <p class="small text-body-secondary">
-      Only an organization admin can create or revoke keys.
-    </p>
-  {% endif %}
 {% endblock %}

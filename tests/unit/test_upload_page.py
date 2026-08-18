@@ -34,8 +34,14 @@ def _manifest(name: str = "requirements.txt", content: bytes = REQUIREMENTS) -> 
     return SimpleUploadedFile(name, content, content_type="text/plain")
 
 
-def _payload(**overrides: object) -> dict[str, object]:
+def _payload(org: object, **overrides: object) -> dict[str, object]:
+    """Build a valid POST body.
+
+    ``org`` is required because Story 21.24 added an explicit organization field: with the
+    login removed there is no "active org" to infer, so the choice is made on the form.
+    """
     data: dict[str, object] = {
+        "org": getattr(org, "pk", org),
         "file": _manifest(),
         "application_id": "APP-42",
         "component_name": "billing-service",
@@ -62,11 +68,11 @@ def member_client():  # type: ignore[no-untyped-def]
 
 @pytest.mark.django_db
 def test_the_form_renders_multipart_with_all_five_fields(member_client) -> None:  # type: ignore[no-untyped-def]
-    client, _ = member_client
+    client, _org = member_client
     html = client.get(UPLOAD).content.decode()
 
     assert 'enctype="multipart/form-data"' in html
-    for field in ("file", "application_id", "component_name", "repository_url", "source_branch"):
+    for field in ("org", "file", "application_id", "component_name", "repository_url", "source_branch"):
         assert f'name="{field}"' in html
     # Story 10.x parity: the branch defaults to main.
     assert 'value="main"' in html
@@ -75,7 +81,7 @@ def test_the_form_renders_multipart_with_all_five_fields(member_client) -> None:
 @pytest.mark.django_db
 def test_the_format_choices_come_from_the_backend(member_client) -> None:  # type: ignore[no-untyped-def]
     """Story 6.4's lesson: a hand-kept copy of a choice list is what caused that bug."""
-    client, _ = member_client
+    client, _org = member_client
     html = client.get(UPLOAD).content.decode()
 
     for value, label in OUTPUT_FORMAT_CHOICES:
@@ -91,7 +97,7 @@ def test_output_format_choices_cover_every_supported_format() -> None:
 
 @pytest.mark.django_db
 def test_every_provenance_field_is_required(member_client) -> None:  # type: ignore[no-untyped-def]
-    client, _ = member_client
+    client, _org = member_client
 
     response = client.post(UPLOAD, {"file": _manifest()})
 
@@ -109,7 +115,7 @@ def test_a_valid_upload_creates_a_pending_job_and_redirects(member_client) -> No
     client, org = member_client
 
     with patch(DISPATCH) as dispatch:
-        response = client.post(UPLOAD, _payload())
+        response = client.post(UPLOAD, _payload(org))
 
     job = SBOMJob.objects.get()
     # AC #12: the initial PENDING write is the view/service's sole permitted status write.
@@ -130,7 +136,7 @@ def test_the_manifest_is_stored_with_its_provenance(member_client) -> None:  # t
     client, org = member_client
 
     with patch(DISPATCH):
-        client.post(UPLOAD, _payload())
+        client.post(UPLOAD, _payload(org))
 
     upload = ManifestUpload.objects.get()
     assert upload.org == org
@@ -143,10 +149,10 @@ def test_the_manifest_is_stored_with_its_provenance(member_client) -> None:  # t
 
 @pytest.mark.django_db
 def test_the_selected_output_format_is_mapped_to_the_internal_id(member_client) -> None:  # type: ignore[no-untyped-def]
-    client, _ = member_client
+    client, org = member_client
 
     with patch(DISPATCH):
-        client.post(UPLOAD, _payload(output_format="spdx-2.3"))
+        client.post(UPLOAD, _payload(org, output_format="spdx-2.3"))
 
     assert SBOMJob.objects.get().output_format == OUTPUT_FORMAT_MAP["spdx-2.3"]
 
@@ -156,10 +162,10 @@ def test_the_selected_output_format_is_mapped_to_the_internal_id(member_client) 
 
 @pytest.mark.django_db
 def test_an_unrecognised_manifest_is_a_field_error(member_client) -> None:  # type: ignore[no-untyped-def]
-    client, _ = member_client
+    client, org = member_client
 
     with patch(DISPATCH) as dispatch:
-        response = client.post(UPLOAD, _payload(file=_manifest("notes.txt", b"this is not a manifest\n")))
+        response = client.post(UPLOAD, _payload(org, file=_manifest("notes.txt", b"this is not a manifest\n")))
 
     assert response.status_code == 200
     assert SBOMJob.objects.count() == 0
@@ -176,10 +182,10 @@ def test_an_oversize_file_is_rejected_without_touching_storage(member_client) ->
     rebuilds the UploadedFile server-side, so a faked size is discarded and the real (tiny)
     length is what the validator sees — the check silently never fires.
     """
-    client, _ = member_client
+    client, org = member_client
 
     with patch("inventory.sbom.forms.MAX_MANIFEST_BYTES", 8), patch(DISPATCH) as dispatch:
-        response = client.post(UPLOAD, _payload())
+        response = client.post(UPLOAD, _payload(org))
 
     assert response.status_code == 200
     assert "50 MB limit" in response.content.decode()
@@ -191,14 +197,14 @@ def test_an_oversize_file_is_rejected_without_touching_storage(member_client) ->
 @pytest.mark.django_db
 def test_the_concurrency_gate_refuses_with_retry_guidance(member_client, settings) -> None:  # type: ignore[no-untyped-def]
     """AD-7, and the gate is the SERVICE's — the page must not have its own copy."""
-    client, _ = member_client
+    client, org = member_client
     settings.SBOM_MAX_CONCURRENT_JOBS_PER_ORG = 1
     with patch(DISPATCH):
-        client.post(UPLOAD, _payload())
+        client.post(UPLOAD, _payload(org))
     assert SBOMJob.objects.count() == 1
 
     with patch(DISPATCH) as dispatch:
-        response = client.post(UPLOAD, _payload())
+        response = client.post(UPLOAD, _payload(org))
 
     assert response.status_code == 200
     body = response.content.decode()
@@ -212,9 +218,9 @@ def test_the_concurrency_gate_refuses_with_retry_guidance(member_client, setting
 @pytest.mark.django_db
 def test_a_malformed_repository_url_is_a_field_error(member_client) -> None:  # type: ignore[no-untyped-def]
     # URLField, matching the SPA's type="url" and the serializer.
-    client, _ = member_client
+    client, org = member_client
 
-    response = client.post(UPLOAD, _payload(repository_url="not a url"))
+    response = client.post(UPLOAD, _payload(org, repository_url="not a url"))
 
     assert response.status_code == 200
     assert "Enter a valid URL." in response.content.decode()
@@ -225,46 +231,44 @@ def test_a_malformed_repository_url_is_a_field_error(member_client) -> None:  # 
 
 
 @pytest.mark.django_db
-def test_a_zero_org_user_sees_the_shared_empty_state_instead_of_the_form() -> None:
-    register_user(email="nobody@example.com", password=PASSWORD)
-    client = Client()
-    assert client.login(email="nobody@example.com", password=PASSWORD)
+def test_an_unknown_org_is_a_field_error_rather_than_a_job() -> None:
+    """Was the zero-org denial, which Story 21.24 removed along with the access control.
 
-    response = client.get(UPLOAD)
-
-    assert response.status_code == 200
-    body = response.content.decode()
-    assert "No organization yet" in body
-    assert 'enctype="multipart/form-data"' not in body
-
-
-@pytest.mark.django_db
-def test_a_zero_org_user_cannot_submit_by_posting() -> None:
+    The organization is now chosen on the form, so the thing worth protecting is that the
+    field cannot be hand-edited into filing a job against an org that does not exist.
+    """
     register_user(email="nobody@example.com", password=PASSWORD)
     client = Client()
     assert client.login(email="nobody@example.com", password=PASSWORD)
 
     with patch(DISPATCH) as dispatch:
-        client.post(UPLOAD, _payload())
+        response = client.post(UPLOAD, _payload(999999))
 
+    assert response.status_code == 200  # re-rendered form, not a redirect
     assert SBOMJob.objects.count() == 0
     dispatch.assert_not_called()
 
 
 @pytest.mark.django_db
-def test_anonymous_is_redirected_to_login() -> None:
-    response = Client().get(UPLOAD)
-    assert response.status_code == 302
-    assert response.headers["Location"].startswith("/login")
+def test_the_admin_org_is_not_offered_as_an_upload_target(member_client) -> None:  # type: ignore[no-untyped-def]
+    """Story 2.12: the ADMIN org is a platform tier, never a workspace to file jobs into."""
+    from inventory.users.models import Org
+
+    client, _ = member_client
+    admin_org = Org.objects.get(is_admin_org=True)
+
+    html = client.get(UPLOAD).content.decode()
+
+    assert f'value="{admin_org.pk}"' not in html
 
 
 @pytest.mark.django_db
 def test_submission_requires_a_csrf_token(member_client) -> None:  # type: ignore[no-untyped-def]
-    _, _ = member_client
+    _, org = member_client
     strict = Client(enforce_csrf_checks=True)
     assert strict.login(email="dev@example.com", password=PASSWORD)
 
-    assert strict.post(UPLOAD, _payload()).status_code == 403
+    assert strict.post(UPLOAD, _payload(org)).status_code == 403
     assert SBOMJob.objects.count() == 0
 
 
@@ -279,7 +283,7 @@ def test_a_plain_member_can_submit(member_client) -> None:  # type: ignore[no-un
     assert client.login(email="plain@example.com", password=PASSWORD)
 
     with patch(DISPATCH):
-        response = client.post(UPLOAD, _payload())
+        response = client.post(UPLOAD, _payload(org))
 
     assert response.status_code == 302
     assert SBOMJob.objects.count() == 1

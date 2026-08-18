@@ -396,17 +396,6 @@ def test_exports_are_org_scoped_and_indistinguishable_from_missing(org_client) -
 
 
 @pytest.mark.django_db
-def test_anonymous_cannot_export(org_client) -> None:  # type: ignore[no-untyped-def]
-    _, org = org_client
-    job = _job(org, reports=ALL_REPORTS)
-
-    response = Client().get(f"/results/{job.task_id}/export.xlsx")
-
-    assert response.status_code == 302
-    assert response.headers["Location"].startswith("/login")
-
-
-@pytest.mark.django_db
 def test_an_unknown_export_kind_is_404(org_client) -> None:  # type: ignore[no-untyped-def]
     client, org = org_client
     job = _job(org, reports=ALL_REPORTS)

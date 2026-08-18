@@ -64,7 +64,10 @@ def test_generate_persist_download_roundtrip(settings: pytest.FixtureRequest, tm
     assert document["spdxVersion"] == "SPDX-2.3"
 
     client = APIClient()
-    client.post("/api/v1/auth/login/", {"email": "alice@example.com", "password": "pw12345678"}, format="json")
+    # Story 21.24 deleted POST /api/v1/auth/login/. Django's session login still works
+    # (the user model and SessionAuthentication both survive), so these tests keep
+    # exercising a real principal rather than the anonymous default-org path.
+    client.login(email="alice@example.com", password="pw12345678")
     response = client.get(f"/api/v1/sbom/result/{job.task_id}/")
     assert response.status_code == 303
     assert job.result_key in response.headers["Location"]

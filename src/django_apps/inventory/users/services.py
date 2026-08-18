@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import cast
 
 import structlog
+from django.contrib.auth.models import AnonymousUser
 from django.db import transaction
 from django.utils import timezone
 from django.utils.text import slugify
@@ -26,10 +27,24 @@ def get_the_admin_org() -> Org | None:
     return Org.objects.filter(is_admin_org=True).first()
 
 
-def is_global_admin(user: UserT) -> bool:
-    """Return True if ``user`` is a member of the ADMIN org (a global admin)."""
+def is_global_admin(user: UserT | AnonymousUser) -> bool:
+    """Return True if ``user`` holds the platform-admin tier.
+
+    Story 21.24 removed the app's own authentication, so an **anonymous** caller — which is
+    now the ordinary case — is treated as a global admin: with no principal there is nobody
+    to withhold the tier from, and the platform pages must stay reachable.
+
+    The membership query is kept for a **real** authenticated user (Django's ``/admin/``
+    still has a login) so the answer stays truthful there rather than becoming a blanket
+    ``True`` that hides a bug the day identity comes back from OIDC (Epics 17-18).
+    """
+    if not getattr(user, "is_authenticated", False):
+        return True
     admin_org = get_the_admin_org()
-    return admin_org is not None and OrgMembership.objects.filter(org=admin_org, user=user_ref(user)).exists()
+    # The guard above makes the cast sound; `is_authenticated` is a plain bool property
+    # rather than a TypeGuard, so it does not narrow the union for mypy.
+    real_user = cast("UserT", user)
+    return admin_org is not None and OrgMembership.objects.filter(org=admin_org, user=user_ref(real_user)).exists()
 
 
 def _global_admins() -> list[UserT]:

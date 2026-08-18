@@ -87,7 +87,10 @@ def test_global_admin_is_admin_on_org_never_joined() -> None:
     create_org(name="Team", admin_user=alice)  # auto-adds root as admin
 
     client = APIClient()
-    client.post("/api/v1/auth/login/", {"email": "root@example.com", "password": "pw12345678"}, format="json")
+    # Story 21.24 deleted POST /api/v1/auth/login/. Django's session login still works
+    # (the user model and SessionAuthentication both survive), so these tests keep
+    # exercising a real principal rather than the anonymous default-org path.
+    client.login(email="root@example.com", password="pw12345678")
     switched = client.post("/api/v1/orgs/switch/", {"slug": "team"}, format="json")
     assert switched.status_code == 200
 
@@ -105,7 +108,7 @@ def test_only_global_admin_can_grant_global_admin() -> None:
 
     # A non-global-admin (alice) is rejected.
     alice_client = APIClient()
-    alice_client.post("/api/v1/auth/login/", {"email": "alice@example.com", "password": "pw12345678"}, format="json")
+    alice_client.login(email="alice@example.com", password="pw12345678")
     denied = alice_client.post("/api/v1/admin/global-admins/", {"email": "bob@example.com"}, format="json")
     assert denied.status_code == 403
     assert denied.data["code"] == "not_global_admin"
@@ -113,7 +116,7 @@ def test_only_global_admin_can_grant_global_admin() -> None:
 
     # A global admin (root) may grant it.
     root_client = APIClient()
-    root_client.post("/api/v1/auth/login/", {"email": "root@example.com", "password": "pw12345678"}, format="json")
+    root_client.login(email="root@example.com", password="pw12345678")
     granted = root_client.post("/api/v1/admin/global-admins/", {"email": "bob@example.com"}, format="json")
     assert granted.status_code == 201
     assert is_global_admin(bob) is True
@@ -146,7 +149,10 @@ def test_grant_global_admin_noop_without_admin_org() -> None:
 
 def _login(email: str, password: str = "pw12345678") -> APIClient:
     client = APIClient()
-    client.post("/api/v1/auth/login/", {"email": email, "password": password}, format="json")
+    # Story 21.24 deleted POST /api/v1/auth/login/. Django's session login still works
+    # (the user model and SessionAuthentication both survive), so these tests keep
+    # exercising a real principal rather than the anonymous default-org path.
+    client.login(email=email, password=password)
     return client
 
 

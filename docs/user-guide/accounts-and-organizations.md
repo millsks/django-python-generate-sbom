@@ -1,104 +1,66 @@
 # Accounts & Organizations
 
-Most work in the app belongs to an **organization**. Your jobs, SBOMs, API keys, and
-fellow members are all scoped to the organization you are currently acting in. A new
-account starts with **no** organization — an admin adds you (or, if you are a platform
-admin, you create one) before there is anything to act in.
+Most work in the app belongs to an **organization**. Jobs, SBOMs, and API keys are all
+scoped to the organization they were created in, and that separation still holds
+completely — one organization's data is never visible from another.
 
-## Roles at a glance
+!!! warning "This application does not require you to sign in"
 
-The app has three role tiers:
+    There is no login, no registration, and no password. Every page and every API endpoint
+    is open to anyone who can reach the server, and every action — including creating
+    organizations, managing members, and issuing API keys — is available to everyone.
 
-| Role | What they can do |
-|---|---|
-| **Member** | Upload manifests, generate SBOMs, and read reports in the organizations they belong to. |
-| **Organization admin** | Everything a member can, plus manage that organization's membership (add, remove, promote, and demote people) and its API keys. Admin of one organization does not grant admin of another. |
-| **Global admin** | A platform-wide administrator. Global admins belong to a system **Admin** organization and are automatically an admin of **every** organization — existing and any created later. Only global admins can create organizations and manage the global-admin tier. |
+    This is deliberate and temporary. Identity will be supplied by the platform the app is
+    hosted on, through single sign-on and group membership. Until that lands, **deploy this
+    application only on a network where every user is already trusted.**
 
-## Register
+## Organizations
 
-1. Open the app, choose **Sign in** at the top-right, then **Create one** on the login
-   page. (You can also go straight to `/register`.)
-2. Provide your account details and submit.
-3. Registration creates your user account only — no organization is created for you.
-4. You are then sent to the login page automatically. If you would rather not wait, use
-   the **Go to login now** link on the confirmation message.
+An organization is a container for work, not a permission boundary between people. A
+default organization is created when the database is first set up, and you can create
+more at any time.
 
-## Log in
-
-1. Choose **Sign in** at the top-right of the header.
-2. Enter your credentials and submit.
-3. On success you are taken to the page you were trying to reach (or the home page if you
-   went straight to the login page).
-
-!!! tip "Protected pages remember where you were going"
-    If you open a page that requires signing in (for example a results link someone
-    shared), you are sent to the login page first and then returned to that original page
-    once you sign in.
-
-## No organization yet
-
-Because registration no longer creates an organization for you, the first time you sign
-in you belong to none. Until you are in an organization you are **restricted to the home
-page** — the organization-scoped destinations (Upload, History, API Keys) show a shared
-empty state that reads:
-
-> You're not in an organization yet — create one or ask an admin to add you.
-
-For most users the way forward is to **ask an existing organization's admin to add you**
-using the email address you registered with. Once they add you, the organization appears
-and you can start working in it.
-
-!!! note "Creating an organization is reserved for platform admins"
-    Only **global admins** can create organizations (see below), so a **Create
-    organization** button appears on that empty state only for them. A regular member
-    simply waits to be added — there is no self-service org creation.
+The organization you are "acting in" decides which jobs and keys you see, and which
+organization a new upload is filed against. You choose it in two places: the
+**organization switcher** in the header, and the **Organization** field on the upload
+form.
 
 ## Create an organization
 
-Creating an organization is restricted to **global admins**. If you are a global admin,
-you can create one at any time:
+Open the **Organization** page from the navigation and create one by name. Creating an
+organization used to be restricted to platform administrators; with sign-in removed it is
+available to anyone.
 
-1. Open the **organization switcher** in the top bar and choose **New organization**. If
-   you have no organizations yet, this appears as a **Create organization** button
-   instead (the same button also appears on the "no organization yet" empty state).
-2. Enter a name in the **Create an organization** dialog and choose **Create**.
-3. You become the organization's admin, and the app switches you into it right away.
-
-The system **Admin** organization is never shown in the switcher — it is an internal
-platform-admin tier, not a workspace you act in.
+The system **Admin** organization is never shown in the switcher and can never be selected
+as a workspace — it is an internal tier, not somewhere work is filed.
 
 ## Switch organizations
 
-If you belong to more than one organization, use the **organization switcher** in the top
-bar to change which one you are acting in. The active organization determines which jobs,
-SBOMs, and API keys you see. Switching takes effect immediately across the app.
+Use the **organization switcher** in the header to change which organization you are
+acting in. It determines which jobs, SBOMs, and API keys you see, and preselects the
+**Organization** field when you upload. Switching takes effect immediately.
 
-!!! info "The switcher hides when you have a single organization"
-    If you belong to exactly one organization there is nothing to switch to, so the
-    switcher just shows the organization's name as plain text instead of a dropdown. Your
-    active organization is also shown in the account menu and at the bottom of the side
-    navigation.
+!!! info "The switcher hides when only one organization exists"
+    With a single organization there is nothing to switch to, so the control is not
+    rendered at all.
 
-## Members (admins)
+## Members
 
-Organization admins see a **Members** link in the navigation. From there an admin can add
-people to the organization, remove them, and **promote** a member to admin or **demote**
-an admin back to member. Non-admins do not see this link. See
+The **Members** page lists an organization's members and lets you add, remove, promote,
+and demote them. Membership records still exist and are still editable, but they no longer
+control access — anyone can reach any page. See
 [Invite a member / switch organizations](../how-to/manage-organization.md) for the
 details.
 
 ## Platform administrators
 
-Platform (**global**) administrators belong to a system-wide **Admin** organization and
-oversee every organization in the app. A global admin is automatically an admin of all
-organizations — existing ones and any created later — so they can help manage membership
-anywhere, and they are the only role that can create organizations.
+The **Admin** organization records a platform-administrator tier. Its members are
+automatically an admin of every organization. The tier is still tracked and still
+editable; like membership, it no longer gates anything.
 
 ### Managing the global-admin tier
 
-Global admins see a **Global Admins** link in the navigation (visible to global admins
-only). It opens a management screen where a global admin can:
+The **Global Admins** page lets you:
 
 - **See the current global admins**, listed by email.
 - **Grant global admin** to another user by entering their registered email. The person
@@ -108,14 +70,6 @@ only). It opens a management screen where a global admin can:
   demotes them to a plain member of every other organization. As a safeguard, you cannot
   revoke the **last** remaining global admin — the app blocks it with
   **"There must always be at least one global admin."**
-
-## Log out
-
-Open the **account menu** in the top-right of the header and choose **Sign out**. You are
-returned to the login page and the header reverts to its signed-out **Sign in** button.
-
-Signing out is a form submission rather than a link, so it cannot be triggered by
-something else on the page prefetching a URL.
 
 !!! info "Screenshots"
     Not captured. See the note in the [User Guide index](index.md).

@@ -1,119 +1,70 @@
-"""Server-side access control for the server-rendered pages (Story 21.4).
+"""Org context for the server-rendered pages, and the org-scoped lookup helper.
 
-Replaces four **client-side** React route guards (`ProtectedRoute`, `OrgRoute`,
-`AdminRoute`, `GlobalAdminRoute`) with enforcement the browser cannot bypass. The SPA's
-own guards described themselves as "UX, not the security boundary" — the API was the
-boundary. Server-rendered pages have no such second line, so these mixins *are* the
-boundary and are tested as such.
+**This module no longer performs access control.** Story 21.24 removed the app's own
+authentication outright: every page and every endpoint is reachable without logging in, and
+identity becomes the *host platform's* responsibility, supplied via OIDC and group claims
+when `inventory` is contributed to it (Epics 17-18). The three mixins that lived here —
+``OrgMemberRequiredMixin``, ``OrgAdminRequiredMixin``, ``GlobalAdminRequiredMixin`` — and the
+shared zero-org state they rendered are deleted, not disabled. ``git log`` has the diff if
+the enforcement is ever wanted back, but it would be the wrong shape for the destination:
+it was built on a Django session plus local ``OrgMembership`` roles.
 
-Three rules, and the reasoning behind each:
+**Tenancy is not authentication, and it survives untouched.** AD-2 makes the org the
+isolation boundary regardless of who is asking, so:
 
-**Anonymous → redirect to login, preserving the destination.** They can fix the problem by
-signing in, so send them somewhere useful. Django's ``AccessMixin.handle_no_permission``
-already does exactly this (via ``redirect_to_login`` with ``next``), which is why these
-mixins build on it rather than reimplementing the branch.
+* :class:`OrgContextMixin` resolves the acting org for a view. It is *not* a gate — it
+  rejects nobody — it exists so nineteen view classes do not each repeat the same two lines,
+  and so they keep the ``self.org`` attribute the deleted mixin used to supply.
+* :func:`get_org_scoped_object_or_404` still refuses to serve another org's object, and
+  still makes that refusal indistinguishable from a missing one.
 
-**Authenticated but wrong role → 403, never a redirect.** A redirect turns an authorization
-failure into a navigation event, which hides it from tests and from logs. This is a
-deliberate divergence from the SPA, whose guards bounced wrong-role users to the home page.
-
-**Authenticated with no active org → the shared "no organisation" state, not an error.**
-A user who has not been added to an org yet has done nothing wrong. Story 2.18 kept such
-users off org-scoped pages; here the mixin renders the empty state in place of the page, so
-every org-scoped page behaves identically without repeating itself (Story 21.4 AC #4, and
-Task 4's "enforce at the mixin layer, not per page").
-
-Org resolution goes through ``inventory.users.auth`` — the single source of truth shared
-with the API path (AD-2). A second resolver that drifts from the API's is precisely the
-class of bug this story exists to prevent.
+CSRF protection, the POST-only org switcher, and the open-redirect guard on ``next`` are all
+unaffected. This story removed *who you are*, not *what a browser may be made to do*.
 """
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any
 
-from django.contrib.auth.mixins import AccessMixin, LoginRequiredMixin, UserPassesTestMixin
 from django.http import Http404, HttpRequest
 from django.http.response import HttpResponseBase
 from django.shortcuts import render
+from django.views import View
 
-from inventory.common.users import UserT
-from inventory.users.auth import get_admin_org, get_request_org
+from inventory.users.auth import get_request_org
 from inventory.users.models import Org
-from inventory.users.services import is_global_admin
 
-#: Rendered in place of an org-scoped page when the user belongs to no organisation.
-NO_ORG_TEMPLATE = "_no_org.html"
+#: Rendered in place of an org-scoped page when the database contains no organisation at
+#: all. Distinct from the zero-org state Story 21.4 rendered and Story 21.24 deleted: that
+#: one meant "you are not a member of one yet", which no longer has a subject.
+NO_ORGS_TEMPLATE = "_no_orgs.html"
 
 
-class OrgMemberRequiredMixin(LoginRequiredMixin):
-    """Require an authenticated user with an active organisation.
+class OrgContextMixin(View):
+    """Resolve the acting org onto ``self.org`` before the view body runs.
 
-    Replaces ``OrgRoute.tsx``. On success the resolved org is available to the view as
-    ``self.org``, so pages never re-resolve it (and cannot resolve it differently).
+    Replaces ``OrgMemberRequiredMixin`` as the supplier of ``self.org``, minus the gate. The
+    org comes from ``inventory.users.auth.get_request_org`` — the single source of truth
+    shared with the API path (AD-2). A second resolver that drifts from it is precisely the
+    class of bug that rule exists to prevent.
+
+    When the database contains **no** organisation at all — an operator deleted every one,
+    since migration ``0003`` seeds one — there is nothing for an org-scoped page to act on.
+    This short-circuits to a shared explanatory page at 200 rather than raising, which keeps
+    ``self.org`` a plain ``Org`` for every view body. Nineteen view classes would otherwise
+    each need a ``None`` branch for a state none of them can do anything about.
     """
 
     #: Set by :meth:`dispatch` before the view runs. Never ``None`` inside the view.
     org: Org
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
-        """Resolve the active org, or short-circuit to login / the no-org state."""
-        if not request.user.is_authenticated:
-            # LoginRequiredMixin redirects to the login URL carrying `next`.
-            return super().dispatch(request, *args, **kwargs)
-
+        """Resolve the acting org, or render the no-organisations page in place of the view."""
         org = get_request_org(request)
         if org is None:
-            # 200, not 403 or a redirect: nothing is forbidden and nothing is missing —
-            # the account simply has no organisation yet. Returning the page's own URL
-            # with this body means the URL is not a way to reach org data.
-            return render(request, NO_ORG_TEMPLATE)
-
+            return render(request, NO_ORGS_TEMPLATE)
         self.org = org
         return super().dispatch(request, *args, **kwargs)
-
-
-class OrgAdminRequiredMixin(OrgMemberRequiredMixin, AccessMixin):
-    """Require an admin of the **active** organisation.
-
-    Replaces ``AdminRoute.tsx``. Admin-ness is per-org, not global: the same user can be an
-    admin of org A and a plain member of org B, so this is re-evaluated against whichever
-    org is active. Switching org can therefore change the answer.
-    """
-
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
-        """Reject non-admins of the active org with 403."""
-        if request.user.is_authenticated and get_request_org(request) is not None and get_admin_org(request) is None:
-            # Authenticated, has an org, but is not its admin → a real authorization
-            # failure, so 403 rather than a redirect.
-            return self.handle_no_permission()
-        return super().dispatch(request, *args, **kwargs)
-
-
-class GlobalAdminRequiredMixin(UserPassesTestMixin):
-    """Require a member of the distinguished ADMIN org — the platform-admin tier.
-
-    Replaces ``GlobalAdminRoute.tsx``. Deliberately **not** built on
-    :class:`OrgMemberRequiredMixin`: global-admin pages are platform-wide and must stay
-    reachable by a global admin who has no working org of their own (Story 2.18 makes the
-    ADMIN org never resolve as a working org, so such a user has no active org at all).
-
-    ``UserPassesTestMixin.handle_no_permission`` supplies the required split for free:
-    anonymous → redirect to login with ``next``; authenticated non-global-admin → 403.
-    """
-
-    #: Supplied by the ``View`` this mixin is combined with. Declared so the mixin type-checks
-    #: on its own, and to document that it is only ever valid on a view.
-    request: HttpRequest
-
-    def test_func(self) -> bool:
-        """Return True if the requesting user is a global admin."""
-        user = self.request.user
-        if not user.is_authenticated:
-            return False
-        # `is_authenticated` is a plain bool property, not a TypeGuard, so it does not narrow
-        # the User | AnonymousUser union for mypy. The check above makes the cast sound.
-        return is_global_admin(cast("UserT", user))
 
 
 def get_org_scoped_object_or_404(model: Any, org: Org, **lookup: Any) -> Any:

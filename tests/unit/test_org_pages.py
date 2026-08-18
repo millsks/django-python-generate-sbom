@@ -78,27 +78,7 @@ def test_hub_links_to_the_management_pages_rather_than_duplicating_them(
     assert 'action="/members/remove"' not in html
 
 
-@pytest.mark.django_db
-def test_hub_is_admin_only(org_with_member: tuple[Client, Org, object]) -> None:
-    assert _client("member@example.com").get(HUB).status_code == 403
-
-
 # --- AC #2: org creation is global-admin only -------------------------------------------
-
-
-@pytest.mark.django_db
-def test_org_admin_cannot_reach_org_creation(org_admin: tuple[Client, Org, object]) -> None:
-    # Story 2.12 deliberately reversed self-service creation: being an ORG admin is not enough.
-    client, _, _ = org_admin
-    assert client.get(ORG_CREATE).status_code == 403
-    assert client.post(ORG_CREATE, {"name": "Sneaky"}).status_code == 403
-    assert not Org.objects.filter(name="Sneaky").exists()
-
-
-@pytest.mark.django_db
-def test_the_create_affordance_is_hidden_from_non_global_admins(org_admin: tuple[Client, Org, object]) -> None:
-    client, _, _ = org_admin
-    assert ORG_CREATE not in client.get(HUB).content.decode()
 
 
 @pytest.mark.django_db
@@ -294,17 +274,24 @@ def test_a_member_can_leave_and_the_org_survives(org_with_member: tuple[Client, 
 
 
 @pytest.mark.django_db
-def test_leaving_your_only_org_lands_you_in_the_zero_org_state(
+def test_leaving_an_org_removes_the_membership(
     org_with_member: tuple[Client, Org, object],
 ) -> None:
-    _, _, _ = org_with_member
+    """Leaving still ends the membership; it no longer ends *access*.
+
+    Was ``test_leaving_your_only_org_lands_you_in_the_zero_org_state``. Story 21.24 removed
+    the app's access control, so a user with no membership resolves to the default org like
+    any anonymous caller rather than being shut out. The membership record is still the
+    thing being changed, so that is what this asserts.
+    """
+    _, org, _ = org_with_member
     member_client = _client("member@example.com")
 
     member_client.post(ORG_LEAVE)
 
-    # Access ends immediately — the org-gated page now shows the shared empty state.
-    body = member_client.get(MEMBERS).content.decode()
-    assert "No organization yet" in body
+    assert not OrgMembership.objects.filter(org=org, user__email="member@example.com").exists()
+    # The page stays reachable — no membership is no longer a denial.
+    assert member_client.get(MEMBERS).status_code == 200
 
 
 @pytest.mark.django_db
@@ -318,23 +305,6 @@ def test_the_sole_admin_cannot_leave(org_admin: tuple[Client, Org, object]) -> N
 
 
 # --- AC #7: authorization on every mutation ----------------------------------------------
-
-
-@pytest.mark.django_db
-@pytest.mark.parametrize("url", ALL_MUTATIONS)
-def test_a_plain_member_is_forbidden_from_every_member_mutation(
-    org_with_member: tuple[Client, Org, object], url: str
-) -> None:
-    member_client = _client("member@example.com")
-    assert member_client.post(url, {"email": "x@example.com", "user_id": 1}).status_code == 403
-
-
-@pytest.mark.django_db
-@pytest.mark.parametrize("url", ALL_MUTATIONS)
-def test_anonymous_is_redirected_to_login_from_every_member_mutation(url: str) -> None:
-    response = Client().post(url, {})
-    assert response.status_code == 302
-    assert response.headers["Location"].startswith("/login")
 
 
 @pytest.mark.django_db

@@ -151,7 +151,27 @@ tests/               # at the repo ROOT, not under src/ — unit/ and integratio
   - **Docker follows the umbrella:** one root `Dockerfile` (build context `.`) installs the pixi environment and runs `collectstatic`; every service (web, `worker-pipeline`, `worker-analysis`, `beat`) runs from that one image via `pixi run <task>`. There is no frontend build stage.
   - `pixi run ci` is the single gate: pre-commit, wheel build, mypy, ruff lint + format-check, bandit, the full test suite with the coverage floor, and the docs build.
 
-### AD-14 — Org/admin/auth model: zero-org identity, per-org vs. global admin
+### AD-14 — Org/admin/auth model: zero-org identity, per-org vs. global admin [AMENDED — Story 21.24, 2026-08-18]
+
+> **The app no longer authenticates anyone (2026-08-18).** Story 21.24 removed the app's own
+> authentication and access control outright — the login, registration and logout surface, the
+> three access-control mixins, and the DRF `HasSessionOrApiKey` permission are **deleted**, not
+> disabled. Every page and every `/api/v1/` endpoint is reachable without signing in, and an
+> anonymous caller acts as a seeded default org (`INVENTORY_DEFAULT_ORG_SLUG`) with org-admin and
+> global-admin capability.
+>
+> **Identity is the host platform's responsibility**, supplied via OIDC and group claims when
+> `inventory` is contributed to `django-15-factor-base` (Epics 17-18). The enforcement that was
+> removed was the wrong *shape* for that destination — Django session plus local `OrgMembership`
+> roles — so it was deleted rather than flagged off; `git log` has the diff.
+>
+> **What the rules below still describe accurately:** the org/membership *data model*, the
+> distinguished ADMIN org, and the rule that the ADMIN org is never a workspace (Story 2.18) —
+> which now governs which org a request *acts as* rather than who may see what. **What they no
+> longer describe:** every sentence about a principal being refused, gated, or restricted.
+>
+> **Retained and unaffected:** AD-2 (org isolation — a tenancy invariant, not an authentication
+> one), AD-8 (API keys — a presented key still pins the caller to that key's org), and CSRF.
 
 - **Binds:** `inventory/users/` (models, services, selectors, views, `auth.py`); `GET /auth/me/`; `inventory/common/access.py`; every admin-gated API endpoint and page route
 - **Prevents:** identity coupled to a single org; ad-hoc or duplicated authorization; a cross-org superuser tier bolted on with special-case branching that bypasses AD-2
@@ -448,6 +468,10 @@ django-python-generate-sbom/          ← repo root == BASE_DIR (pixi umbrella, 
 - **`uv.lock` / `poetry.lock` parsers** — deferred in PRD; add modules to `sbom/parsers/` with no structural change
 - **OAuth / SSO** — deferred in PRD; plugs into DRF auth class layer without touching AD-8's key model
 - **Cleanup queue** — a third `cleanup` Celery queue for Celery Beat jobs; trivial to add alongside AD-4's two queues if Beat jobs compete with user traffic
+- **Authentication and authorization** — **removed on purpose** (Story 21.24, 2026-08-18) and to be
+  supplied by the host platform via OIDC + group claims (Epics 17-18). Not a gap to be filled
+  ad hoc: re-adding an app-owned session/role gate would rebuild exactly what was deleted. See the
+  amendment note on **AD-14**.
 - **Pluggability into a `django-15-factor-base` platform** — explicit future intent (**AD-16**, **AD-17**), **not** implemented. Four known violations remain, each of which would force a host project to accept this app's opinion:
   - `src/config/settings/base.py` — a **global** `DEFAULT_AUTHENTICATION_CLASSES` and `DEFAULT_PERMISSION_CLASSES` (`"inventory.users.authentication.HasSessionOrApiKey"`), imposing the app's auth on *every* DRF view a host adds. Should be declared per-viewset.
   - `src/config/settings/base.py` — `config` imports the app's `configure_structlog` directly, so the project's logging setup depends on the app rather than the reverse.

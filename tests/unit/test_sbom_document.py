@@ -175,7 +175,10 @@ def _make_job(output_format: str = "cyclonedx-json", email: str = "alice@example
 
 def _login(email: str = "alice@example.com") -> APIClient:
     client = APIClient()
-    client.post("/api/v1/auth/login/", {"email": email, "password": "pw12345678"}, format="json")
+    # Story 21.24 deleted POST /api/v1/auth/login/. Django's session login still works
+    # (the user model and SessionAuthentication both survive), so these tests keep
+    # exercising a real principal rather than the anonymous default-org path.
+    client.login(email=email, password="pw12345678")
     return client
 
 

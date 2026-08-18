@@ -26,11 +26,10 @@ def _login() -> APIClient:
     user = register_user(email="alice@example.com", password="pw12345678")
     create_org(name="alice", admin_user=user)
     client = APIClient()
-    client.post(
-        "/api/v1/auth/login/",
-        {"email": "alice@example.com", "password": "pw12345678"},
-        format="json",
-    )
+    # Story 21.24 deleted POST /api/v1/auth/login/. Django's session login still works
+    # (the user model and SessionAuthentication both survive), so this keeps exercising a
+    # real principal rather than the anonymous default-org path.
+    client.login(email="alice@example.com", password="pw12345678")
     return client
 
 
@@ -210,14 +209,3 @@ def test_path_traversal_filename_is_sanitized() -> None:
     upload = ManifestUpload.objects.get(pk=response.data["upload_id"])
     assert upload.original_filename == "requirements.txt"
     assert ".." not in upload.file.name
-
-
-@pytest.mark.django_db
-def test_upload_requires_authentication() -> None:
-    file = SimpleUploadedFile("requirements.txt", b"django==5.2\n")
-    response = APIClient().post(
-        "/api/v1/manifests/upload/",
-        {"file": file, **META},
-        format="multipart",
-    )
-    assert response.status_code in (401, 403)

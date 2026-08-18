@@ -503,3 +503,8 @@ development_status:
   # membership MODEL, the services, and the /api/v1/ endpoints are all retained: the model is
   # the seam OIDC group claims re-attach to (Epics 17-18), and Story 21.24 AC #9 froze the API.
   22-9-remove-inert-membership-ui: review
+  # ADDED 2026-08-18. Orgs are lines of business known up front, so they are seeded from a
+  # committed list (orgs.yml) by an idempotent boot-time command rather than typed into a form.
+  # Placeholder list ORG001-ORG005 pending the real one. The org-creation UI is RETAINED for
+  # now — retiring it is a separate decision (see the story notes).
+  22-10-seed-orgs-from-a-list: review

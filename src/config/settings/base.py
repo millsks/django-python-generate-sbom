@@ -261,6 +261,11 @@ PRODUCT_VERSION = env.str("PRODUCT_VERSION", default=_DISTRIBUTION_VERSION)
 # boundary, so an anonymous request must still resolve to one. Migration 0003 seeds it.
 INVENTORY_DEFAULT_ORG_SLUG = env.str("INVENTORY_DEFAULT_ORG_SLUG", default="enterprise-wells-fargo-technology")
 
+# The organizations (lines of business) this deployment seeds, read by `manage.py seed_orgs`
+# (Story 22.10). A committed file rather than a form: the set is known up front, and a file is
+# reviewable in a pull request. Overridable so a deployment can supply its own list.
+INVENTORY_ORGS_FILE = env.str("INVENTORY_ORGS_FILE", default=str(BASE_DIR / "orgs.yml"))
+
 REPO_URL = env.str("REPO_URL", default="https://github.com/millsks/django-python-generate-sbom")
 DOCS_URL = env.str("DOCS_URL", default="https://millsks.github.io/django-python-generate-sbom/")
 

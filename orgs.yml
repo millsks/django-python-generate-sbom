@@ -1,0 +1,30 @@
+# The organizations (lines of business) seeded into this deployment.
+#
+# Loaded by `pixi run seed-orgs` (management command `seed_orgs`), which is idempotent and
+# safe to run on every boot: an org whose `slug` already exists is skipped, never modified.
+#
+# ---------------------------------------------------------------------------------------
+# THE SLUG IS THE IDENTITY. Write it explicitly, and never change it afterwards.
+# ---------------------------------------------------------------------------------------
+# Slugs are what the rest of the system references — `INVENTORY_DEFAULT_ORG_SLUG`, the org
+# switcher's form values, and the tenant an API key is bound to. Deriving them from `name`
+# would mean a display-name edit silently repointed all three, so they are written out here
+# instead. `name` may be corrected freely; `slug` may not.
+#
+# Adding a line and re-running seeds only the new org. Removing a line does NOT delete
+# anything — deleting an org would orphan its jobs and artifacts, which is a deliberate act
+# rather than a side effect of editing a file.
+#
+# The system ADMIN org (`admin`) is seeded by migration 0002 and must NOT be listed here.
+
+organizations:
+  - name: ORG001
+    slug: org001
+  - name: ORG002
+    slug: org002
+  - name: ORG003
+    slug: org003
+  - name: ORG004
+    slug: org004
+  - name: ORG005
+    slug: org005

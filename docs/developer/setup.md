@@ -235,8 +235,34 @@ pixi run docker-shell       # open a shell in the web container
 | **Enterprise Wells Fargo Technology** (`enterprise-wells-fargo-technology`) | `inventory.0003_seed_default_org` | The org an anonymous caller acts as. Override the slug with `INVENTORY_DEFAULT_ORG_SLUG`. |
 | **Admin** (`admin`) | `inventory.0002_seed_admin_org` | The platform-admin tier. Never a workspace — it is not offered in the org switcher or on the upload form. |
 
-Open [http://localhost:8000](http://localhost:8000) and go straight to **Upload**. Pick the
-organization on the form; create more from the **Organization** page whenever you need them.
+Open [http://localhost:8000](http://localhost:8000) and go straight to **Upload**, picking the
+organization on the form.
+
+### Seeding your organizations
+
+Organizations are lines of business, known up front, so they are seeded from a committed list
+rather than typed into a form:
+
+```sh
+pixi run seed-orgs --dry-run   # review what would be created
+pixi run seed-orgs             # create anything missing
+```
+
+`orgs.yml` at the repo root is the list; point `INVENTORY_ORGS_FILE` elsewhere to override it.
+The command is **idempotent** — an org whose `slug` already exists is skipped, never modified —
+so it belongs in the boot sequence, which is where Compose runs it:
+
+```
+migrate && seed-orgs && seed-superuser && web
+```
+
+Two rules worth knowing before you edit the list:
+
+- **The slug is the identity, and must never change.** `INVENTORY_DEFAULT_ORG_SLUG`, the org
+  switcher, and every API key reference it. Names may be corrected freely; a changed name is
+  *reported* on the next run and left alone rather than rewritten.
+- **Removing a line deletes nothing.** Deleting an org would orphan its jobs and artifacts, so
+  it is a deliberate act rather than a side effect of editing a file.
 
 ### Creating a Django superuser (for `/admin/` only)
 

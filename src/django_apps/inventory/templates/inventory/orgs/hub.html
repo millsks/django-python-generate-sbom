@@ -18,21 +18,6 @@
       <div class="card h-100">
         <div class="card-body">
           <h2 class="card-title h6 d-flex align-items-center gap-2">
-            {% icon 'nav.members' 18 %}
-            Members
-          </h2>
-          <p class="card-text small text-body-secondary">
-            Add or remove members, and manage who administers this organization.
-          </p>
-          <a class="btn btn-sm btn-outline-primary" href="{% url 'ui-members' %}">Manage members</a>
-        </div>
-      </div>
-    </div>
-
-    <div class="col-md-6">
-      <div class="card h-100">
-        <div class="card-body">
-          <h2 class="card-title h6 d-flex align-items-center gap-2">
             {% icon 'nav.keys' 18 %}
             API keys
           </h2>
@@ -62,15 +47,4 @@
       </div>
   </div>
 
-  <hr class="my-4">
-
-  <h2 class="h6">Leave this organization</h2>
-  <p class="small text-body-secondary">
-    Your access ends immediately. The organization itself is not deleted.
-  </p>
-  <form method="post" action="{% url 'ui-org-leave' %}"
-        onsubmit="return confirm('Leave {{ active_org.name|escapejs }}? Your access ends immediately.');">
-    {% csrf_token %}
-    <button type="submit" class="btn btn-sm btn-outline-danger">Leave organization</button>
-  </form>
 {% endblock %}

@@ -495,3 +495,11 @@ development_status:
   #   (b) four DRF views kept in-body is_global_admin() gates, so SIGNING IN made a user more
   #       restricted than staying anonymous.
   22-8-anonymous-admin-surface: review
+  # ADDED 2026-08-18 by product-owner direction: "if that functionality is no longer needed i
+  # would rather get rid of it." Removed the Members and Global Admins UI (pages, routes,
+  # templates, nav entries, forms) and the leave-org action. All edited records that gate
+  # nothing without identity, and all three were BROKEN for the anonymous caller that is now
+  # the ordinary one — /organization/leave raised TypeError on AnonymousUser. The org and
+  # membership MODEL, the services, and the /api/v1/ endpoints are all retained: the model is
+  # the seam OIDC group claims re-attach to (Epics 17-18), and Story 21.24 AC #9 froze the API.
+  22-9-remove-inert-membership-ui: review

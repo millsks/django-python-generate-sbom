@@ -31,18 +31,18 @@ PASSWORD = "pw12345678"
 
 # Transcribed from `frontend/src/App.tsx` before deletion. `/results/:taskId` is parameterised,
 # so a placeholder id is enough to check that the PATTERN still has an owner.
-#: `/register` and `/login` are deliberately absent: Story 21.24 removed the app's own
-#: authentication, so those two SPA routes have no successor by design rather than by
-#: oversight. They are listed in RETIRED_ROUTES below and asserted to 404.
+#: Four SPA routes are deliberately absent, each retired on purpose rather than by oversight,
+#: and each asserted to 404 via RETIRED_ROUTES below:
+#:   /register, /login             — Story 21.24 removed the app's own authentication
+#:   /members, /platform/global-admins — Story 22.9 removed surfaces that edited records which
+#:                                   gate nothing without identity (and were broken anonymously)
 SPA_ROUTES = (
     "/",
     "/organization",
-    "/members",
     "/keys",
     "/upload",
     "/results/00000000-0000-0000-0000-000000000000",
     "/history",
-    "/platform/global-admins",
 )
 
 

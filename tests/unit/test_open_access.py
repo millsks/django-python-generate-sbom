@@ -87,11 +87,11 @@ def test_no_route_forbids_an_anonymous_caller(path: str) -> None:
 
 @pytest.mark.django_db
 def test_every_page_route_is_actually_reachable(default_org: Org) -> None:
-    """Stronger than "not 403": the seven nav destinations must render.
+    """Stronger than "not 403": every nav destination must render.
 
     A page that 500s or 404s would satisfy the two tests above while being just as broken.
     """
-    for path in ("/", "/upload", "/history", "/members", "/keys", "/organization", "/platform/global-admins"):
+    for path in ("/", "/upload", "/history", "/keys", "/organization"):
         assert Client().get(path).status_code == 200, path
 
 

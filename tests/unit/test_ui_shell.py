@@ -21,9 +21,14 @@ PASSWORD = "pw12345678"
 TEMPLATE_ROOT = Path(__file__).resolve().parents[2] / "src" / "django_service" / "templates"
 
 # Labels as they appear in the rendered nav.
-ALWAYS_VISIBLE = ["Home", "Upload", "History", "API Keys"]
-ADMIN_ONLY = ["Members", "Organization"]
-GLOBAL_ADMIN_ONLY = ["Global Admins"]
+#: The five destinations that remain. Story 21.24 removed the role gates (so the old
+#: ALWAYS_VISIBLE / ADMIN_ONLY / GLOBAL_ADMIN_ONLY split stopped meaning anything), and
+#: Story 22.9 removed Members and Global Admins entirely.
+NAV_ITEMS = ["Home", "Upload", "History", "API Keys", "Organization"]
+
+#: Asserted absent, not merely "not required": a dead nav entry pointing at a deleted route
+#: is worse than a missing one.
+REMOVED_ITEMS = ["Members", "Global Admins"]
 
 
 def _nav_html(client: Client) -> str:
@@ -58,8 +63,10 @@ def test_every_nav_item_renders_for_an_anonymous_visitor() -> None:
     """
     html = _nav_html(Client())
 
-    for label in ALWAYS_VISIBLE + ADMIN_ONLY + GLOBAL_ADMIN_ONLY:
+    for label in NAV_ITEMS:
         assert f">{label}</span>" in html, label
+    for label in REMOVED_ITEMS:
+        assert f">{label}</span>" not in html, f"{label} was removed by Story 22.9"
     assert "Sign in" not in html
     assert "Sign out" not in html
 
@@ -70,7 +77,7 @@ def test_the_nav_is_the_same_for_a_signed_in_user() -> None:
     anonymous = _nav_html(Client())
     signed_in = _nav_html(_logged_in("member@example.com", org="Acme"))
 
-    for label in ALWAYS_VISIBLE + ADMIN_ONLY + GLOBAL_ADMIN_ONLY:
+    for label in NAV_ITEMS:
         assert f">{label}</span>" in anonymous, label
         assert f">{label}</span>" in signed_in, label
 
@@ -78,7 +85,7 @@ def test_the_nav_is_the_same_for_a_signed_in_user() -> None:
 @pytest.mark.django_db
 def test_global_admin_sees_every_item() -> None:
     html = _nav_html(_logged_in("root@example.com", org="Acme", admin=True, global_admin=True))
-    for label in ALWAYS_VISIBLE + ADMIN_ONLY + GLOBAL_ADMIN_ONLY:
+    for label in NAV_ITEMS:
         assert f">{label}</span>" in html
 
 

@@ -210,7 +210,7 @@ def test_inner_pages_keep_the_spa_title_form() -> None:
     create_org(name="Acme", admin_user=user)
     client = _client("dev3@example.com")
 
-    for path, leading in (("/upload", "Upload"), ("/history", "History"), ("/members", "Members")):
+    for path, leading in (("/upload", "Upload"), ("/history", "History"), ("/keys", "API keys")):
         html = client.get(path).content.decode()
         assert f"<title>{leading} · Supply Lens</title>" in html, path
 

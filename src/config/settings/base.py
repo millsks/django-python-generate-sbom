@@ -162,6 +162,32 @@ DATABASES = {
     "default": env.db("DATABASE_URL", default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
 }
 
+# --- SQLite concurrency (Story 22.4) ---
+# `pixi run dev` runs THREE processes against one SQLite file (web + worker + beat), and SQLite
+# allows a single writer. Applied only to SQLite: these keys are invalid for PostgreSQL, which
+# is what the container/OCP path uses.
+if "sqlite3" in DATABASES["default"]["ENGINE"]:
+    DATABASES["default"]["OPTIONS"] = {
+        # THE load-bearing one. Django's default `BEGIN` is DEFERRED: a transaction takes a
+        # SHARED lock to read, then tries to upgrade to RESERVED to write. If another
+        # connection already holds RESERVED, SQLite returns SQLITE_BUSY *immediately* — and
+        # `timeout` below does NOT apply, because waiting could never resolve it. That is the
+        # classic "database is locked" a web request and a worker produce between them.
+        #
+        # Measured on this codebase, 4 threads doing read-then-write on one file:
+        #     deferred BEGIN  -> 3 of 4 raised "database is locked"  (in BOTH journal modes)
+        #     BEGIN IMMEDIATE -> 0 errors                            (in BOTH journal modes)
+        # So WAL alone does not fix this; IMMEDIATE does. Requires Django 5.1+.
+        "transaction_mode": "IMMEDIATE",
+        # Readers no longer block behind an open writer — the everyday `pixi run dev` case,
+        # where the web process serves pages while the worker writes phase progress. This is a
+        # separate benefit from the deadlock fix above, not a substitute for it.
+        "init_command": "PRAGMA journal_mode=WAL;",
+        # Django's own default is also 5s; set explicitly because it is load-bearing under
+        # IMMEDIATE — contenders now queue here instead of failing instantly.
+        "timeout": 20,
+    }
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},

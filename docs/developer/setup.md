@@ -151,7 +151,7 @@ prod topology and the
 | **Settings module** | `config.settings.local` | `config.settings.production` |
 | **Database** | SQLite (`db.sqlite3`) | Enterprise-managed **PostgreSQL** |
 | **Object storage** | `FileSystemStorage` (`media/`) | Enterprise **S3**-compatible object storage |
-| **Celery broker** | Kombu `filesystem://` (`.celery/broker/`) | Enterprise **Redis** |
+| **Celery broker** | Kombu `filesystem://` (`.celery/broker/`) — see its limits above | Enterprise **Redis** |
 | **Celery result backend** | `django-db` (results in SQLite) | Enterprise **Redis** |
 | **Web server** | Django `runserver` | **gunicorn** |
 | **Worker pool** | prefork (`-c 4`) on macOS/Linux, `--pool=solo` on Windows | prefork |
@@ -162,6 +162,28 @@ the containerless defaults, and `config.settings.local` only swaps the Celery
 transport (to the filesystem broker + `django-db` results) on top of them. The
 OCP/prod side is driven by `config.settings.production` and is described in full in
 the [OpenShift guide](../deployment/openshift/index.md).
+
+### The filesystem broker, and what it cannot do
+
+Local dev uses Kombu's `filesystem://` transport: Celery messages are **files** under
+`.celery/broker/`, and the worker polls that directory. It needs no Redis and no container,
+which is the whole point — but it is a development convenience, not a message broker, and it
+behaves differently from the Redis transport used in containers and on OCP:
+
+- **No fanout / no broadcast.** Worker control commands (`celery inspect`, `celery control`,
+  remote shutdown) rely on fanout and do not work. `pixi run flower` will show limited
+  information for the same reason.
+- **Polling latency.** A dispatched task is picked up on the worker's next poll rather than
+  immediately, so expect roughly a second of lag before a job leaves `PENDING`. That is the
+  transport, not a stuck job.
+- **One directory, shared by everything.** Every process pointed at this checkout drains the
+  same `.celery/broker/`. Two workers running at once will compete for the same messages —
+  if a job seems to vanish, check for a stray `pixi run dev` or `pixi run worker`.
+- **Not durable in any meaningful sense.** Messages are files; deleting `.celery/` discards
+  the queue. That is a fine way to clear a wedged state locally, and unthinkable in production.
+
+If a job sits in `PENDING`, the usual cause is **no worker running** — `pixi run dev` starts
+one, and a bare `pixi run runserver` does not.
 
 ## Running the prod-parity stack with Docker Compose
 

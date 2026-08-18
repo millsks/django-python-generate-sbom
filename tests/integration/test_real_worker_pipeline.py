@@ -49,7 +49,12 @@ def _worker_command() -> list[str]:
     exists for. Getting this wrong here would make the test fail on the one platform the epic
     is protecting.
     """
-    pool = "--pool=solo" if os.name == "nt" else "--concurrency=1"
+    # `FORCE_SOLO=1` runs the Windows worker configuration on any platform. That is not a
+    # convenience: when this test failed on Windows CI, the first hypothesis was that
+    # `--pool=solo` deadlocks the analysis chord. Setting this reproduced the exact worker
+    # configuration locally in ten seconds and **falsified** it, which is what redirected the
+    # investigation to the offline mechanism (see `dead_proxy`). Keep the hook.
+    pool = "--pool=solo" if os.environ.get("FORCE_SOLO") or os.name == "nt" else "--concurrency=1"
     return [
         sys.executable,
         "-m",
@@ -67,8 +72,39 @@ def _worker_command() -> list[str]:
     ]
 
 
+@pytest.fixture(scope="session")
+def dead_proxy() -> object:
+    """A proxy URL that accepts a connection and hangs up on it, instantly.
+
+    Used to take the analysis phases offline. The point is the *accept*: a closed port is
+    refused immediately on macOS but can be silently dropped on Windows, where the connect
+    then burns ~21s of SYN retries. Something listening removes the platform from the
+    equation — the connection always succeeds and always dies on the first read.
+    """
+    import socket
+    import threading
+
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(64)
+    port = listener.getsockname()[1]
+
+    def serve() -> None:
+        while True:
+            try:
+                conn, _ = listener.accept()
+            except OSError:
+                return
+            conn.close()
+
+    threading.Thread(target=serve, daemon=True).start()
+    yield f"http://127.0.0.1:{port}"
+    listener.close()
+
+
 @pytest.fixture
-def stack(tmp_path: Path) -> dict[str, object]:
+def stack(tmp_path: Path, dead_proxy: str) -> dict[str, object]:
     """A migrated temp database, a temp broker directory, and the env both processes share."""
     db_path = tmp_path / "e2e.sqlite3"
 
@@ -92,8 +128,17 @@ def stack(tmp_path: Path) -> dict[str, object]:
         # must still reach SUCCESS with every analysis phase failed, which is exactly FR-6.7's
         # per-phase graceful degradation. Without it the test depended on real third-party
         # availability and timed out on Windows CI at progress=45.
-        "HTTP_PROXY": "http://127.0.0.1:1",
-        "HTTPS_PROXY": "http://127.0.0.1:1",
+        # Point every outbound call at a proxy that IS listening and closes each connection
+        # immediately (see `dead_proxy`). The previous mechanism pointed at a closed port and
+        # relied on the OS refusing the connect — instant on macOS, but on Windows a dropped
+        # SYN retries for ~21s per attempt. Multiplied by tenacity's three attempts, several
+        # packages, and five APIs, that is what put the Windows job past JOB_TIMEOUT at
+        # progress=45 — twice, including after the first "offline" fix.
+        #
+        # A live socket that hangs up makes the failure instant *by construction* rather than
+        # by hoping a port is refused the same way on every platform.
+        "HTTP_PROXY": dead_proxy,
+        "HTTPS_PROXY": dead_proxy,
         "NO_PROXY": "",
         "PARSELMOUTH_PYPI_TO_CONDA_URL": "",
     }
@@ -195,6 +240,25 @@ print(f"status={{job.status}} result_key={{job.result_key}} progress={{job.progr
 """
 
 
+def _drain(proc: object) -> str:
+    """Stop the worker and return everything it wrote.
+
+    Terminating first is deliberate: a non-blocking read needs `selectors`, which cannot poll
+    a pipe on Windows — the one platform this test has ever failed on, and so the one platform
+    that must not lose its log. Once the process is stopped, a plain read works everywhere,
+    and the worker is being torn down by the fixture moments later regardless.
+    """
+    stream = proc.stdout  # type: ignore[attr-defined]
+    if stream is None:  # pragma: no cover - stdout is always piped here
+        return "(no worker output captured)"
+    proc.terminate()  # type: ignore[attr-defined]
+    try:
+        proc.wait(timeout=30)  # type: ignore[attr-defined]
+    except subprocess.TimeoutExpired:  # pragma: no cover
+        proc.kill()  # type: ignore[attr-defined]
+    return stream.read() or "(worker produced no output)"
+
+
 def test_a_real_worker_completes_a_job_over_the_filesystem_broker(stack: dict[str, object], worker: object) -> None:
     """The end-to-end claim: dispatch to a broker on disk, a separate process finishes the job.
 
@@ -204,7 +268,12 @@ def test_a_real_worker_completes_a_job_over_the_filesystem_broker(stack: dict[st
     """
     output = _run_in_stack(stack, SUBMIT_AND_WAIT)
 
-    assert "status=SUCCESS" in output, output
+    # Dump what the worker actually did before asserting. This test can only fail on a
+    # platform the author may not have — the first two Windows failures reported nothing but
+    # `status=PROGRESS progress=45`, which is consistent with half a dozen causes and
+    # distinguishes none of them. The worker's own log is the difference between diagnosing
+    # and guessing.
+    assert "status=SUCCESS" in output, f"{output}\n\n--- worker log ---\n{_drain(worker)}"
     assert "result_key=None" not in output, output
 
     key = output.split("result_key=")[1].split()[0]

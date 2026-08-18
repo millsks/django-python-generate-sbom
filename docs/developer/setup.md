@@ -29,17 +29,20 @@ pixi install          # resolve and install the environment
 pixi run bootstrap    # install the pre-commit + commit-msg git hooks
 ```
 
-Then create your local environment file from the containerless template:
+Then create your local environment file:
 
 ```sh
-cp .env.local.example .env    # copy on macOS/Linux; use `copy` on Windows cmd
+cp .env.example .env    # copy on macOS/Linux; use `copy` on Windows cmd
 ```
 
-`.env.local.example` is pre-wired for containerless dev: it sets
-`DJANGO_SETTINGS_MODULE=config.settings.local` and deliberately leaves
-`DATABASE_URL`, `AWS_*`, and `REDIS_URL` **unset** so the base defaults apply —
-SQLite at `db.sqlite3` and `FileSystemStorage` at `media/`, both at the repository
-root. `.env` is git-ignored; never commit secrets.
+`.env.example` **is** the containerless template — that is why it carries the plain name
+(Story 22.1). It sets `DJANGO_SETTINGS_MODULE=config.settings.local` and deliberately leaves
+`DATABASE_URL`, `AWS_*`, and `REDIS_URL` **unset** so the base defaults apply — SQLite at
+`db.sqlite3` and `FileSystemStorage` at `media/`, both at the repository root. Setting any of
+them opts you into infrastructure you then have to run.
+
+`.env.container.example` is the other template, for the optional Docker Compose stack only.
+`.env` itself is git-ignored; never commit secrets.
 
 ## Running the stack — `pixi run dev`
 
@@ -168,7 +171,15 @@ OCP/prod deployment uses. Reach for it when you need to reproduce a
 storage/database/broker behavior that SQLite and the filesystem broker cannot, or
 before a deployment. Everyday development does not need it — use `pixi run dev`.
 
-This path **does** require Docker + Docker Compose installed locally.
+This path **does** require Docker + Docker Compose installed locally, which makes it
+unavailable to developers whose organization blocks Docker and Podman on Windows.
+
+It also needs the **other** environment template, because it runs `config.settings.production`
+and every service must genuinely be reachable:
+
+```sh
+cp .env.container.example .env    # NOT .env.example, which is the containerless one
+```
 
 ```sh
 pixi run docker-up      # build (if needed) and start all services in the background

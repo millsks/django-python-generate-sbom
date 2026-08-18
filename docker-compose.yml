@@ -1,7 +1,7 @@
 # Full local stack for Python Inventory Supply Lens (Story 1.2).
 #
 # All Django/Celery services share one umbrella image (AD-13); the SPA is baked
-# in at build time. All configuration comes from .env (copy from .env.example);
+# in at build time. All configuration comes from .env (copy from .env.container.example);
 # no secrets are hardcoded here.
 services:
   web:

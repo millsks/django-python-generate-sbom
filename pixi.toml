@@ -1,11 +1,12 @@
 # Umbrella pixi manifest for the whole project (AD-13).
-# Installs the Python env (backend) AND the Node runtime (frontend), and
-# orchestrates every task. Backend tasks run with cwd = "backend"; frontend
-# tasks run with cwd = "frontend" and shell out to npm/vite.
+# One environment, one runner: pixi installs the Python env and orchestrates every
+# task. Story 21.1 moved the Django tree to a src/ layout at the repo root, so tasks
+# run from the root with NO `cwd`. Story 21.19 retired the React SPA and with it the
+# Node runtime and the eight `fe-*` tasks — the project is Python-only.
 [workspace]
 authors = ["Kevin Mills <millsks@gmail.com>"]
 channels = ["conda-forge"]
-name = "django-python-generate-sbom"
+name = "python-inventory-supply-lens"
 platforms = ["osx-arm64", "linux-64", "linux-aarch64", "win-64"]
 version = "0.1.0"
 
@@ -15,7 +16,6 @@ version = "0.1.0"
 # will be tightened toward the spine pins as those land on conda-forge.
 [dependencies]
 python = "3.13.*"
-nodejs = ">=20"
 django = ">=5.1"
 djangorestframework = ">=3.15"
 djangorestframework-api-key = ">=3.1"
@@ -41,6 +41,11 @@ requests-ratelimiter = ">=0.7,<1"
 tenacity = ">=9,<10"
 drf-spectacular = ">=0.27"
 drf-spectacular-sidecar = ">=2026.7.1,<2027"
+django-crispy-forms = ">=2.6,<3"
+crispy-bootstrap5 = ">=2026.3,<2027"
+django-tables2 = ">=3.0.0,<4"
+django-filter = ">=26.1,<27"
+openpyxl = ">=3.1.5,<4"
 
 # --- Unix-only dependency scoping (Story 20.2) ---
 # gunicorn is the Unix-only WSGI server; it has no win-64 conda build. It runs
@@ -64,11 +69,10 @@ gunicorn = ">=22"
 # per platform without any shared shell command.
 [target.win-64.tasks.worker]
 cmd = "celery -A config.celery_app worker -Q pipeline,analysis --pool=solo"
-cwd = "backend"
 env = { DJANGO_SETTINGS_MODULE = "config.settings.local" }
 
 [pypi-dependencies]
-generate-sbom = { path = "./backend", editable = true }
+python-inventory-supply-lens = { path = ".", editable = true }
 
 [feature.dev.dependencies]
 pytest = ">=8,<9"
@@ -96,87 +100,78 @@ mkdocstrings-python = ">=1.11,<2"
 [environments]
 default = { features = ["dev"], solve-group = "default" }
 
-# --- Backend (Python) tasks — run from ./backend ---
+# --- Quality tasks — run from the repo root (Story 21.1) ---
+# There is no "backend" qualifier any more: Story 21.19 retired the SPA, so these are
+# simply the project's tasks.
 [tasks.fmt]
 cmd = "ruff format ."
-cwd = "backend"
 
 [tasks.lint]
 cmd = "ruff check ."
-cwd = "backend"
 
 [tasks.check]
-cmd = "mypy generate_sbom"
-cwd = "backend"
+cmd = "mypy src"
 
 [tasks.test]
 cmd = "pytest tests/unit/"
-cwd = "backend"
 
 [tasks.test-integration]
 cmd = "pytest tests/integration/"
-cwd = "backend"
 
 [tasks.cov]
-cmd = "pytest tests/ --cov=generate_sbom --cov-report=term-missing --cov-fail-under=90"
-cwd = "backend"
+cmd = "pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=90"
 
 [tasks.build]
 cmd = "python -m build --no-isolation --wheel"
-cwd = "backend"
 
 # Non-mutating format check (companion to the mutating `fmt`) — CI-friendly.
 [tasks.fmt-check]
 cmd = "ruff format --check ."
-cwd = "backend"
 
 # Lint with autofix (companion to the read-only `lint`).
 [tasks.lint-fix]
 cmd = "ruff check --fix ."
-cwd = "backend"
 
 # Static security scan (bandit); reads [tool.bandit] from pyproject, medium+ severity
 # only so low-noise asserts don't fail it.
 [tasks.security]
-cmd = "bandit -r generate_sbom -c pyproject.toml -ll"
-cwd = "backend"
+cmd = "bandit -r src -c pyproject.toml -ll"
 
 # Full suite with an HTML coverage report for local inspection (htmlcov/).
 [tasks.cov-html]
-cmd = "pytest tests/ --cov=generate_sbom --cov-report=html"
-cwd = "backend"
+cmd = "pytest tests/ --cov=src --cov-report=html"
 
 # CI coverage: same gate as `cov` plus branch coverage and a machine-readable
-# coverage.xml (backend/coverage.xml) for the Codecov upload (Story 9.1).
+# coverage.xml (at the repo root) for the Codecov upload (Story 9.1).
 [tasks.cov-xml]
-cmd = "pytest tests/ --cov=generate_sbom --cov-branch --cov-report=xml --cov-report=term-missing --cov-fail-under=90"
-cwd = "backend"
+cmd = "pytest tests/ --cov=src --cov-branch --cov-report=xml --cov-report=term-missing --cov-fail-under=90"
 
 # --- Server / ops tasks — also the Docker service commands ---
+# Applies migrations, including the two data migrations that seed the ADMIN org and the
+# default org an anonymous caller acts as. `pixi run migrate` is the only setup the app
+# needs before `pixi run dev`.
 [tasks.migrate]
 cmd = "python manage.py migrate"
-cwd = "backend"
 
+# Creates a Django superuser for the ADMIN org from DJANGO_SUPERUSER_EMAIL /
+# DJANGO_SUPERUSER_PASSWORD (Story 2.13); idempotent. Since Story 21.24 the app itself
+# needs NO account — this is only for `django.contrib.admin` at /admin/.
 [tasks.seed-superuser]
 cmd = "python manage.py seed_superuser"
-cwd = "backend"
 
 [tasks.collectstatic]
 cmd = "python manage.py collectstatic --noinput"
-cwd = "backend"
 
 # Container/prod WSGI server (Unix-only). Used by the Dockerfile/OCP `web`
 # process; NEVER on the local/dev path — local uses `runserver` (see below).
 [tasks.web]
 cmd = "gunicorn config.wsgi --bind 0.0.0.0:8000 --workers 4"
-cwd = "backend"
 
 # --- Cross-platform local dev tasks (Story 20.5) — macOS + Windows, no containers ---
 # Local web = Django's `runserver` (cross-platform; gunicorn is Unix-only). Serves
 # on :8000 under local settings. Standalone (`pixi run runserver`) or via honcho.
 [tasks.runserver]
 cmd = "python manage.py runserver 0.0.0.0:8000"
-cwd = "backend"
 env = { DJANGO_SETTINGS_MODULE = "config.settings.local" }
 
 # Local combined Celery worker draining BOTH queues in one process (prefork `-c 4`,
@@ -184,7 +179,6 @@ env = { DJANGO_SETTINGS_MODULE = "config.settings.local" }
 # tasks. On win-64 the `[target.win-64.tasks.worker]` override swaps to `--pool=solo`.
 [tasks.worker]
 cmd = "celery -A config.celery_app worker -Q pipeline,analysis -c 4"
-cwd = "backend"
 env = { DJANGO_SETTINGS_MODULE = "config.settings.local" }
 
 # Worker pool per OS (Story 20.4): the default (prefork) pool below is Unix-only. On
@@ -193,29 +187,29 @@ env = { DJANGO_SETTINGS_MODULE = "config.settings.local" }
 # task overrides that inject `--pool=solo` on win-64 while linux/osx keep prefork `-c 4`.
 [tasks.worker-pipeline]
 cmd = "celery -A config.celery_app worker -Q pipeline -c 4"
-cwd = "backend"
 
 [tasks.worker-analysis]
 cmd = "celery -A config.celery_app worker -Q analysis -c 4"
-cwd = "backend"
 
 # Portable beat schedule (Story 20.4): the schedule DB lives at a repo-relative,
-# git-ignored path (backend/.celery/celerybeat-schedule) — not POSIX-only `/tmp`, which
-# does not exist on Windows. cwd is `backend`, so this resolves under backend/.celery/.
+# git-ignored path (.celery/celerybeat-schedule) — not POSIX-only `/tmp`, which does
+# not exist on Windows. Tasks run from the repo root, so this resolves under ./.celery/.
 [tasks.beat]
 cmd = "celery -A config.celery_app beat -s .celery/celerybeat-schedule"
-cwd = "backend"
 
 # Celery Flower monitoring UI (http://localhost:5555).
 [tasks.flower]
 cmd = "celery -A config.celery_app flower --port=5555"
-cwd = "backend"
 
 # --- Project-wide tasks — run from the root ---
 # One-command containerless local stack (Story 20.5): honcho reads the root
-# Procfile and launches web (runserver) + worker + beat together in the
-# foreground, identically on macOS and Windows. Sets local settings for the
-# whole process tree so no child falls back to the production-defaulting wsgi.
+# Procfile and launches THREE processes — web (runserver) + worker + beat — together in
+# the foreground, identically on macOS and Windows. Sets local settings for the whole
+# process tree so no child falls back to the production-defaulting wsgi.
+#
+# The UI is at http://localhost:8000, served by Django itself: Story 21.19 removed the
+# fourth (Vite) process, so there is no second port and no build step.
+# First run needs `pixi run migrate`, which seeds the orgs the app needs.
 [tasks.dev]
 cmd = "honcho start"
 env = { DJANGO_SETTINGS_MODULE = "config.settings.local" }
@@ -275,61 +269,10 @@ cmd = "docker compose exec web pixi run migrate"
 [tasks.docker-shell]
 cmd = "docker compose exec web bash"
 
-# --- Frontend (Node) tasks — run from ./frontend; pixi provides the Node runtime ---
-[tasks.fe-install]
-cmd = "npm install"
-cwd = "frontend"
-
-# Vite HMR dev server (Story 20.8). Serves the SPA at http://localhost:5173 with
-# hot-module reload and proxies /api, /admin, /static to Django on :8000 (see
-# frontend/vite.config.ts). Run standalone (`pixi run fe-dev`) or via the root
-# Procfile so `pixi run dev` brings the UI up alongside the backend. Cross-platform
-# (macOS + Windows) through the pixi-provided Node runtime.
-[tasks.fe-dev]
-cmd = "npm run dev"
-cwd = "frontend"
-depends-on = ["fe-install"]
-
-[tasks.fe-lint]
-cmd = "npm run lint"
-cwd = "frontend"
-depends-on = ["fe-install"]
-
-[tasks.fe-build]
-cmd = "npm run build"
-cwd = "frontend"
-depends-on = ["fe-install"]
-
-[tasks.fe-test]
-cmd = "npm run test"
-cwd = "frontend"
-depends-on = ["fe-install"]
-
-# Standalone type check (tsc, no emit via tsconfig noEmit) so CI can type-check
-# independently of the build. Runs the local tsc binary — no registry access.
-[tasks.fe-typecheck]
-cmd = "node_modules/.bin/tsc -b"
-cwd = "frontend"
-depends-on = ["fe-install"]
-
-# npm dependency vulnerability audit for the frontend; gates on high/critical
-# (lists moderate/low too, but doesn't fail the task on them).
-[tasks.fe-security]
-cmd = "npm audit --audit-level=high"
-cwd = "frontend"
-depends-on = ["fe-install"]
-
-# Frontend tests with v8 coverage → frontend/coverage/lcov.info for the Codecov
-# upload (Story 9.1). Vitest coverage config lives in vitest.config.ts.
-[tasks.fe-cov]
-cmd = "npm run test:coverage"
-cwd = "frontend"
-depends-on = ["fe-install"]
-
-# Unified CI gate across both backend and frontend (AD-13 pixi umbrella). Mirrors
-# the GitHub CI quality jobs: ruff lint + format-check, mypy, bandit (backend);
-# oxlint + tsc (frontend); full coverage; and both builds. Story 9.1 wired the
-# format-check / security / typecheck gates in so local == CI.
+# The CI gate (AD-13 pixi umbrella). Mirrors the GitHub CI quality jobs: ruff lint +
+# format-check, mypy, bandit, full coverage, the wheel build, and the docs build.
+# Story 9.1 wired the format-check / security / typecheck gates in so local == CI;
+# Story 21.19 removed the frontend half when the SPA was retired.
 [tasks.ci]
 depends-on = [
   "precommit",
@@ -339,9 +282,5 @@ depends-on = [
   "fmt-check",
   "security",
   "cov",
-  "fe-lint",
-  "fe-typecheck",
-  "fe-cov",
-  "fe-build",
   "docs-build",
 ]

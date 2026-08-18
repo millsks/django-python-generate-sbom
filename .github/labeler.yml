@@ -3,7 +3,7 @@
 
 backend:
   - changed-files:
-      - any-glob-to-any-file: ['backend/**']
+      - any-glob-to-any-file: ['src/**', 'tests/**', 'manage.py', 'pyproject.toml']
 
 frontend:
   - changed-files:

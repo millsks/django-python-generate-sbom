@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% load ui_icons %}
+{% load static %}
+{% comment %} Temporary page (Story 21.3, AC #7) proving the foundation renders: the shell, the
+  crispy template pack, the icon sprite, htmx, and the theme toggle. No business page is
+  converted in this story. Removed with the SPA in Story 21.19. {% endcomment %}
+
+{% block title %}Foundation · {{ product_name_short }}{% endblock %}
+
+{% block content %}
+  <h1 class="h3">{{ heading }}</h1>
+  <p class="text-body-secondary">
+    The shell, asset pipeline, and form renderer that Stories 21.5–21.18 build on.
+  </p>
+
+  <div class="row g-3 mt-3">
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <h2 class="card-title h6">Icon sprite</h2>
+          <p class="card-text small text-body-secondary">
+            Vendored subset of Bootstrap Icons, inheriting colour via <code>currentColor</code>.
+          </p>
+          <div class="d-flex flex-wrap gap-3 fs-4">
+            {% icon 'nav.home' 24 %}
+            {% icon 'nav.upload' 24 %}
+            {% icon 'nav.history' 24 %}
+            {% icon 'nav.members' 24 %}
+            {% icon 'nav.keys' 24 %}
+            {% icon 'nav.organization' 24 %}
+            {% icon 'nav.global_admins' 24 %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <h2 class="card-title h6">Theme</h2>
+          <p class="card-text small text-body-secondary">
+            Bootstrap <code>data-bs-theme</code>, persisted under the SPA's
+            <code>theme-mode</code> key, defaulting to the OS preference. Use the header
+            toggle; the choice survives a reload with no flash.
+          </p>
+          <div class="d-flex gap-2">
+            <span class="badge text-bg-primary">Primary</span>
+            <span class="badge text-bg-secondary">Secondary</span>
+            <span class="badge text-bg-success">Success</span>
+            <span class="badge text-bg-danger">Danger</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

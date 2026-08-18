@@ -1,4 +1,4 @@
-# cliff.toml — git-cliff changelog configuration for django-python-generate-sbom.
+# cliff.toml — git-cliff changelog configuration for Python Inventory Supply Lens.
 # Run: pixi run changelog
 # Docs: https://git-cliff.org/docs/configuration
 

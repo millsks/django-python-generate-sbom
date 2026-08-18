@@ -1,0 +1,39 @@
+"""URL routes for the users app (mounted under /api/v1/)."""
+
+from django.urls import path
+
+from .views import (
+    AuthMeView,
+    CreateMemberUserView,
+    CreateOrgView,
+    DemoteAdminView,
+    GlobalAdminDetailView,
+    GlobalAdminsView,
+    KeyDetailView,
+    KeysView,
+    LeaveOrgView,
+    MemberDetailView,
+    MembersView,
+    OrgListView,
+    OrgMeView,
+    OrgSwitchView,
+    PromoteAdminView,
+)
+
+urlpatterns = [
+    path("auth/me/", AuthMeView.as_view(), name="auth-me"),
+    path("orgs/", OrgListView.as_view(), name="org-list"),
+    path("orgs/create/", CreateOrgView.as_view(), name="org-create"),
+    path("orgs/switch/", OrgSwitchView.as_view(), name="org-switch"),
+    path("orgs/me/", OrgMeView.as_view(), name="org-me"),
+    path("orgs/leave/", LeaveOrgView.as_view(), name="org-leave"),
+    path("orgs/promote-admin/", PromoteAdminView.as_view(), name="org-promote-admin"),
+    path("orgs/demote-admin/", DemoteAdminView.as_view(), name="org-demote-admin"),
+    path("orgs/members/", MembersView.as_view(), name="org-members"),
+    path("orgs/members/create-user/", CreateMemberUserView.as_view(), name="org-member-create-user"),
+    path("orgs/members/<int:user_id>/", MemberDetailView.as_view(), name="org-member-detail"),
+    path("keys/", KeysView.as_view(), name="key-list"),
+    path("keys/<str:key_id>/", KeyDetailView.as_view(), name="key-detail"),
+    path("admin/global-admins/", GlobalAdminsView.as_view(), name="global-admins"),
+    path("admin/global-admins/<int:user_id>/", GlobalAdminDetailView.as_view(), name="global-admin-detail"),
+]

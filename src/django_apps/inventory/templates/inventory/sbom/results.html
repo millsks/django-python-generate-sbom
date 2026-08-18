@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% comment %} Job results (Story 21.11 built the gate; Story 21.12 the shell + Overview).
+
+  While the job runs this is a progress view that polls itself. Once terminal it becomes the
+  five-tab shell, in ResultsPage.tsx's order.
+
+  The active tab lives in the URL (?tab=), which is a small improvement on the SPA: it held tab
+  state in React and lost it on refresh, so a tab could not be shared or bookmarked. The active
+  tab is rendered SERVER-SIDE on load, so that works with no JavaScript at all; htmx only makes
+  the in-page switches avoid a full reload.
+{% endcomment %}
+
+{% block title %}Results · {{ product_name_short }}{% endblock %}
+
+{% block content %}
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <div>
+      <h1 class="h3 mb-0">{{ job.manifest.original_filename }}</h1>
+      <p class="text-body-secondary mb-0">
+        {{ job.manifest.component_name }} &middot; {{ job.manifest.application_id }}
+      </p>
+    </div>
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'ui-history' %}">Back to history</a>
+  </div>
+
+  {% if not job_is_terminal %}
+    <div class="mt-4">{% include "inventory/sbom/_job_progress.html" %}</div>
+
+  {% elif job.status == 'FAILED' %}
+    <div class="alert alert-danger mt-4" role="alert">
+      <strong>This job failed.</strong>
+      {% if job.failure_reason %}<div class="mt-1">{{ job.failure_reason }}</div>{% endif %}
+    </div>
+
+  {% else %}
+    {% if not artifacts_available %}
+      {% comment %} Story 7.3: the summary survives the retention purge, so the Overview still
+        renders — the detail tabs and downloads are the only things that cannot. {% endcomment %}
+      <div class="alert alert-warning mt-4" role="alert">
+        <strong>Artifacts removed.</strong>
+        The downloadable files for this job were deleted
+        {% if job.artifacts_expire_at %}on {{ job.artifacts_expire_at|date:"Y-m-d" }}{% endif %}
+        under the retention policy. The summary below is retained permanently.
+      </div>
+    {% endif %}
+
+    <ul class="nav nav-tabs mt-4" role="tablist">
+      {% for slug, label in tabs %}
+        <li class="nav-item" role="presentation">
+          {% if slug in artifact_tabs and not artifacts_available %}
+            <span class="nav-link disabled" aria-disabled="true" title="Artifacts were removed">{{ label }}</span>
+          {% else %}
+            <a class="nav-link {% if slug == active_tab %}active{% endif %}"
+               href="?tab={{ slug }}"
+               role="tab"
+               aria-selected="{% if slug == active_tab %}true{% else %}false{% endif %}"
+               hx-get="{% url 'ui-job-tab' task_id=job.task_id tab=slug %}"
+               hx-target="#tab-content"
+               hx-swap="innerHTML"
+               {% comment %} Keeps the URL in step with the visible tab, so refreshing or
+                 sharing after a click lands on the same place. {% endcomment %}
+               hx-push-url="?tab={{ slug }}">{{ label }}</a>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+
+    <div id="tab-content" class="border border-top-0 rounded-bottom p-3">
+      {% include active_tab_template %}
+    </div>
+  {% endif %}
+{% endblock %}

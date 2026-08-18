@@ -1,0 +1,20 @@
+{% comment %} The raw SBOM document, fetched on demand (Story 21.13, AC #4).
+
+  Never part of the SBOM tab's initial payload. Above the inline size cap this declines to
+  render the text at all and offers the presigned download instead (AD-11) — shipping several
+  megabytes into a <pre> would freeze the page rather than merely being slow.
+{% endcomment %}
+{% if not sbom_available %}
+  <div class="alert alert-secondary mb-0" role="status">
+    This SBOM is not available. Its artifacts may have been removed under the retention policy.
+  </div>
+{% elif too_large %}
+  <div class="alert alert-info" role="status">
+    <p class="mb-2">
+      This document is {{ size_bytes|filesizeformat }}, too large to display in the browser.
+    </p>
+    <a class="btn btn-sm btn-primary" href="/api/v1/sbom/result/{{ job.task_id }}/">Download SBOM</a>
+  </div>
+{% else %}
+  <pre class="border rounded p-3 small mb-0" style="max-height: 600px; overflow: auto;"><code>{{ raw }}</code></pre>
+{% endif %}

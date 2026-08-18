@@ -15,7 +15,8 @@
    admin and are switched into it immediately.
 
 !!! note "Only platform admins can create organizations"
-    Creating an organization is restricted to **global admins** (platform admins), so the
+    Creating an organization used to be restricted to **global admins**; Story 21.24
+    removed that gate along with the app's authentication, so the
     **New organization** / **Create organization** affordance appears for them only. If
     you are a regular member with no organization yet, ask a global admin or an existing
     org's admin to add you — you cannot create one yourself.
@@ -51,7 +52,7 @@
 
 ## Manage global admins (platform admins)
 
-Global admins see a **Global Admins** link in the navigation. It opens a platform-admin
+The **Global Admins** link in the navigation opens a platform-admin
 screen for the global-admin tier:
 
 - **Grant global admin** by entering a registered user's email. If no user matches, the

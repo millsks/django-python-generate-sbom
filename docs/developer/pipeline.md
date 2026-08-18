@@ -1,7 +1,7 @@
 # SBOM Pipeline
 
 SBOM generation is an **eight-phase asynchronous pipeline** built from Celery
-primitives. It is assembled in `backend/generate_sbom/tasks/sbom_pipeline.py` by
+primitives. It is assembled in `src/django_apps/inventory/tasks/sbom_pipeline.py` by
 `build_pipeline()` and dispatched by `run_sbom_pipeline()`.
 
 ## Two queues (AD-4)
@@ -67,7 +67,8 @@ that marks the job `FAILED` with a specific `failure_reason` (e.g.
 `resolution_failed`, `sbom_generation_failed`, `missing_artifact`) on error — so a
 phase failure can never leave a job stuck at `PROGRESS`. A soft-timeout is caught the
 same way (`failure_reason="soft_timeout"`). Progress and the current step are reported
-as phases advance so the SPA can poll live status.
+as phases advance, so the results page can poll live status over htmx and API clients
+can poll the status endpoint.
 
 Task dispatch from the generate view uses `delay_on_commit()` (AD-10), so the pipeline
 starts only after the `SBOMJob`/`ManifestUpload` transaction commits.

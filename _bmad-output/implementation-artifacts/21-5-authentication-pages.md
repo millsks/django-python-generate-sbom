@@ -1,6 +1,10 @@
+---
+baseline_commit: 7c83282
+---
+
 # Story 21.5: Authentication Pages
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -47,14 +51,14 @@ so that I can access the application without a JavaScript framework.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — `LoginForm` + view (AC: #1, #3, #4, #6)** — Crispy-rendered; calls the existing login service;
+- [x] **Task 1 — `LoginForm` + view (AC: #1, #3, #4, #6)** — Crispy-rendered; calls the existing login service;
   honours `?next=`; autofocus on email.
-- [ ] **Task 2 — `RegistrationForm` + view (AC: #1, #2, #6)** — Password validators from
+- [x] **Task 2 — `RegistrationForm` + view (AC: #1, #2, #6)** — Password validators from
   `AUTH_PASSWORD_VALIDATORS` (`base.py:116-119`) surface as inline field errors; duplicate email is a field
   error, not a 500.
-- [ ] **Task 3 — Logout (AC: #5)** — POST-only, CSRF-protected, session flushed.
-- [ ] **Task 4 — Account menu (AC: #5)** — Email + logout in the shell header from 21.3.
-- [ ] **Task 5 — Tests + gate (AC: #7)**.
+- [x] **Task 3 — Logout (AC: #5)** — POST-only, CSRF-protected, session flushed.
+- [x] **Task 4 — Account menu (AC: #5)** — Email + logout in the shell header from 21.3.
+- [x] **Task 5 — Tests + gate (AC: #7)**.
 
 ## Dev Notes
 
@@ -101,16 +105,122 @@ behaviour — Story 10.6 exists only because the SPA had to implement it.
 
 ### Agent Model Used
 
-_(to be filled by the dev agent)_
+claude-opus-5[1m] (Claude Opus 5, 1M context)
 
 ### Debug Log References
 
-_(to be filled by the dev agent)_
+- `pixi run ci` — **exit 0**. Backend **499 passed**, coverage **96.14%**; frontend **223 passed**.
+- `mypy src` clean over 90 files; `ruff check .` clean.
+- **25 new tests** in `tests/unit/test_auth_pages.py`.
+- Route resolution: `ui-login` → `/login`, `ui-register` → `/register`, `ui-logout` → `/logout`;
+  the API's `login`/`register` still → `/api/v1/auth/{login,register}/` (untouched).
+- Live server check — `/login` and `/register` served by **Django**; `/logout` GET → **405**;
+  `/`, `/upload`, `/history` still served by the **SPA**.
+- Real browser-equivalent round trip with `curl` and a cookie jar: fetched `/login`, captured
+  the 64-char CSRF token, POSTed credentials → **302 to `/`**, session persisted, and `/ui/`
+  then rendered `admin@example.com` in the account menu.
+- Login failure parity: wrong password and unknown email produce **identical** response bodies
+  once the CSRF token and the echoed email are masked.
 
 ### Completion Notes List
 
-_(to be filled by the dev agent)_
+**A cross-story regression this story caused, found by the gate.** Adding the POST logout form
+to `base.html` means the shell now emits a CSRF token — and Django re-salts that token on every
+render. Story 21.4's `test_cross_org_and_missing_objects_are_indistinguishable` compared two
+404 bodies byte-for-byte, so it started failing on the token alone. The security property is
+unchanged (a rotating token distinguishes nothing); the test had been relying on the incidental
+absence of any CSRF token in the shell. Now masks the token before comparing. Worth noting
+because the same latent assumption could bite any test that byte-compares two rendered pages.
+
+**Two django-stubs/runtime mismatches, resolved without weakening the checks.**
+1. `FormView[LoginForm]` type-checks but **raises `TypeError` at import** — django-stubs
+   declares the class generic while Django's runtime class is not subscriptable. It broke all
+   25 tests at once with "type 'FormView' is not subscriptable". Reverted to the unsubscripted
+   base with a narrow `# type: ignore[type-arg]` and a comment naming the cause. The documented
+   alternative (`django_stubs_ext.monkeypatch()`) was rejected: it would make production
+   settings import a type-stubs helper.
+2. `validate_password(..., user)` and `auth_login(request, user)` are typed against the host's
+   **concrete** User, which the app must not name. Both go through the existing
+   `inventory.common.users.user_ref` seam rather than new ignores — the same mechanism Story
+   21.2 established for exactly this mismatch.
+
+**Real paths claimed, not a `/ui/` prefix.** `/login`, `/register`, and `/logout` are now
+served by Django and added to the SPA catch-all's negative lookahead. This is what makes Story
+21.4's `LOGIN_URL = "/login"` and the whole bounce-to-login round trip genuinely work — a
+`/ui/login` mount would have left the mixins redirecting to a SPA page. The SPA's client-side
+router still has `/login` and `/register` routes, so an in-app navigation stays on the SPA while
+a fresh request for those URLs gets the Django page; that coexistence is intentional for the rest
+of the epic and is documented in `config/urls.py`.
+
+**Route names follow the `ui-` convention from 21.4.** The API already owns `login` and
+`register` as route names, and a duplicate resolves to whichever registers last. Two tests assert
+the *rendered* `href`/`action` points at the HTML route and explicitly **not** at
+`/api/v1/auth/...`, which is the only way that class of bug is visible.
+
+**Server-rendered views live in `pages.py`, not `views.py`.** Story 21.2 preserved the file-role
+convention in which `views.py` means DRF views. A new `inventory/urls_pages.py` aggregates page
+routes for Stories 21.5-21.18 and is mounted at the site root, separate from the per-submodule
+DRF urlconfs mounted under `/api/v1/`.
+
+**What genuinely got simpler, as the story predicted.** Enter-to-submit (Story 10.6) and
+autofocus (Story 10.4) are a native form behaviour and one widget attribute. `{% csrf_token %}`
+replaces the manual `X-CSRFToken` handling. And the four `AUTH_PASSWORD_VALIDATORS` — configured
+since Story 1.3 but invisible to the SPA, which surfaced a weak password as a generic 400 banner
+— now render inline against the password field. Four tests pin that: too short, entirely
+numeric, too common, and too similar to the email.
+
+**The similarity validator needed a probe instance.** `UserAttributeSimilarityValidator` silently
+does nothing when `validate_password` is passed `user=None`, so the form builds an unsaved user
+carrying the submitted email. `test_a_password_similar_to_the_email_is_rejected` pins it,
+because a silently-skipped validator looks exactly like a passing one.
+
+**Account-enumeration resistance is asserted on the whole page, not the message.** Wrong password
+and unknown email are compared body-to-body (masking the CSRF token and the echoed email — the
+submitter already knows the address they typed), so an extra hint, a differing count, or a
+field-level marker on `email` would all fail the test. A message-only assertion would not catch
+those.
+
+**Duplicate-email registration is a deliberate disclosure.** It is a field error saying the email
+is taken. Registration cannot avoid disclosing this — the alternative is silently not creating
+the account — so it is stated plainly rather than obscured. This is a different threat model from
+login, and the code says so.
+
+**No SSO button**, per the story's explicit instruction: Epic 17 (OIDC) is entirely unimplemented.
+`test_login_page_offers_no_sso_button` pins the absence so a later story cannot add a
+non-functional button before Epic 17 lands.
+
+**Session handling.** Login goes through `django.contrib.auth.login`, which cycles the session key
+(session-fixation defence); logout uses `auth_logout`, which flushes the session entirely. Tests
+assert `SESSION_KEY` is present after login and **absent** after logout, plus that a GET logout
+(405) and a CSRF-less POST logout (403) both leave the session intact.
+
+**Not done here.** No SSO. No password reset — outside this story's ACs and not present in the
+SPA either. The nav still points at SPA paths for pages not yet converted (21.6 onward replace
+them one at a time).
+
+**Still open, unchanged:** the `beat_schedule` maintenance tasks are absent from the Celery
+registry (found in 21.1, needs its own bug story), and the four deferred pluggability violations.
 
 ### File List
 
-_(to be filled by the dev agent)_
+**New (6)**
+- `src/django_apps/inventory/users/forms.py` — `LoginForm`, `RegistrationForm`
+- `src/django_apps/inventory/users/pages.py` — `LoginPageView`, `RegisterPageView`, `LogoutPageView`
+- `src/django_apps/inventory/urls_pages.py` — the app's page urlconf (`ui-` names)
+- `src/django_apps/inventory/templates/inventory/auth/login.html`, `register.html`
+- `tests/unit/test_auth_pages.py` (25 tests)
+
+**Modified (4)**
+- `src/config/urls.py` — mount `inventory.urls_pages` at the root; free `login|register|logout`
+  from the SPA catch-all
+- `src/django_service/templates/base.html` — `Sign in` → `{% url 'ui-login' %}`; the 21.3
+  placeholder logout **link** replaced by a CSRF-protected POST form
+- `tests/unit/test_access_control.py` — mask the rotating CSRF token before comparing two
+  error-page bodies (see the regression note)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`, and this story file
+
+## Change Log
+
+| Date | Change |
+|---|---|
+| 2026-08-17 | Converted login, registration, and logout to server-rendered Django pages calling the existing services directly (AD-1). Claimed the real `/login`, `/register`, `/logout` paths from the SPA catch-all, which is what makes Story 21.4's bounce-to-login round trip work. Registration creates no org (Story 2.6) and flashes a message before redirecting to sign-in (Story 10.3). The four `AUTH_PASSWORD_VALIDATORS` now render inline against the password field. Failed login is indistinguishable between unknown email and wrong password, asserted body-to-body. Logout is a CSRF-protected POST that flushes the session. `pixi run ci` exit 0; 499 backend tests at 96.14%. |

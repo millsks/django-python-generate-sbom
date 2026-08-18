@@ -1,4 +1,4 @@
-# django-python-generate-sbom
+# Python Inventory Supply Lens
 
 Generate and analyze **CycloneDX SBOMs** for Python projects. Upload a manifest
 (`requirements.txt`, `pyproject.toml`, or a lockfile), and the app resolves the

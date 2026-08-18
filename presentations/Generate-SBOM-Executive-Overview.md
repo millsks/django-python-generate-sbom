@@ -1,5 +1,5 @@
 ---
-title: Generate SBOM — Project Overview
+title: Python Inventory Supply Lens — Project Overview
 subtitle: "Software Bills of Materials for Python: security, licences, and compliance in one place"
 description: >-
   A self-hosted web application that turns a Python dependency manifest into a
@@ -30,11 +30,15 @@ tags:
   - spdx
   - self-hosted
 source:
+  # STALE: the .pptx/.pdf were rendered before the Story 21.21 rename and still say
+  # "Generate SBOM" and "React + TypeScript UI". This Markdown is the source of truth
+  # until they are re-rendered. The filenames are left alone deliberately — renaming
+  # them is distribution identity (Story 21.22), not product copy.
   deck: presentations/Generate-SBOM-Executive-Overview.pptx
   pdf: presentations/Generate-SBOM-Executive-Overview.pdf
 slides: 9
 summary: >-
-  One dependency file in, a complete software inventory out. Generate SBOM
+  One dependency file in, a complete software inventory out. Supply Lens
   resolves every direct and transitive Python dependency and produces a
   standards-based bill of materials with vulnerability, licence, graph, and
   currency reports — self-hosted, in under two minutes.
@@ -48,15 +52,15 @@ key_facts:
   model: Multi-tenant, self-hosted, Apache 2.0
 ---
 
-# Generate SBOM — Project Overview
+# Python Inventory Supply Lens — Project Overview
 
 > **Know what's inside your software — before someone else has to ask.**
 >
 > *Software Bills of Materials for Python · security, licences, and compliance in one place.*
 > Prepared by Kevin Mills · July 2026 · Self-hosted · Open source · Apache 2.0
 
-Generate SBOM is a self-hosted web application that turns a Python project's dependency
-file into a standards-based software inventory, plus security, licence, and currency
+Python Inventory Supply Lens is a self-hosted web application that turns a Python
+project's dependency file into a standards-based software inventory, plus security, licence, and currency
 analysis. This document mirrors the executive-overview deck slide by slide — why we built
 it, how it works and how it was built, what shipped, and what comes next — with the
 speaker notes preserved for each section.
@@ -78,8 +82,8 @@ speaker notes preserved for each section.
 
 ### One dependency file in, a complete inventory out
 
-The Generate SBOM project answers a question most teams can't: **what is actually inside
-this software?**
+Supply Lens answers a question most teams can't: **what is actually inside this
+software?**
 
 Upload a project's dependency manifest and, in under two minutes, the system resolves
 every direct and transitive library and produces a standards-based Bill of Materials
@@ -148,14 +152,15 @@ under two minutes.
 
 | | |
 |---|---|
-| **Built on** | Django · DRF · Celery on PostgreSQL, Redis & S3-compatible storage; React + TypeScript UI |
+| **Built on** | Django · DRF · Celery on PostgreSQL, Redis & S3-compatible storage; server-rendered Django UI |
 | **Speaks** | CycloneDX (JSON/XML) and SPDX 2.3 — accepted by regulators, buyers, and security tools |
 | **Sourced from** | OSV · PyPI · conda-forge (prefix.dev) · endoflife.date |
 
 > **Speaker notes** — The product is an async pipeline: upload, resolve the full dependency
 > tree, run four analyses in parallel, assemble a standards-based SBOM, then review or
-> export. It's a conventional, boring-on-purpose stack — Django/DRF/Celery with a React UI
-> — speaking open standards and pulling from well-known public data sources.
+> export. It's a conventional, boring-on-purpose stack — Django/DRF/Celery with a
+> server-rendered Django UI — speaking open standards and pulling from well-known public
+> data sources.
 
 ---
 
@@ -165,8 +170,8 @@ under two minutes.
 
 - **Story-driven delivery.** Every change — feature, fix, or doc — was scoped as a
   contexted story with explicit acceptance criteria before any code was written.
-- **One command for everything.** A single toolchain (pixi) orchestrates both the Python
-  backend and the Node frontend: build, lint, type-check, test, and docs.
+- **One command for everything.** A single toolchain (pixi) orchestrates the whole
+  project — one language, one environment: build, lint, type-check, test, and docs.
 - **A quality gate on every merge.** Formatting, strict type-checking, linting, a security
   scan, and the full test suite must all pass before anything lands — enforced, not
   optional.
@@ -278,7 +283,7 @@ under two minutes.
 
 ## 8 · Closing
 
-### Generate SBOM
+### Python Inventory Supply Lens
 
 **Know what's inside your software — before someone else has to ask.**
 

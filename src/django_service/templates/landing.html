@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% load ui_icons %}
+{% comment %} The public landing page (Story 12.8 → 21.18), at `/`.
+
+  Two states in one template: an anonymous visitor gets the marketing view, a signed-in user
+  gets the same view with a CTA that leads straight into the app. A signed-in user with NO
+  org is handled by the view, which renders the shared zero-org state instead (Story 2.18).
+
+  The full product name is used here — this is the one place a visitor learns what the thing
+  is called — while the header brand stays the short form (Story 21.3's two-form rule).
+{% endcomment %}
+
+{% block title %}{{ product_name }}{% endblock %}
+
+{% block content %}
+  <div class="container py-4 py-md-5">
+    <div class="text-center mx-auto" style="max-width: 46rem;">
+      <h1 class="display-5 fw-bold">{{ product_name }}</h1>
+      <p class="fs-4 text-body-secondary">
+        Generate Software Bills of Materials from Python dependency manifests.
+      </p>
+      <p class="text-body-secondary">
+        Upload a manifest and get a standards-based SBOM plus vulnerability, license,
+        and version-currency reports &mdash; all in one place.
+      </p>
+      <div class="d-flex flex-column flex-sm-row justify-content-center gap-2 pt-2">
+        {% comment %} Points at an org-scoped route: an anonymous click is sent to login by
+          the Story 21.4 mixin, exactly as ProtectedRoute did. {% endcomment %}
+        <a class="btn btn-primary btn-lg d-inline-flex align-items-center gap-2" href="{% url 'ui-upload' %}">
+          {% icon 'action.upload' 18 %} Upload a manifest
+        </a>
+        <a class="btn btn-outline-secondary btn-lg" href="{{ docs_url }}" target="_blank" rel="noopener noreferrer">
+          Read the docs
+        </a>
+      </div>
+    </div>
+
+    <section class="mt-5 pt-md-4">
+      <h2 class="h3 fw-bold text-center mb-4">What you get</h2>
+      <div class="row g-3">
+        {% for feature in features %}
+          <div class="col-12 col-sm-6 col-md-4">
+            <div class="card h-100">
+              <div class="card-body">
+                <h3 class="card-title h6 d-flex align-items-center gap-2">
+                  <span class="text-primary">{% icon feature.icon 20 %}</span>
+                  {{ feature.title }}
+                </h3>
+                {% comment %} `safe` because the blurbs are AUTHORED CONSTANTS in views.py carrying HTML
+                  entities (a typographic apostrophe), never user input. {% endcomment %}
+                <p class="card-text small text-body-secondary mb-0">{{ feature.blurb|safe }}</p>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="mt-5 pt-md-4">
+      <h2 class="h3 fw-bold text-center mb-4">How it works</h2>
+      <div class="row g-3">
+        {% for step in steps %}
+          <div class="col-12 col-sm-6 col-md-3">
+            <div class="h3 fw-bold text-primary mb-1">{{ forloop.counter }}</div>
+            <div class="fw-semibold">{{ step.title }}</div>
+            <p class="small text-body-secondary">{{ step.blurb }}</p>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+{% endblock %}

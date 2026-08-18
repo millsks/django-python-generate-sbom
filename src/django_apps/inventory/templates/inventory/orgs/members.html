@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% load crispy_forms_tags %}
+{% comment %} Member management (Story 2.3/2.7/2.10/2.16/2.20), converted from MembersPage.tsx.
+
+  Every mutation is a CSRF-protected POST to its own endpoint. Destructive ones carry a
+  confirm().
+
+  The role controls and the remove button are hidden for the current user's own row, but that
+  is PRESENTATION ONLY — the last-admin, global-admin, and ADMIN-org guards all live in the
+  services and are what actually enforce the invariants (Story 2.9). Hiding a button never
+  substitutes for the server check.
+{% endcomment %}
+
+{% block title %}Members · {{ product_name_short }}{% endblock %}
+
+{% block content %}
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <div>
+      <h1 class="h3 mb-0">Members</h1>
+      <p class="text-body-secondary mb-0">{{ org.name }}</p>
+    </div>
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'ui-organization' %}">Back to organization</a>
+  </div>
+
+  <div class="table-responsive mt-4">
+    <table class="table align-middle">
+      <caption class="visually-hidden">Members of {{ org.name }}</caption>
+      <thead>
+        <tr>
+          <th scope="col">Email</th>
+          <th scope="col">Role</th>
+          <th scope="col" class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for membership in memberships %}
+          <tr>
+            <td>{{ membership.user.email }}</td>
+            <td>
+              <span class="badge {% if membership.role == 'admin' %}text-bg-primary{% else %}text-bg-secondary{% endif %}">
+                {{ membership.get_role_display }}
+              </span>
+            </td>
+            <td class="text-end">
+              {% if membership.user.pk != current_user_id %}
+                <div class="d-inline-flex gap-1">
+                  {% if membership.role == 'admin' %}
+                    <form method="post" action="{% url 'ui-member-demote' %}" class="d-inline">
+                      {% csrf_token %}
+                      <input type="hidden" name="user_id" value="{{ membership.user.pk }}">
+                      <button type="submit" class="btn btn-sm btn-outline-secondary">Make member</button>
+                    </form>
+                  {% else %}
+                    <form method="post" action="{% url 'ui-member-promote' %}" class="d-inline">
+                      {% csrf_token %}
+                      <input type="hidden" name="user_id" value="{{ membership.user.pk }}">
+                      <button type="submit" class="btn btn-sm btn-outline-primary">Make admin</button>
+                    </form>
+                  {% endif %}
+
+                  <form method="post" action="{% url 'ui-member-remove' %}" class="d-inline"
+                        onsubmit="return confirm('Remove {{ membership.user.email|escapejs }} from {{ org.name|escapejs }}?');">
+                    {% csrf_token %}
+                    <input type="hidden" name="user_id" value="{{ membership.user.pk }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                  </form>
+                </div>
+              {% else %}
+                <span class="small text-body-secondary">You</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="3" class="text-body-secondary">No members yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="row g-3 mt-2">
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <h2 class="card-title h6">Add an existing user</h2>
+          <p class="card-text small text-body-secondary">
+            They must already have an account. To create one, use the form beside this.
+          </p>
+          <form method="post" action="{% url 'ui-member-add' %}" novalidate>
+            {% csrf_token %}
+            {{ add_form|crispy }}
+            <button type="submit" class="btn btn-primary btn-sm">Add member</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <h2 class="card-title h6">Create a new account</h2>
+          <p class="card-text small text-body-secondary">
+            For someone who has never registered. You will see the temporary password once.
+          </p>
+          <form method="post" action="{% url 'ui-member-create' %}" novalidate>
+            {% csrf_token %}
+            {{ create_form|crispy }}
+            <button type="submit" class="btn btn-primary btn-sm">Create and add</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

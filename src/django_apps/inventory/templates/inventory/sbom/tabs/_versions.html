@@ -1,0 +1,30 @@
+{% load render_table from django_tables2 %}
+{% comment %} Version Currency tab (Story 5.6 / 8.7 / 8.9 / 8.10 / 8.23 → 21.16).
+
+  Seven columns in a load-bearing order: PyPI Latest sits immediately before conda-forge
+  Latest so the two can be compared at a glance (Story 8.23).
+
+  Status sorts by CLASS RANK, never alphabetically — see the note on the currency column in
+  tables.py. Sorting the string would read "behind-1, behind-2+, current, unknown", which
+  looks sorted and puts the most outdated packages in the middle.
+{% endcomment %}
+
+{% if report_state == 'failed' %}
+  {% include "inventory/sbom/tabs/_failure_notice.html" %}
+
+{% elif report_state == 'missing' %}
+  <div class="alert alert-secondary mb-0" role="status">
+    No version-currency report is available for this job. Its artifacts may have been removed
+    under the retention policy.
+  </div>
+
+{% else %}
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <p class="small text-body-secondary mb-0">{{ version_package_count }} package(s) checked.</p>
+    <a class="btn btn-sm btn-outline-secondary"
+       href="{% url 'ui-job-export' task_id=job.task_id kind='versions' %}">Export to Excel</a>
+  </div>
+  <div style="max-height: 600px; overflow: auto;">
+    {% render_table version_table %}
+  </div>
+{% endif %}

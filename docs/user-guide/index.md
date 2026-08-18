@@ -1,6 +1,6 @@
 # User Guide
 
-This guide walks through using **django-python-generate-sbom** end to end — from
+This guide walks through using **Python Inventory Supply Lens** end to end — from
 creating an account to generating a Software Bill of Materials (SBOM) and reading each
 report.
 
@@ -17,7 +17,7 @@ browser, export any of them to Excel, and download the SBOM document itself.
 
 | Step | Page |
 |---|---|
-| 1. Create an account and organization | [Accounts & Organizations](accounts-and-organizations.md) |
+| 1. Choose an organization | [Accounts & Organizations](accounts-and-organizations.md) |
 | 2. Upload a manifest and start a job | [Generating an SBOM](generating-an-sbom.md) |
 | 3. Read the results | [Reading the Results](reading-the-results.md) |
 | 4. Export reports and download the SBOM | [Exporting & Downloading](exporting-and-downloading.md) |
@@ -25,5 +25,6 @@ browser, export any of them to Excel, and download the SBOM document itself.
 | 6. Automate with API keys | [API Keys](api-keys.md) |
 
 !!! info "Screenshots"
-    Annotated screenshots are added alongside the UI polish work — this guide currently
-    describes each screen in text.
+    This guide describes each screen in text. Screenshots have not been captured; any
+    added in future must be taken against the current server-rendered UI, not the
+    retired React interface.

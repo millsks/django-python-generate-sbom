@@ -13,10 +13,11 @@ containerless flow is the primary way to develop.
 
 ## Prerequisites
 
-- [**pixi**](https://pixi.sh) — the single toolchain manager for the whole project
-  (Python **and** Node). You do not need a separate `pip`, `conda`, `nvm`, or `npm`
-  install step; pixi manages all of them. pixi resolves a native environment for
-  your platform, so the same commands run on macOS and Windows.
+- [**pixi**](https://pixi.sh) — the single toolchain manager for the whole project.
+  You do not need a separate `pip`, `conda`, or `uv` install step; pixi manages
+  everything. There is no Node: the UI is server-rendered Django templates with
+  vendored assets, so there is nothing to build. pixi resolves a native environment
+  for your platform, so the same commands run on macOS and Windows.
 
 That is the only hard prerequisite for containerless local dev. Docker + Docker
 Compose are needed **only** for the optional prod-parity stack.
@@ -24,7 +25,7 @@ Compose are needed **only** for the optional prod-parity stack.
 ## First-time setup
 
 ```sh
-pixi install          # resolve and install the full environment (Python + Node)
+pixi install          # resolve and install the environment
 pixi run bootstrap    # install the pre-commit + commit-msg git hooks
 ```
 
@@ -37,38 +38,62 @@ cp .env.local.example .env    # copy on macOS/Linux; use `copy` on Windows cmd
 `.env.local.example` is pre-wired for containerless dev: it sets
 `DJANGO_SETTINGS_MODULE=config.settings.local` and deliberately leaves
 `DATABASE_URL`, `AWS_*`, and `REDIS_URL` **unset** so the base defaults apply —
-SQLite at `backend/db.sqlite3` and `FileSystemStorage` at `backend/media/`. `.env`
-is git-ignored; never commit secrets.
+SQLite at `db.sqlite3` and `FileSystemStorage` at `media/`, both at the repository
+root. `.env` is git-ignored; never commit secrets.
 
 ## Running the stack — `pixi run dev`
 
 ```sh
-pixi run migrate      # apply database migrations (creates backend/db.sqlite3)
+pixi run migrate      # apply database migrations (creates ./db.sqlite3)
 pixi run dev          # start web + worker + beat together (containerless)
 ```
 
+### A fresh database is required as of Story 21.2
+
+Story 21.2 collapsed the four Django apps (`users`, `manifests`, `sbom`, `analysis`)
+into a single `inventory` app and **rewrote migration history from scratch**. Django
+identifies a model as `<app_label>.<ModelName>`, so changing the labels changed the
+identity of every model, every foreign-key target, and every `ContentType` row — and the
+tables moved with them (`users_org` is now `inventory_org`, `sbom_sbomjob` is now
+`inventory_sbomjob`, and so on).
+
+There is **no migration path** from a pre-21.2 database. Any local database created
+before that story is unusable and must be recreated:
+
+```sh
+rm db.sqlite3                  # discard the pre-21.2 database (no upgrade path)
+pixi run migrate               # rebuild the schema from the new initial migrations
+```
+
+**`pixi run migrate` alone is enough to get a usable app**: the data migrations seed both
+the ADMIN org (`0002`) and the default org an anonymous caller acts as (`0003`). Run
+`pixi run seed-superuser` as well only if you want a Django `/admin/` login.
+
+This was a deliberate, signed-off trade: at `version = 0.1.0` with nothing deployed, a
+fresh database was judged far less risky than hand-authoring `SeparateDatabaseAndState`
+state operations for ~10 models across four app labels plus a `ContentType` data
+migration. The one thing that did **not** change is `AUTH_USER_MODEL`, which is still
+`"users.User"` — the dissolved app freed the `users` label and `django_service.users`
+re-took it.
+
 `pixi run dev` runs [honcho](https://honcho.readthedocs.io) against the repo-root
-`Procfile`, launching four processes in one foreground terminal:
+`Procfile`, launching three processes in one foreground terminal:
 
 | Process | Command | What it is |
 |---|---|---|
 | `web` | `pixi run runserver` | Django's `runserver` on `:8000` (not gunicorn) |
 | `worker` | `pixi run worker` | A **real** Celery worker draining the `pipeline` + `analysis` queues |
 | `beat` | `pixi run beat` | Celery Beat scheduler for maintenance jobs |
-| `frontend` | `pixi run fe-dev` | The Vite HMR dev server on `:5173`, proxying `/api` to Django on `:8000` |
 
 honcho is pure-Python and cross-platform, so this single command behaves the same
 on macOS and Windows. `pixi run dev` sets `DJANGO_SETTINGS_MODULE=config.settings.local`
 for the whole process tree, so no child process falls back to the
 production-defaulting `wsgi.py`.
 
-**Open the app at [http://localhost:5173](http://localhost:5173)** — the Vite dev
-server serves the hot-reloading UI and proxies `/api` (and `/admin`, `/static`) to
-Django on `:8000`, so the SPA's API calls reach the real backend. Editing a file
-under `frontend/src/` reloads instantly with no rebuild. (The Django server on
-`:8000` serves the API directly; it only serves the built SPA from `frontend/dist/`
-when you have run `pixi run fe-build` — the dev server on `:5173` is the primary UI
-during development.)
+**Open the app at [http://localhost:8000](http://localhost:8000).** Django serves the
+UI, the REST API, and static assets from that one port — there is no second dev server
+and no build step. `runserver` reloads on Python changes, and template and static edits
+are picked up on the next request.
 
 > **Port conflict — `:8000`.** Both `pixi run dev` and the Docker Compose
 > prod-parity stack bind port `:8000`. Do not run them at the same time — stop one
@@ -84,13 +109,9 @@ pixi run runserver          # Django runserver on :8000 (local settings)
 pixi run worker             # Celery worker: pipeline + analysis queues
 pixi run beat               # Celery Beat scheduler
 pixi run flower             # Celery monitoring UI on :5555
-pixi run fe-dev             # Vite HMR dev server on :5173 (proxies /api → :8000)
 ```
 
-`pixi run fe-dev` runs the frontend on its own — useful when the backend is already
-up (via `pixi run dev`, a container, or the individual tasks above) and you only
-want to iterate on the UI. Other frontend tasks (`fe-build`, `fe-lint`, `fe-test`,
-`fe-typecheck`, …) run through their own `fe-*` pixi tasks; see `pixi task list`.
+See `pixi task list` for the full set.
 
 ## Windows specifics
 
@@ -106,14 +127,10 @@ things differ from Unix:
 - **`runserver`, not gunicorn.** gunicorn is a Unix-only WSGI server and is not
   installed on Windows. Local web always uses Django's `runserver` (cross-platform);
   gunicorn is used only on the containerized OCP/prod path.
-- **Frontend dev server.** `pixi run fe-dev` (and the `frontend` process in
-  `pixi run dev`) runs Vite/npm through the pixi-provided Node runtime, so the HMR
-  server on `:5173` and its `/api → :8000` proxy behave identically on macOS and
-  Windows — no separate Node/nvm install.
 - **Portable broker/beat paths.** The filesystem Celery broker and the Beat
-  schedule live under a git-ignored `backend/.celery/` tree (broker messages under
-  `backend/.celery/broker/`, the Beat schedule at
-  `backend/.celery/celerybeat-schedule`). These paths are built with `pathlib`, so
+  schedule live under a git-ignored `.celery/` tree at the repo root (broker messages
+  under `.celery/broker/`, the Beat schedule at `.celery/celerybeat-schedule`). These
+  paths are built with `pathlib`, so
   they are correct on Windows — nothing is written to POSIX-only `/tmp`, which does
   not exist there. The folders are created on import, so a fresh checkout can start
   a worker without a manual `mkdir`.
@@ -129,9 +146,9 @@ prod topology and the
 | Concern | Local (containerless) | OCP / production |
 |---|---|---|
 | **Settings module** | `config.settings.local` | `config.settings.production` |
-| **Database** | SQLite (`backend/db.sqlite3`) | Enterprise-managed **PostgreSQL** |
-| **Object storage** | `FileSystemStorage` (`backend/media/`) | Enterprise **S3**-compatible object storage |
-| **Celery broker** | Kombu `filesystem://` (`backend/.celery/broker/`) | Enterprise **Redis** |
+| **Database** | SQLite (`db.sqlite3`) | Enterprise-managed **PostgreSQL** |
+| **Object storage** | `FileSystemStorage` (`media/`) | Enterprise **S3**-compatible object storage |
+| **Celery broker** | Kombu `filesystem://` (`.celery/broker/`) | Enterprise **Redis** |
 | **Celery result backend** | `django-db` (results in SQLite) | Enterprise **Redis** |
 | **Web server** | Django `runserver` | **gunicorn** |
 | **Worker pool** | prefork (`-c 4`) on macOS/Linux, `--pool=solo` on Windows | prefork |
@@ -159,7 +176,7 @@ pixi run docker-logs    # follow the logs
 pixi run docker-down    # stop everything
 ```
 
-The API and the built SPA are served by the `web` container (gunicorn); MinIO's
+The UI and the API are served by the `web` container (gunicorn); MinIO's
 console and the Postgres/Redis ports are exposed for local inspection (see
 `docker-compose.yml`). For migrations and management commands, run them inside the
 `web` container:
@@ -169,48 +186,58 @@ pixi run docker-migrate     # apply migrations in the web container
 pixi run docker-shell       # open a shell in the web container
 ```
 
-## Creating the initial admin
+## You do not need an account to use the app
 
-Migrations seed the distinguished **ADMIN** org (`Org.is_admin_org=True`); members
-of that org are **global admins** (see [Architecture](architecture.md)). There is no
-auto-created "personal" org for the first user — a new account starts with zero
-memberships. Instead, seed a Django **superuser**, which is automatically made a
-global admin:
+!!! warning "The application has no authentication"
+
+    Story 21.24 removed the app's own login. Every page and every `/api/v1/` endpoint is
+    open to anyone who can reach the server, and every action is available to every caller.
+    Identity is intended to come from the host platform via OIDC and group claims (Epics
+    17-18); until then, **run this only on a trusted network.**
+
+`pixi run migrate` seeds two organizations and that is all the setup the app needs:
+
+| Org | Seeded by | Purpose |
+|---|---|---|
+| **Enterprise Wells Fargo Technology** (`enterprise-wells-fargo-technology`) | `inventory.0003_seed_default_org` | The org an anonymous caller acts as. Override the slug with `INVENTORY_DEFAULT_ORG_SLUG`. |
+| **Admin** (`admin`) | `inventory.0002_seed_admin_org` | The platform-admin tier. Never a workspace — it is not offered in the org switcher or on the upload form. |
+
+Open [http://localhost:8000](http://localhost:8000) and go straight to **Upload**. Pick the
+organization on the form; create more from the **Organization** page whenever you need them.
+
+### Creating a Django superuser (for `/admin/` only)
+
+`django.contrib.admin` keeps its **own** login at `/admin/`, independent of the app. A
+superuser is needed only to reach that:
 
 ```sh
-cd backend
-python manage.py createsuperuser        # create_superuser hook → grant_global_admin
+pixi run python manage.py createsuperuser
 ```
 
 **Env-driven auto-seed (Story 2.13):** set `DJANGO_SUPERUSER_EMAIL` and
-`DJANGO_SUPERUSER_PASSWORD` in `.env` and seeding creates that superuser (making
-them a global admin via the `create_superuser` hook) if it does not already exist —
-no manual step. The `.env.local.example` template ships placeholder values you can
-edit. The command is idempotent: it skips cleanly when the vars are unset or the
-user already exists, and never logs the password. You can also run it directly:
+`DJANGO_SUPERUSER_PASSWORD` in `.env` and seeding creates that superuser if it does not
+already exist. It is idempotent — it skips cleanly when the vars are unset or the user
+exists, and never logs the password:
 
 ```sh
 pixi run seed-superuser        # env-driven; idempotent (Story 2.13)
 ```
 
-The seeded superuser is provisioned into the **ADMIN** org — there is no auto-created
-personal org. Never commit real credentials.
-
-`UserManager.create_superuser` calls `grant_global_admin`, so the new superuser is
-written into the ADMIN org and back-filled as an admin of every org. If you created
-superusers before running the seed migration (or need an idempotent catch-up), run:
+`UserManager.create_superuser` calls `grant_global_admin`, so the superuser is written into
+the ADMIN org. That tier no longer gates anything in the app, but the records are still
+maintained — they are the seam host-supplied group claims will re-attach to. For an
+idempotent catch-up over superusers created before the seed migration:
 
 ```sh
-cd backend
-python manage.py bootstrap_admin_org    # ensure the ADMIN org exists; seed all superusers
+pixi run python manage.py bootstrap_admin_org   # ensure the ADMIN org exists; seed superusers
 ```
 
-Under Docker Compose, run these inside the `web` container (`pixi run docker-shell`,
-then the same `python manage.py …` commands).
+Under Docker Compose run these inside the `web` container — `pixi run docker-shell`, then
+the same `pixi run python manage.py …` commands. Never commit real credentials.
 
 ## Settings
 
-Django settings are split under `backend/config/settings/`:
+Django settings are split under `src/config/settings/`:
 
 | Module | Used for |
 |---|---|
@@ -224,8 +251,7 @@ Configuration is environment-driven; never commit secrets or `.env` files.
 
 | Task | What it does |
 |---|---|
-| `pixi run dev` | Start the containerless stack (web + worker + beat + frontend HMR) |
-| `pixi run fe-dev` | Start just the Vite HMR frontend on :5173 (proxies `/api` → :8000) |
+| `pixi run dev` | Start the containerless stack (web + worker + beat) |
 | `pixi run migrate` | Apply database migrations |
 | `pixi run test` | Backend unit tests (fast) |
 | `pixi run test-integration` | Backend integration tests |

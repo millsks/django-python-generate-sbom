@@ -1,6 +1,6 @@
 # Job History
 
-The **History** page (in the top navigation) lists the SBOM jobs for your active
+The **History** page (in the side navigation) lists the SBOM jobs for your active
 organization, most recent first, so you can revisit past runs.
 
 ## What you see
@@ -19,4 +19,4 @@ tabs and downloads are available exactly as when it first completed.
     the organization switcher in the top bar.
 
 !!! info "Screenshots"
-    _Screenshots of the History page are added with the UI polish work._
+    Not captured. See the note in the [User Guide index](index.md).

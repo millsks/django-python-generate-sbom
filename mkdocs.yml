@@ -1,7 +1,12 @@
 # MkDocs Material configuration (Story 11.1). The nav skeleton below is filled in
 # by the Epic 11 content stories (11.2–11.6). Build strictly with `pixi run docs-build`.
-site_name: django-python-generate-sbom
-site_description: Generate and analyze CycloneDX SBOMs for Python projects — vulnerabilities, licenses, and version currency.
+#
+# `site_name` and `site_description` carry the PRODUCT name (rebrand layer L6, Story 21.21).
+# `site_url`, `repo_url`, and `repo_name` carry the EXTERNAL identity (layer L5) and are
+# deliberately unchanged — renaming them would break published links and discard the
+# project's SonarCloud history. Do not "fix" the inconsistency.
+site_name: Python Inventory Supply Lens
+site_description: Python Inventory Supply Lens — generate and analyze CycloneDX SBOMs for Python projects, with vulnerability, license, and version-currency reports.
 site_url: https://millsks.github.io/django-python-generate-sbom/
 repo_url: https://github.com/millsks/django-python-generate-sbom
 repo_name: millsks/django-python-generate-sbom
@@ -43,10 +48,12 @@ plugins:
   - search
   - mkdocstrings:
       # Static (griffe) rendering of the backend docstrings — no Django runtime import.
-      # `paths` points griffe at backend/ so the generate_sbom package resolves.
+      # Story 21.1: `paths` lists BOTH import roots so `config`/`django_service` resolve
+      # from src/ and the reusable app resolves as the unqualified `inventory`, exactly
+      # as it does at runtime.
       handlers:
         python:
-          paths: [backend]
+          paths: [src, src/django_apps]
           options:
             docstring_style: google
             show_source: false
@@ -106,6 +113,8 @@ nav:
       - Data Model: developer/data-model.md
       - Testing: developer/testing.md
       - Code Reference: developer/code-reference.md
+      - Rename Audit: developer/rename-audit.md
+      - Test-Parity Audit: developer/test-parity-audit.md
   - API Reference:
     - Overview: api/index.md
     - Authentication: api/authentication.md

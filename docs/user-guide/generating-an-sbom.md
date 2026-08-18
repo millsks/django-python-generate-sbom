@@ -1,6 +1,6 @@
 # Generating an SBOM
 
-Generating an SBOM starts from the **Upload** page (in the top navigation once you are
+Generating an SBOM starts from the **Upload** page (in the side navigation once you are
 signed in). You provide a dependency manifest and some metadata about the component, pick
 an output format, and start the job.
 
@@ -56,5 +56,4 @@ When the pipeline finishes, the Results page shows the report tabs — see
 [Reading the Results](reading-the-results.md).
 
 !!! info "Screenshots"
-    _Screenshots of the upload form and the in-progress Results page are added with the UI
-    polish work._
+    Not captured. See the note in the [User Guide index](index.md).

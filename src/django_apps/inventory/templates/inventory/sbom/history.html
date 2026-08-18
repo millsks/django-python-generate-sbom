@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% load render_table from django_tables2 %}
+{% load crispy_forms_tags %}
+{% comment %} Job history (converted from HistoryPage.tsx, the SPA's largest page).
+
+  Live polling is NOT here — Story 21.11 adds it to these rows.
+
+  Filtering, sorting, and paging are all querystring-driven, so any view of this table can be
+  bookmarked or shared. That is the trade the epic accepted in exchange for the SPA's
+  client-side sorting of already-fetched rows.
+
+  Selection covers the CURRENT PAGE only, matching the SPA's toggleAll, and the confirmation
+  copy says so rather than implying it spans the filter.
+{% endcomment %}
+
+{% block title %}History · {{ product_name_short }}{% endblock %}
+
+{% block content %}
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <div>
+      <h1 class="h3 mb-0">Job history</h1>
+      <p class="text-body-secondary mb-0">{{ org.name }}</p>
+    </div>
+      {% comment %} Was admin-only (Story 2.17). Story 21.24 removed the app's access
+        control, so this is available to anyone; the confirm dialog is now the only
+        guard against an accidental click. {% endcomment %}
+      <form method="post" action="{% url 'ui-jobs-delete-all-artifacts' %}"
+            onsubmit="return confirm('Delete the SBOM and report files for EVERY job in {{ org.name|escapejs }}? The job records and their metadata are kept — only the downloadable files are removed. This cannot be undone.');">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-outline-danger">Delete all artifacts</button>
+      </form>
+
+  </div>
+
+  <form method="get" class="row g-2 align-items-end mt-3">
+    <div class="col-sm-4 col-lg-3">
+      <label class="form-label" for="id_status">Status</label>
+      {{ filter.form.status }}
+    </div>
+    <div class="col-sm-4 col-lg-3">
+      <label class="form-label" for="id_format">Manifest format</label>
+      {{ filter.form.format }}
+    </div>
+    <div class="col-sm-auto">
+      {% comment %} No `page` field is carried over, so changing a filter starts at page 1
+        rather than stranding the user on a page that no longer exists. {% endcomment %}
+      <button type="submit" class="btn btn-outline-primary">Apply</button>
+      <a class="btn btn-link" href="{% url 'ui-history' %}">Clear</a>
+    </div>
+  </form>
+
+  <form method="post" action="{% url 'ui-jobs-delete-artifacts' %}" id="bulk-delete"
+        onsubmit="return confirm('Delete the SBOM and report files for the selected jobs on this page? The job records and their metadata are kept — only the downloadable files are removed.');">
+    {% csrf_token %}
+
+    {% comment %} `table-responsive` so a narrow viewport scrolls the TABLE rather than the
+      page — this table has eight columns and is the widest thing in the app. {% endcomment %}
+    <div class="table-responsive mt-3">
+      {% render_table table %}
+    </div>
+
+    <button type="submit" class="btn btn-sm btn-outline-danger" id="delete-selected">
+      Delete selected artifacts
+    </button>
+    <span class="small text-body-secondary ms-2">Applies to the rows selected on this page.</span>
+  </form>
+
+  <script>
+    // Header checkbox toggles only the rows currently rendered — the same scope the SPA had.
+    (function () {
+      var all = document.getElementById('select-all');
+      if (!all) return;
+      all.addEventListener('change', function () {
+        document.querySelectorAll('#bulk-delete input[name="task_ids"]').forEach(function (box) {
+          box.checked = all.checked;
+        });
+      });
+    })();
+  </script>
+{% endblock %}

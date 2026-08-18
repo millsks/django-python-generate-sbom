@@ -67,4 +67,4 @@ packages to the top). The report can be exported to Excel, with the package-name
 preserved in the spreadsheet.
 
 !!! info "Screenshots"
-    _Screenshots of each tab are added with the UI polish work._
+    Not captured. See the note in the [User Guide index](index.md).

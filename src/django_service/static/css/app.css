@@ -1,0 +1,26 @@
+/*
+ * Project styles layered on top of vendored Bootstrap 5.3 (Story 21.3).
+ *
+ * Deliberately thin: Bootstrap's own utilities and `data-bs-theme` handle nearly
+ * everything, and every rule added here is a rule that has to be maintained against
+ * future Bootstrap upgrades. Add to this file only when a utility class genuinely cannot
+ * express the need.
+ */
+
+/* Inline SVG icons from the sprite. `currentColor` is what makes them inherit link and
+   button colours automatically in both themes. */
+.bi {
+  fill: currentColor;
+  vertical-align: -0.125em;
+}
+
+/* Keep the sidebar in view while long tables scroll (md+ only, where it is rendered). */
+@media (min-width: 768px) {
+  aside {
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    max-height: 100vh;
+    overflow-y: auto;
+  }
+}

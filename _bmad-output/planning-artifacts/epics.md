@@ -5979,6 +5979,14 @@ Phase G (21.18–21.23) retires React and completes the rename **last**, because
 `backend/config/urls.py:38` must not be removed until every route has a Django owner, and the documentation
 sweep should describe the UI that exists rather than the one being built.
 
+**ORDER AMENDED — Story 21.24 added after the epic was written.** At the product owner's direction the app's
+own authentication and access control are **removed**, not carried forward: identity becomes the host
+platform's responsibility, supplied via OIDC and group claims (Epics 17–18) when `inventory` is contributed to
+the `django-15-factor-base` platform. Story 21.24 slots in **after 21.18 and before 21.19**, so Phase G
+retires, documents, and audits an app that is already open. It supersedes Story 21.4 in full and the auth
+pages half of Story 21.5; both stay in this document as the record of what was built and then deliberately
+withdrawn.
+
 ### Story 21.1: Restructure the Repository to a `src/` Layout
 
 As a developer,
@@ -6839,3 +6847,325 @@ signs off on a walkthrough, `pixi run ci` exits 0, and the branch is ready to me
 **When** the epic closes,
 **Then** both are flagged in `sprint-status.yaml` as requiring re-authoring, so no dev agent picks up a story
 that targets a deleted stack.
+
+### Story 21.24: Remove the Authentication Requirement (Open Access Pending OIDC)
+
+As a developer building `inventory` as a reusable app,
+I want every page and every API endpoint reachable without logging in, and the app's own login, registration,
+and access-control machinery deleted,
+so that the app carries no identity opinion of its own and the host platform can supply authentication and
+authorization via OIDC and group claims when it is plugged in.
+
+**Context:** **Added after the epic was written**, at the product owner's direction. Epic 21 re-delivered the
+SPA's client-side route guards as server-side mixins (Story 21.4) and the SPA's login/register screens as
+Django pages (Story 21.5). Both are now being **removed outright**, not flagged off. The app will be rewired to
+authenticate and authorize through **OIDC with group/role claims** (Epics 17 and 18) once it is contributed to
+the target `django-15-factor-base` platform; keeping a second, app-managed identity path alive until then buys
+nothing and constrains the pages built in 21.6–21.18. **Hard removal, not a feature flag** — the product owner
+chose deletion explicitly, on the grounds that the enforcement being deleted is the *wrong shape* for the
+destination (session + local `OrgMembership` roles) and would be rewritten rather than re-enabled.
+
+**The data model already supports this state.** `SBOMJob.user` and `ManifestUpload.user` are both
+`null=True, blank=True` with `on_delete=SET_NULL`, and `ManifestUpload` says why in a comment: "programmatic
+(API-key) uploads have an org but no user". The Api-Key path is *already* `AnonymousUser` plus a resolved org
+(`OrgApiKeyAuthentication.authenticate` returns exactly `(AnonymousUser(), api_key)`). This story makes the
+web path behave the way the Api-Key path already does, minus the key — it does **not** invent a new principal
+shape.
+
+**Fixed decisions (product owner):**
+- **Hard removal.** The mixins, the login/register/logout pages, the DRF `HasSessionOrApiKey` permission, and
+  their tests are deleted — not gated behind a setting.
+- **Anonymous + a default org.** `request.user` stays `AnonymousUser`; nothing is auto-logged-in and no dev
+  superuser is provisioned. The acting org is resolved for anonymous requests, and admin-ness (per-org and
+  global) reads **true**, so every page and every action is reachable.
+- **Both surfaces.** This covers the server-rendered UI **and** `/api/v1/`. The API's *paths and payload field
+  names* stay frozen exactly as the epic promised — only the permission gate in front of them is removed.
+
+**Grounded facts this story must honor (verified against the repo):**
+- **The mixins and their 25 use sites:** `src/django_apps/inventory/common/access.py` defines
+  `OrgMemberRequiredMixin`, `OrgAdminRequiredMixin`, `GlobalAdminRequiredMixin`, `NO_ORG_TEMPLATE`, and
+  `get_org_scoped_object_or_404`. **19 classes apply one directly** — 6 in `inventory/sbom/pages.py` and 13
+  in `inventory/users/pages.py` — and further views inherit the gate through `_ArtifactDeleteMixin`,
+  `_JobScopedView`, and `_MemberActionView`; `django_service/views.py::OrgSwitchView` uses Django's own
+  `LoginRequiredMixin` directly.
+- **Auth pages:** `LoginPageView`, `RegisterPageView`, `LogoutPageView` (`inventory/users/pages.py:83-160`),
+  routed as `ui-login` / `ui-register` / `ui-logout` in `inventory/urls_pages.py`, with templates
+  `inventory/templates/inventory/auth/{login,register}.html`.
+- **DRF gate:** `base.py:81-85` — `DEFAULT_AUTHENTICATION_CLASSES` = `OrgApiKeyAuthentication` +
+  `SessionAuthentication`, `DEFAULT_PERMISSION_CLASSES` = `inventory.users.authentication.HasSessionOrApiKey`.
+  `HasSessionOrApiKey` is project code (23 lines, same file as `OrgApiKeyAuthentication`).
+- **DRF auth endpoints:** `auth/register/`, `auth/login/`, `auth/logout/`, `auth/me/`
+  (`inventory/users/urls.py:27-30`) backed by `RegisterView`, `LoginView`, `LogoutView`, `AuthMeView`.
+- **Org resolution:** `inventory/users/auth.py::get_request_org` returns `None` for anonymous
+  (`if not request.user.is_authenticated: return None`). `get_admin_org` and
+  `django_service/context_processors.py::ui` both short-circuit on the same check.
+- **Seeded orgs:** only migration `inventory/0002_seed_admin_org` exists, and it seeds the **ADMIN** org
+  (`is_admin_org=True`) — which `get_request_org`, `get_user_orgs`, and `get_the_admin_org` all deliberately
+  refuse to treat as a workspace (Stories 2.12/2.18). A fresh database therefore has **no** org that
+  anonymous requests could act as.
+- **Shell markup:** `django_service/templates/base.html` branches on `user.is_authenticated` at lines 64, 86,
+  123, and 138, links `ui-login` (:114) and posts `ui-logout` (:103); its account dropdown is built around
+  `{{ user.email }}`. `_nav.html` carries three `is_org_admin`/`is_global_admin` gates and is included twice.
+  `_org_switcher.html` renders only inside an `is_authenticated` branch.
+- **Settings:** `base.py:206-211` sets `LOGIN_URL = "/login"`, `LOGIN_REDIRECT_URL`, `LOGOUT_REDIRECT_URL`.
+- **Catch-all:** `config/urls.py:73` excludes `login|register|logout` from the SPA lookahead so Django serves
+  them; removing the Django routes without editing the lookahead leaves three URLs resolving to nothing.
+- **Test footprint:** 25 `client.login(...)` calls across the suite; ~34 tests named for anonymous / 403 /
+  forbidden / non-admin outcomes; whole files `test_access_control.py` (303 lines), `test_auth_pages.py`
+  (300), `test_auth.py` (156), `test_registration.py` (91) exist primarily to assert what is being removed.
+
+> **⚠ WHAT IS DELIBERATELY *NOT* REMOVED.** `AUTH_USER_MODEL`, `django_service.users`, `Org`, `OrgMembership`,
+> `OrgApiKey`, and the whole org/member/key management surface **stay**. Orgs remain the tenancy boundary
+> (**AD-2**) and every service still takes an org as its first positional argument — this story removes the
+> *identity gate*, not the *tenancy model*. `django.contrib.admin` keeps its own login at `/admin/`; Django's
+> admin is not the app's UI and is untouched. `OrgApiKeyAuthentication` stays registered, so a request that
+> *does* present `Authorization: Api-Key <key>` still pins itself to that key's org.
+
+> **⚠ PLANNING CONFLICT — Epic 17.** Story 17.8 plans a "coexistence flag, then cutover" that migrates users
+> **off local password auth**. After this story there is no local password auth to migrate off, and Stories
+> 17.2–17.5 assume login screens this story deletes. Epic 17 is not re-authored here; it is flagged in
+> `sprint-status.yaml` alongside the existing Epic 16 / Story 17.5 flags so no dev agent picks up a story
+> written against a stack that no longer exists.
+
+**Acceptance Criteria:**
+
+1. **Nothing in the app requires a login.**
+   Given every server-rendered page and every `/api/v1/` endpoint currently refuses an unauthenticated caller,
+   when the gate is removed, then an anonymous client receives **200** (or the endpoint's normal success
+   status) from **every** route in `inventory/urls_pages.py` and **every** route in the four `/api/v1/`
+   urlconfs, and **no** response in the project is a redirect-to-login or a 403 produced by app-owned access
+   control.
+2. **The access-control layer is deleted, not disabled.**
+   Given `inventory/common/access.py` defines three mixins plus `NO_ORG_TEMPLATE`, when the story completes,
+   then `OrgMemberRequiredMixin`, `OrgAdminRequiredMixin`, `GlobalAdminRequiredMixin`, `NO_ORG_TEMPLATE`, and
+   the `_no_org.html` template no longer exist anywhere in `src/`, no view imports
+   `django.contrib.auth.mixins`, and a test asserts the absence rather than trusting the diff.
+3. **`get_org_scoped_object_or_404` survives and org isolation still holds.**
+   Given **AD-2** is a tenancy invariant and not an authentication one, when the mixins are deleted, then
+   `get_org_scoped_object_or_404` remains, every org-scoped view still filters by the acting org, and a
+   request for an object belonging to a *different* org still raises 404 — indistinguishable from a
+   non-existent object.
+4. **Anonymous requests resolve a real org.**
+   Given `get_request_org` returns `None` for anonymous callers and a fresh database seeds only the ADMIN org,
+   when an anonymous request arrives, then `get_request_org` returns a **non-ADMIN** org — the one named by a
+   new `INVENTORY_DEFAULT_ORG_SLUG` setting when set, otherwise the first non-ADMIN org by name — a data
+   migration seeds that org so it exists on a fresh database, and the Api-Key path still wins when a key is
+   presented.
+5. **Admin-gated capability is universally available.**
+   Given org-admin and global-admin actions were gated per principal, when the gate is removed, then
+   `get_admin_org` returns the acting org and `is_global_admin` reads **true** for anonymous callers, so
+   member management, org creation, API-key create/revoke, bulk artifact deletion, and the platform
+   global-admins page are all reachable and all succeed.
+6. **The login, registration, and logout surface is gone.**
+   Given Story 21.5 built three pages and Epic 2 built three DRF endpoints, when they are removed, then
+   `LoginPageView` / `RegisterPageView` / `LogoutPageView`, the `ui-login` / `ui-register` / `ui-logout`
+   routes, the two `auth/` templates, the DRF `RegisterView` / `LoginView` / `LogoutView` and their
+   `auth/register/`, `auth/login/`, `auth/logout/` routes, and `LOGIN_URL` / `LOGIN_REDIRECT_URL` /
+   `LOGOUT_REDIRECT_URL` are all deleted, and the SPA catch-all's negative lookahead is updated in the same
+   commit so no URL resolves to a route that no longer exists.
+7. **The app shell shows no authentication state.**
+   Given `base.html` branches on `user.is_authenticated` in four places and renders a "Sign in" button and a
+   sign-out form, when the shell is updated, then no template in the project branches on `is_authenticated`,
+   no sign-in or sign-out control renders, every one of the seven nav items renders unconditionally, and the
+   layout no longer switches its column width on authentication state.
+8. **The org switcher works without memberships.**
+   Given the switcher lists `get_user_orgs(user)` and `set_active_org_by_slug` validates membership, when
+   both are made membership-free, then the switcher offers **every** non-ADMIN org, switching to any of them
+   succeeds and re-renders the current page against it, the switcher still hides itself below two orgs
+   (Story 2.19), and it remains a **CSRF-protected POST** — removing the login requirement does not remove
+   CSRF protection.
+9. **The DRF gate is removed without touching the contract.**
+   Given `DEFAULT_PERMISSION_CLASSES` is `HasSessionOrApiKey`, when the gate is removed, then the default
+   becomes `AllowAny`, the `HasSessionOrApiKey` class is deleted, `OrgApiKeyAuthentication` stays registered
+   and still resolves `request.auth.org`, and a test asserts that every `/api/v1/` path and payload field name
+   is byte-for-byte what it was before — the epic's freeze on the API contract is not relaxed by this story.
+10. **The test suite tests the new rule, and coverage does not regress.**
+    Given ~34 tests assert redirect-to-login, 403, or non-admin denial and 25 call `client.login(...)`, when
+    the suite is reworked, then each such test is either **deleted** (it asserted a rule that no longer
+    exists) or **rewritten** to assert the anonymous caller now succeeds — none is skipped or xfailed — the
+    remaining `client.login(...)` calls exist only where the test is genuinely about a logged-in user,
+    `pixi run ci` exits 0, and coverage stays at or above the 90% gate.
+11. **The removal is recorded where the next reader will look.**
+    Given Epics 17 and 18 will reintroduce authentication via OIDC and group claims, when the story
+    completes, then the architecture's auth section and `AD-14` carry a dated note that the app is
+    deliberately open and that identity is the host platform's responsibility, Epic 17 is flagged in
+    `sprint-status.yaml` as requiring re-authoring, and no documentation still instructs a reader to sign in.
+
+**ORDER:** Runs **after Story 21.18 and before Story 21.19.** After 21.18 because the landing page is in
+flight and its sign-in call-to-action should be written once, against the final rule. Before 21.19–21.23
+because the React retirement, the documentation sweep (21.21), and the test-parity audit (21.23) must all
+describe and audit the app as it will actually ship — an audit that certifies authorization tests for four
+principal types would otherwise certify tests this story deletes.
+
+---
+
+## Epic 22: Harden Containerless Local Development (Windows + macOS)
+
+**This epic does not build containerless local development — Epic 20 already did.** SQLite is the local
+database, Kombu's `filesystem://` transport is the local broker, `FileSystemStorage` is local object storage,
+`win-64` is a supported pixi platform with a `--pool=solo` worker override, and `pixi run dev` starts web +
+worker + beat through honcho with no container of any kind. All of that is implemented and verified.
+
+What is **not** established is that it *keeps* working, on Windows, for a team that has no fallback. The
+application is moving into an organization where Docker and Podman are unavailable on Windows by security
+policy, so the containerless path is not the convenient option — it is the **only** option, and a regression in
+it stops work outright. This epic closes the gap between "works on the machine it was built on" and "is
+guaranteed on both platforms by CI", and fixes one real defect that ships to every developer today.
+
+**Grounded facts (verified against the repo, 2026-08-18):**
+- `pixi.toml:10` — `platforms = [..., "win-64"]`; `[target.win-64.tasks.worker]` swaps the Unix-only prefork
+  pool for `--pool=solo`.
+- `src/config/settings/local.py` — `CELERY_BROKER_URL = "filesystem://"`, `CELERY_RESULT_BACKEND = "django-db"`,
+  and a comment forbidding a `DATABASES`/`STORAGES` swap because the base SQLite + filesystem defaults **are**
+  the containerless defaults.
+- `pixi run dev` starts exactly three processes (`web.1`, `worker.1`, `beat.1`); `/upload` answers `200` from a
+  database created by `pixi run migrate` alone.
+- `pixi run test-integration` — **8 passed** with no Postgres, Redis, MinIO, or network. The integration suite
+  is already containerless.
+- `.github/workflows/ci.yml` — the `unit-windows` job runs `pixi run test` (**unit only**) on `windows-latest`.
+- `.env.example` sets `DJANGO_SETTINGS_MODULE=config.settings.production` with Postgres, Redis, and MinIO
+  values; `.env.local.example` is the containerless template.
+- Both `beat_schedule` entries in `src/config/celery_app.py:23-34` name tasks that are **absent from the Celery
+  registry** — confirmed by importing the default modules and diffing against `app.tasks`.
+
+### Story 22.1: Make the Containerless Template the Obvious One
+
+As a developer joining on Windows,
+I want the environment file I am told to copy to be the containerless one,
+so that my first run does not point the app at a PostgreSQL, Redis, and MinIO that I cannot start.
+
+**Context:** `.env.example` is the file a newcomer reaches for by name, and it is the **production/container**
+template — `DJANGO_SETTINGS_MODULE=config.settings.production` plus Postgres, Redis, and MinIO. The
+containerless template is `.env.local.example`. `README.md`'s Quick Start compounds this by instructing
+`cp .env.example .env` as part of the Docker path. A developer with no Docker who follows the most obvious
+instruction gets a stack that cannot start, and the failure (a Postgres connection refusal) does not point at
+the cause.
+
+**Acceptance Criteria:**
+1. **The default-named template is containerless.**
+   Given a developer copies the template whose name carries no qualifier, when they run `pixi run migrate` and
+   `pixi run dev` with no further edits, then the application starts against SQLite, the filesystem broker, and
+   filesystem storage, and requires no container.
+2. **The container template is still available and clearly named.**
+   Given the Docker Compose path still exists for prod-parity work, when the templates are reorganised, then a
+   container/production template remains, is named so its purpose is unambiguous, and is referenced only from
+   the Compose section of the docs.
+3. **The README's Quick Start leads with the containerless path.**
+   Given Docker is unavailable to part of the team by policy, when the Quick Start is reordered, then
+   `pixi install` → `pixi run migrate` → `pixi run dev` is the first path presented, and the Compose path is
+   presented after it as optional.
+4. **A test asserts the default template is containerless.**
+   Given the trap was a filename, when the story completes, then a test parses the default-named template and
+   fails if it selects production settings or names a service the containerless path cannot provide.
+
+### Story 22.2: Fix the Unregistered Celery Beat Maintenance Tasks
+
+As a developer running the local stack,
+I want the two scheduled maintenance tasks to actually exist in the Celery registry,
+so that Beat is not dispatching tasks that every worker rejects.
+
+**Context:** Found during Story 21.1 and carried unfixed through Epic 21 because it was out of that epic's
+scope. `app.conf.beat_schedule` schedules `inventory.tasks.maintenance.refresh_parselmouth_mapping` and
+`...purge_expired_artifacts`; neither module is imported during autodiscovery, so both names are **missing from
+`app.tasks`**. Beat dispatches them and the worker raises `NotRegistered`. Two features are silently dead:
+artifact retention (FR-8.2) never purges, and the parselmouth mapping never refreshes. This mattered less when
+Beat ran only in a container; `pixi run dev` now starts Beat on every developer's machine.
+
+**Acceptance Criteria:**
+1. **Both scheduled tasks are registered.**
+   Given `beat_schedule` names two tasks, when the application starts, then both names are present in
+   `app.tasks` and a worker executes them rather than raising `NotRegistered`.
+2. **The schedule cannot drift from the registry again.**
+   Given the failure was invisible because nothing compared the two, when the story completes, then a test
+   asserts every `beat_schedule` entry's `task` resolves in the registry — so adding a third schedule entry
+   without importing its module fails the suite.
+3. **Both tasks are proven to run.**
+   Given the defect hid behind tests that never dispatched them, when the story completes, then each task is
+   executed in a test and asserted on its effect, not merely on being importable.
+4. **Gate green.** `pixi run ci` exits 0.
+
+### Story 22.3: Windows CI Parity — Run the Whole Gate on `win-64`
+
+As a maintainer,
+I want Windows to run the same suite macOS does,
+so that a cross-platform regression is caught by CI rather than by the developer who cannot work around it.
+
+**Context:** `unit-windows` runs `pixi run test` — the **unit** suite only. The parts most likely to break on
+Windows are precisely the parts it does not cover: the `filesystem://` broker's locking, the `--pool=solo`
+worker, Beat's schedule file, and SQLite under two processes. The integration suite already runs offline with
+no infrastructure (**8 passed**), so there is no technical obstacle to running it on `windows-latest`.
+
+**Acceptance Criteria:**
+1. **The Windows job runs the integration suite too.**
+   Given `pixi run test-integration` needs no container, when the job is extended, then it runs on
+   `windows-latest` and passes.
+2. **The Windows job runs the coverage gate.**
+   Given coverage is the merge gate on Ubuntu, when the job is extended, then Windows runs `pixi run cov` and
+   is subject to the same ≥90% floor.
+3. **A Windows failure blocks the merge.**
+   Given the platform has no fallback for part of the team, when the workflow is updated, then the Windows job
+   is a required check rather than an advisory one, and the change is recorded in the workflow.
+4. **The matrix is honest about what it does not cover.**
+   Given `pixi run ci` also runs `precommit`, `build`, `security`, and `docs-build`, when the job is defined,
+   then whatever it deliberately omits is stated in a comment rather than left implicit.
+
+### Story 22.4: Prove the Local Pipeline End to End on Both Platforms
+
+As a developer,
+I want evidence that a real SBOM job completes locally on SQLite with a real worker,
+so that the containerless stack is verified as a working system rather than as a set of green unit tests.
+
+**Context:** Every existing test runs Celery **eager** (`config.settings.test`), so no test has ever exercised
+the local stack as it actually runs: a separate worker process, the `filesystem://` broker, and **two processes
+writing the same SQLite file**. SQLite's writer lock is the classic failure here — the web process writing
+`SBOMJob.status` while the worker writes phase progress produces `database is locked`, and it appears under
+load rather than on the first run. AD-12 makes the worker the sole writer of `status`, which helps, but nothing
+proves it.
+
+**Acceptance Criteria:**
+1. **A real job completes against a real worker.**
+   Given `pixi run dev` runs web + worker + beat, when a manifest is submitted through the UI, then the job
+   reaches a terminal state with its SBOM artifact written, driven by the real worker over the filesystem
+   broker — not eager mode.
+2. **Concurrent writes do not lock the database.**
+   Given SQLite permits one writer, when a job runs while the web process is serving requests against the same
+   database, then no request or task fails with `database is locked`, and whatever makes that true (Django's
+   `timeout`, WAL mode, or AD-12's single-writer rule) is **recorded in settings with its reasoning**.
+3. **The verification runs on both platforms.**
+   Given the team develops on Windows and macOS, when the check is automated, then it runs on both and its
+   result is visible in CI.
+4. **The filesystem broker's limits are documented.**
+   Given Kombu's `filesystem://` transport is a development convenience, when the story completes, then its
+   known constraints — no fanout, polling latency, shared-directory locking — are documented where a developer
+   debugging a stuck job will find them.
+
+### Story 22.5: State the No-Container Contract (Product-Owner Decision)
+
+As a maintainer,
+I want the project to state that local development requires no container, and to decide what happens to the
+Compose path,
+so that a contributor does not add a dependency that half the team cannot satisfy.
+
+**Context:** Docker and Podman are unavailable on Windows in the destination organization by security policy.
+The repository still ships `docker-compose.yml`, a `Dockerfile`, and eight `docker-*` pixi tasks, and
+`docs/developer/setup.md` presents Compose as the "prod-parity" path. None of that is wrong — the container
+path is how OCP/prod runs (Epic 19) — but nothing states the **contract**: that no local workflow, and no CI
+gate, may require a container.
+
+> **⚠ DECISION GATE.** Whether to keep, de-emphasise, or retire the local Compose path is the product owner's
+> call. Propose; do not remove anything until it is answered.
+
+**Acceptance Criteria:**
+1. **The contract is written down.**
+   Given the constraint is a policy rather than a preference, when it is recorded, then `CONTRIBUTING.md` and
+   the developer docs state that local development and `pixi run ci` must never require Docker or Podman, and
+   that Windows and macOS are equally supported.
+2. **A test enforces the contract.**
+   Given a future task could reintroduce a container dependency, when the story completes, then a test asserts
+   no task in `pixi run ci`'s chain invokes `docker` or `podman`.
+3. **The Compose path's fate is decided and applied.**
+   Given the decision gate above, when the product owner answers, then the Compose path is kept as-is,
+   marked explicitly as unavailable to part of the team, or retired — and the reasoning is recorded in place.
+4. **The docs stop implying Docker is expected.**
+   Given `setup.md` currently frames Compose as a normal alternative, when it is updated, then the
+   containerless path is unambiguously the supported local path and Compose is qualified accordingly.

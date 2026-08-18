@@ -2,7 +2,7 @@
 
 API keys let you call the app's REST API programmatically — for example to generate SBOMs
 from CI. Keys are scoped to your **organization** and managed on the **API Keys** page (in
-the top navigation).
+the side navigation).
 
 ## Create a key
 
@@ -43,4 +43,4 @@ On the **API Keys** page, each key shows its name, prefix, and creation date. Ch
 `401 Unauthorized`.
 
 !!! info "Screenshots"
-    _Screenshots of the API Keys page are added with the UI polish work._
+    Not captured. See the note in the [User Guide index](index.md).

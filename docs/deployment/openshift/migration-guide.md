@@ -29,7 +29,7 @@ Before you begin, confirm you have:
   [egress](#egress-and-network-policy)).
 - **The `web` health endpoint** confirmed: `GET /health/` returns
   `{"status": "ok"}` and, by design, does **not** touch the database
-  (`backend/generate_sbom/common/views.py`), so it is safe as both a liveness and a
+  (`src/django_apps/inventory/common/views.py`), so it is safe as both a liveness and a
   readiness probe.
 
 ## Image: build in CI, push to a registry, pull into OCP
@@ -124,7 +124,7 @@ Common failure signature if this is wrong: the Pod crash-loops with
 
 ## Configuration and secrets
 
-The app is entirely env-driven (`backend/config/settings/base.py` and
+The app is entirely env-driven (`src/config/settings/base.py` and
 `production.py`), so migration is a matter of moving `.env` into a **ConfigMap**
 (non-secret) plus a **Secret** (sensitive). See the
 [Reference inventory](reference.md#environment-variables) for the exact split of

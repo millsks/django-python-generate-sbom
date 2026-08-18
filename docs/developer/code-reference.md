@@ -11,9 +11,9 @@ are documented narratively in [Architecture](architecture.md), the
 
 ## Shared abstractions (`common`)
 
-::: generate_sbom.common.storage
+::: inventory.common.storage
 
-::: generate_sbom.common.logging
+::: inventory.common.logging
 
 ## Accounts & organization services (`users`)
 
@@ -22,12 +22,12 @@ Membership, admin, and global-admin mutations (Epic 2 / Story 13.1) — includin
 `demote_admin_to_member`, `grant_global_admin`, `grant_global_admin_by_email`,
 `revoke_global_admin`, and `list_global_admins`.
 
-::: generate_sbom.users.services
+::: inventory.users.services
 
 ## Analysis services
 
-::: generate_sbom.analysis.services.versions
+::: inventory.analysis.services.versions
 
-::: generate_sbom.analysis.services.parselmouth
+::: inventory.analysis.services.parselmouth
 
-::: generate_sbom.analysis.services.http
+::: inventory.analysis.services.http

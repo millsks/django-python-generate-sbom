@@ -1,0 +1,100 @@
+"""Tests for API key management and the Api-Key auth class (Story 2.4)."""
+
+import pytest
+from rest_framework.test import APIClient
+
+from django_service.users.models import User
+from inventory.users.models import OrgApiKey
+from inventory.users.services import create_org, register_user
+
+
+def _register_with_org(email: str, password: str = "pw12345678") -> User:
+    """Register a user and give them a first org (registration now creates none)."""
+    user = register_user(email=email, password=password)
+    create_org(name=email.split("@")[0], admin_user=user)
+    return user
+
+
+def _login(email: str, password: str = "pw12345678") -> APIClient:
+    client = APIClient()
+    # Story 21.24 deleted POST /api/v1/auth/login/. Django's session login still works
+    # (the user model and SessionAuthentication both survive), so these tests keep
+    # exercising a real principal rather than the anonymous default-org path.
+    client.login(email=email, password=password)
+    return client
+
+
+@pytest.mark.django_db
+def test_create_key_returns_plaintext_once_and_list_hides_it() -> None:
+    _register_with_org("alice@example.com")
+    client = _login("alice@example.com")
+
+    created = client.post("/api/v1/keys/", {"name": "ci"}, format="json")
+    assert created.status_code == 201
+    assert len(created.data["key"]) > 10  # plaintext shown once
+
+    listed = client.get("/api/v1/keys/")
+    assert listed.status_code == 200
+    row = listed.data[0]
+    assert row["name"] == "ci"
+    assert "prefix" in row
+    assert "key" not in row
+    assert "hashed_key" not in row
+
+
+@pytest.mark.django_db
+def test_eleventh_active_key_rejected() -> None:
+    _register_with_org("alice@example.com")
+    client = _login("alice@example.com")
+    for i in range(10):
+        client.post("/api/v1/keys/", {"name": f"k{i}"}, format="json")
+
+    response = client.post("/api/v1/keys/", {"name": "k10"}, format="json")
+
+    assert response.status_code == 400
+    assert response.data["code"] == "api_key_limit_reached"
+    assert response.data["error"] == "This org has reached the maximum of 10 active API keys."
+
+
+@pytest.mark.django_db
+def test_valid_key_authenticates_and_updates_last_used() -> None:
+    _register_with_org("alice@example.com")
+    admin = _login("alice@example.com")
+    key = admin.post("/api/v1/keys/", {"name": "ci"}, format="json").data["key"]
+
+    response = APIClient().get("/api/v1/keys/", HTTP_AUTHORIZATION=f"Api-Key {key}")
+
+    assert response.status_code == 200
+    assert OrgApiKey.objects.get(name="ci").last_used_at is not None
+
+
+@pytest.mark.django_db
+def test_revoked_key_is_rejected() -> None:
+    _register_with_org("alice@example.com")
+    admin = _login("alice@example.com")
+    created = admin.post("/api/v1/keys/", {"name": "ci"}, format="json")
+    key, key_id = created.data["key"], created.data["id"]
+
+    assert admin.delete(f"/api/v1/keys/{key_id}/").status_code == 204
+
+    response = APIClient().get("/api/v1/keys/", HTTP_AUTHORIZATION=f"Api-Key {key}")
+    assert response.status_code == 401
+    assert response.data["code"] == "invalid_api_key"
+
+
+@pytest.mark.django_db
+def test_bogus_key_is_rejected() -> None:
+    response = APIClient().get("/api/v1/keys/", HTTP_AUTHORIZATION="Api-Key not.arealkey")
+    assert response.status_code == 401
+    assert response.data["code"] == "invalid_api_key"
+
+
+@pytest.mark.django_db
+def test_revoke_other_orgs_key_returns_404() -> None:
+    _register_with_org("alice@example.com")
+    _register_with_org("bob@example.com")
+    bob_key_id = _login("bob@example.com").post("/api/v1/keys/", {"name": "bobkey"}, format="json").data["id"]
+
+    response = _login("alice@example.com").delete(f"/api/v1/keys/{bob_key_id}/")
+
+    assert response.status_code == 404

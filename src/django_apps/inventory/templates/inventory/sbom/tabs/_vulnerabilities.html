@@ -1,0 +1,55 @@
+{% load render_table from django_tables2 %}
+{% comment %} Vulnerabilities tab (Story 5.3 → 21.14).
+
+  FOUR states, and collapsing any two of them is the defect this tab is most prone to:
+    failed  — the phase errored; show the shared notice and its reason (FR-6.7)
+    missing — no report at all (never ran, or purged)
+    clean   — the scan RAN and found nothing; an explicit result, not an empty table
+    ok      — findings, one row per finding
+{% endcomment %}
+
+{% if report_state == 'failed' %}
+  {% include "inventory/sbom/tabs/_failure_notice.html" %}
+
+{% elif report_state == 'missing' %}
+  <div class="alert alert-secondary mb-0" role="status">
+    No vulnerability report is available for this job. Its artifacts may have been removed
+    under the retention policy.
+  </div>
+
+{% elif report_state == 'clean' %}
+  {% comment %} Deliberately an affirmative statement, not an empty table: the scan produced a
+    result and the user should be able to tell that apart from missing data. {% endcomment %}
+  <div class="alert alert-success mb-0" role="status">
+    <strong>No vulnerabilities found</strong> in {{ scanned_packages }} package(s).
+  </div>
+
+{% else %}
+  <form method="get" class="row g-2 align-items-end mb-3">
+    {% comment %} The active tab is carried so filtering does not bounce back to Overview. {% endcomment %}
+    <input type="hidden" name="tab" value="vulnerabilities">
+    <div class="col-sm-4 col-lg-3">
+      <label class="form-label" for="severity">Severity</label>
+      <select class="form-select form-select-sm" id="severity" name="severity">
+        <option value="">All</option>
+        {% for value, label in severity_choices %}
+          <option value="{{ value }}" {% if value == selected_severity %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-sm-auto">
+      <button type="submit" class="btn btn-sm btn-outline-primary">Apply</button>
+    </div>
+  </form>
+
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <p class="small text-body-secondary mb-0">{{ finding_count }} finding(s) in this report.</p>
+    {% comment %} Exports the FULL report, not the filtered view — matching the SPA, whose
+      export button ignored the severity filter. {% endcomment %}
+    <a class="btn btn-sm btn-outline-secondary"
+       href="{% url 'ui-job-export' task_id=job.task_id kind='vulnerabilities' %}">Export to Excel</a>
+  </div>
+  <div style="max-height: 600px; overflow: auto;">
+    {% render_table vuln_table %}
+  </div>
+{% endif %}

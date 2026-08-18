@@ -1,10 +1,16 @@
-# django-python-generate-sbom
+# Python Inventory Supply Lens
 
 A self-hosted, open-source Django web service that accepts Python dependency
 manifests and generates production-grade Software Bills of Materials (SBOMs) in
 standard formats (CycloneDX, SPDX), alongside three analysis reports:
 vulnerability findings, license obligations, and version currency — through
 both a web UI and a REST API.
+
+> The product is **Python Inventory Supply Lens** ("**Supply Lens**" for short). The
+> repository, the docs-site URL, and the badge links below still use the original
+> `django-python-generate-sbom` identifier — renaming those would break existing links
+> and discard the project's SonarCloud analysis history, so they are deliberately left
+> alone.
 
 <!-- Status -->
 [![CI](https://github.com/millsks/django-python-generate-sbom/actions/workflows/ci.yml/badge.svg)](https://github.com/millsks/django-python-generate-sbom/actions/workflows/ci.yml)
@@ -46,7 +52,8 @@ is multi-tenant and scoped to your organization.
   and API keys; session and API-key authentication.
 - **Async pipeline** — a Celery workflow with live progress, MinIO artifact
   storage, and scheduled retention/cleanup.
-- **Web UI** (React 19 + MUI) and a **REST API**, served from one origin.
+- **Server-rendered web UI** (Django templates, Bootstrap, htmx) and a **REST API**,
+  served from one origin — one language, one toolchain, no build step.
 
 ## Documentation
 
@@ -66,39 +73,40 @@ Contributions are welcome — see **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
 ## Screenshots
 
-<!-- TODO: capture web-UI screenshots for the README/docs (documentation follow-up). -->
-
-_Screenshots of the web UI are a pending documentation addition._
+Not captured. Any added in future must be taken against the current server-rendered UI.
 
 ## Architecture
 
-A modular Django monolith (`backend/`) with a Celery async pipeline, fronted by a
-React SPA (`frontend/`). **Pixi is the umbrella toolchain for the whole project**:
-a single root `pixi.toml` installs both the Python environment and the Node
-runtime, and orchestrates every task.
+A modular Django monolith with a server-rendered UI and a Celery async pipeline.
+**Pixi is the umbrella toolchain for the whole project**: a single root `pixi.toml`
+installs the environment and orchestrates every task.
 
 ```
-django-python-generate-sbom/   ← project root (pixi umbrella)
-  pixi.toml                     # Python env + Node runtime + all tasks
-  backend/                      # Django + Celery
-  frontend/                     # React + Vite SPA
-  Dockerfile                    # umbrella image (Python + Node); SPA baked in
+django-python-generate-sbom/   ← repo root (pixi umbrella)
+  pixi.toml                     # the environment + every task
+  pyproject.toml                # Python tool config, metadata, and the import root
+  src/
+    config/                     # Django project configuration
+    django_service/             # the host project: concrete User, templates, static
+    django_apps/inventory/      # the single reusable app (imported as `inventory`)
+  tests/                        # unit/ and integration/, at the root
+  Dockerfile                    # one image for web, workers, and beat
   docker-compose.yml            # full local stack (web, workers, postgres, redis, minio)
 ```
 
 ## Quick start
 
-Requires [pixi](https://pixi.sh). Node.js and Python are installed by pixi — no
-separate toolchain setup needed.
+Requires [pixi](https://pixi.sh). Python is installed by pixi — no separate toolchain
+setup needed, and no Node.
 
 ```sh
-pixi install          # installs Python + Node environments
+pixi install          # installs the environment
 pixi run bootstrap    # installs the pre-commit git hooks
 pixi run ci           # full validation gate (build · type-check · lint · coverage · docs)
 ```
 
-The Docker stack is the simplest way to run the whole app — the SPA is built into
-the image and served by Django, so there is no separate frontend server to start:
+The Docker stack is the simplest way to run the whole app — Django serves the UI, the
+API, and static assets from one port, so there is nothing else to start:
 
 ```sh
 cp .env.example .env          # then edit SECRET_KEY (and any passwords) in .env
@@ -109,31 +117,29 @@ Wait until the `web` service is healthy, then open:
 
 | URL | What it is |
 |---|---|
-| <http://localhost:8000> | The web UI (React SPA) |
+| <http://localhost:8000> | The web UI |
 | <http://localhost:8000/admin/> | Django admin site |
 | <http://localhost:8000/health/> | Health check (JSON) |
 | <http://localhost:9001> | MinIO console (login with `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` from `.env`) |
 
-Then **register** at `/register` — new accounts start **without** an organization,
-so you'll be sent to **sign in** at `/login`. A new user is **restricted to the
-home page** until an admin adds them to an organization (creating an organization
-is reserved for **global admins**). The seeded superuser is a global admin and can
-create the first organization and add members from there. Once you have an active
-org, **upload** a manifest at `/upload`; all SBOM data is scoped to your active
-organization. See the
+> **⚠ This application does not require authentication.** There is no login page and no
+> password: every page and every `/api/v1/` endpoint is open to anyone who can reach the
+> server, and every action is available to every caller. Identity is intended to be supplied
+> by the host platform via OIDC and group claims; until that lands, **deploy only on a
+> trusted network.**
+
+A default organization is seeded on first migrate. **Upload** a manifest at `/upload`,
+choosing the organization it belongs to on the form. Organizations remain the isolation
+boundary — one organization's jobs are never visible from another — they simply are not
+gated by identity. See the
 [User Guide](https://millsks.github.io/django-python-generate-sbom/user-guide/)
 for the full walkthrough.
-
-The app has three role tiers: **members** (work within their orgs),
-**organization admins** (manage an org's membership and API keys), and **global
-admins** (platform admins who belong to a system **Admin** org, are an admin of
-every organization, and can create orgs and manage the global-admin tier).
 
 To reach the Django admin at `/admin/`, create a superuser in the running `web`
 container:
 
 ```sh
-docker compose exec web pixi run python backend/manage.py createsuperuser
+docker compose exec web pixi run python manage.py createsuperuser
 ```
 
 The first superuser is seeded into the system **ADMIN** organization, making them
@@ -151,12 +157,12 @@ All tasks run from the project root via `pixi run <task>`:
 
 | Task | Purpose |
 |---|---|
-| `fmt` · `lint` · `check` | Format, lint, and type-check the backend (ruff, mypy) |
-| `test` · `test-integration` | Backend unit / integration tests |
+| `fmt` · `lint` · `check` | Format, lint, and type-check (ruff, mypy) |
+| `dev` | Run web + worker + beat together (containerless) |
+| `test` · `test-integration` | Unit / integration tests |
 | `cov` | Full test suite with the 90% coverage gate |
-| `fe-lint` · `fe-typecheck` · `fe-test` · `fe-build` | Frontend lint / types / tests / build |
 | `docs-serve` · `docs-build` | Preview / build the documentation site |
-| `build` | Build the backend package distribution |
+| `build` | Build the package distribution |
 | `ci` | Full validation sequence (the merge gate) |
 
 `pixi run ci` must exit 0 before any change is considered done. See the

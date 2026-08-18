@@ -1,0 +1,14 @@
+{% comment %} One history row, re-rendered by the polling view (Story 21.11).
+
+  The cells come from the SAME JobTable used by the full table, so the row's markup is
+  produced in one place — this template only supplies the <tr> wrapper and its htmx
+  attributes, which is the part tables2 cannot express for a single detached row.
+
+  `row.attrs` carries the trigger for a running job and NOTHING for a finished one, so a job
+  that completes between polls comes back untriggered and the polling stops by itself.
+{% endcomment %}
+{% for row in table.paginated_rows %}
+  <tr {{ row.attrs.as_html }}>
+    {% for column, cell in row.items %}<td>{{ cell }}</td>{% endfor %}
+  </tr>
+{% endfor %}

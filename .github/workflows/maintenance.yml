@@ -45,9 +45,6 @@ jobs:
       - name: Backend security scan (bandit)
         run: pixi run security | tee bandit-report.txt || true
 
-      - name: Frontend dependency audit (npm)
-        run: pixi run fe-security | tee npm-audit-report.txt || true
-
       - name: Summarize findings
         if: always()
         run: |
@@ -56,13 +53,9 @@ jobs:
             echo ""
             echo "Full reports are attached as the \`security-reports\` artifact."
             echo ""
-            echo "### Backend (bandit)"
+            echo "### bandit"
             echo '```'
             tail -n 25 bandit-report.txt 2>/dev/null || echo "(no report produced)"
-            echo '```'
-            echo "### Frontend (npm audit)"
-            echo '```'
-            tail -n 25 npm-audit-report.txt 2>/dev/null || echo "(no report produced)"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -73,6 +66,5 @@ jobs:
           name: security-reports
           path: |
             bandit-report.txt
-            npm-audit-report.txt
           retention-days: 30
           if-no-files-found: warn

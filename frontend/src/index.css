@@ -1,9 +1,0 @@
-/* Minimal reset. MUI's CssBaseline (in ThemeModeProvider) governs background,
-   text color, and the light/dark palette. */
-:root {
-  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}

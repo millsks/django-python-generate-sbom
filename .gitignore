@@ -132,7 +132,8 @@ __pypackages__/
 celerybeat-schedule
 celerybeat.pid
 # Containerless local dev (Story 20.4): filesystem broker folders + beat schedule DB.
-backend/.celery/
+# Repo root since Story 21.1 moved the tree to a src/ layout (no more backend/ cwd).
+.celery/
 
 # Redis
 *.rdb
@@ -227,8 +228,10 @@ __marimo__/
 .pixi/*
 !.pixi/config.toml
 
-# Local media (FileSystemStorage in dev)
-backend/media/
+# Local media (FileSystemStorage in dev) and collected static assets. Both sit at
+# the repo root since Story 21.1 moved BASE_DIR there.
+media/
+staticfiles/
 
 # Claude agent worktrees
 .claude/worktrees/

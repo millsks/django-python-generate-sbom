@@ -1,6 +1,10 @@
+---
+baseline_commit: 6e9533c
+---
+
 # Story 21.11: Live Job Progress via htmx Polling
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -42,13 +46,13 @@ so that I can watch a job's phase and percentage without reloading the page.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Status partial view (AC: #1)** — Renders one job's live state; reads via the existing
+- [x] **Task 1 — Status partial view (AC: #1)** — Renders one job's live state; reads via the existing
   selector; org-scoped.
-- [ ] **Task 2 — Row polling (AC: #2, #3)** — `hx-get` + `hx-trigger="every 5s"` on non-terminal rows only;
+- [x] **Task 2 — Row polling (AC: #2, #3)** — `hx-get` + `hx-trigger="every 5s"` on non-terminal rows only;
   emit a response that removes the trigger once terminal.
-- [ ] **Task 3 — Results-page gate (AC: #4)** — Poll the progress view; swap in the full results on terminal.
-- [ ] **Task 4 — Error handling (AC: #5)** — Stop polling on 403/404; render the denial state.
-- [ ] **Task 5 — Tests + gate (AC: #6)**.
+- [x] **Task 3 — Results-page gate (AC: #4)** — Poll the progress view; swap in the full results on terminal.
+- [x] **Task 4 — Error handling (AC: #5)** — Stop polling on 403/404; render the denial state.
+- [x] **Task 5 — Tests + gate (AC: #6)**.
 
 ## Dev Notes
 
@@ -102,16 +106,91 @@ rows and the results gate. Do not let a later tab story add its own poller.
 
 ### Agent Model Used
 
-_(to be filled by the dev agent)_
+claude-opus-5[1m] (Claude Opus 5, 1M context)
 
 ### Debug Log References
 
-_(to be filled by the dev agent)_
+- `pixi run ci` — **exit 0**. Backend **638 passed**, coverage **96.29%**; frontend **223 passed**.
+- **17 new tests** in `tests/unit/test_job_polling.py`.
+- Routes: `ui-job-row` → `/history/row/<task_id>`, `ui-job-results` → `/results/<task_id>`,
+  `ui-job-progress` → `/results/<task_id>/progress`.
+- Trigger scoping verified on a mixed page: the running row carries
+  `hx-trigger="every 5s"`; the SUCCESS and FAILED rows carry **no trigger and no URL**. A page
+  of three finished jobs contains the string `hx-trigger` **zero** times.
+- Self-termination verified by transition: the same row returns *with* a trigger while
+  PROGRESS and *without* one after being moved to SUCCESS.
+- `HX-Refresh` absent while running, `"true"` once terminal.
+- Cross-org and unknown task ids both **404** on all three endpoints.
 
 ### Completion Notes List
 
-_(to be filled by the dev agent)_
+**The "single sanctioned way to poll" rule is enforced by a test, not just by intent.**
+`useJobStatus.ts` existed so no component could add its own polling loop. The server-side
+equivalent is `tables.poll_attrs`, the only producer of an `hx-trigger` anywhere in the app —
+and `test_the_trigger_is_produced_in_exactly_one_place` greps the app tree and fails if a
+second producer appears. That matters because Stories 21.13–21.16 add four more tab pages that
+could each grow a poller.
+
+**Polling self-terminates from the server, which is the robust direction.** The refreshed row is
+produced by the same `poll_attrs`, so a job that finishes between polls comes back **without**
+a trigger and htmx simply stops. Nothing has to notice terminality and cancel a timer. The same
+idea drives the results page: the progress fragment's response carries `HX-Refresh: true` once
+the job is terminal, so the page reloads into the completed view without the client deciding
+anything.
+
+**Terminal rows issue no requests at all** — the Dev Notes call this the single biggest load
+difference from a naive implementation, and it is asserted directly rather than inferred.
+`get_job` is a single indexed lookup with `select_related("manifest")` and touches no artifact
+storage, so a page of 25 running jobs is 25 cheap queries per 5s rather than anything involving
+blobs.
+
+**The row partial reuses `JobTable` rather than duplicating cell markup.** The polling view
+constructs a one-row `JobTable` and the template emits only the `<tr>` wrapper, so the badge,
+progress bar, and elapsed renderers are shared with the full table — there is no second copy of
+a cell to drift.
+
+**Elapsed freezes as a property of the data, not by stopping a timer.** `render_elapsed`
+measures to `completed_at or timezone.now()`, so a running job advances every poll and a
+finished one is fixed. The test asserts two consecutive reads of a finished row are byte
+identical, which would fail if the end point were still moving.
+
+**Errors stop rather than spin.** A cross-org or unknown task id is a 404 on all three
+endpoints — identical responses, no existence leak (AD-2) — and htmx does not re-issue a
+polling request after a 404, so a denied row is left as it was instead of retrying forever.
+
+**Scope split with Story 21.12, stated plainly.** This story claims `/results/<task_id>` and
+owns the **gate**: progress while running, transition on terminal. What renders *behind* the
+gate is a deliberate placeholder — 21.12 replaces it with the tabbed results shell and the
+Overview tab. Splitting it this way is what the story order implies (21.12 is listed as
+downstream of this one), and it means the history page's "View" link and the upload redirect
+now both reverse `ui-job-results` instead of pointing at the SPA.
+
+**Not done here.** No websockets or SSE — polling at the SPA's interval was the brief, and
+changing the transport would have changed the load profile without being asked. The results
+page shows no report data yet.
+
+**Still open, unchanged:** the `beat_schedule` maintenance tasks are absent from the Celery
+registry (found in 21.1, needs its own bug story), and the four deferred pluggability violations.
 
 ### File List
 
-_(to be filled by the dev agent)_
+**New (4)**
+- `src/django_apps/inventory/templates/inventory/sbom/_job_row.html` — the polled row wrapper
+- `src/django_apps/inventory/templates/inventory/sbom/_job_progress.html` — the polled fragment
+- `src/django_apps/inventory/templates/inventory/sbom/results.html` — the gate (21.12 fills it in)
+- `tests/unit/test_job_polling.py` (17 tests)
+
+**Modified (5)**
+- `src/django_apps/inventory/sbom/services.py` — `TERMINAL_STATUSES`
+- `src/django_apps/inventory/sbom/tables.py` — `poll_attrs`, `POLL_INTERVAL`, row triggers,
+  phase/progress and failure-reason rendering, live elapsed
+- `src/django_apps/inventory/sbom/pages.py` — `JobRowPartialView`, `JobResultsView`,
+  `JobProgressPartialView`; the upload redirect now reverses `ui-job-results`
+- `src/django_apps/inventory/urls_pages.py`, `src/config/urls.py` — three routes; `results` freed
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`, and this story file
+
+## Change Log
+
+| Date | Change |
+|---|---|
+| 2026-08-17 | Added htmx polling at the SPA's 5-second interval. Only non-terminal rows carry a trigger, and because the refreshed markup is produced by the same helper, a job that finishes mid-poll returns untriggered and polling self-terminates. The results page gates on completion, transitioning via an `HX-Refresh` header the server sets. Elapsed time advances while running and freezes on completion as a property of the data. Cross-org and unknown ids 404 identically, so polling stops rather than spinning. A test asserts the trigger is produced in exactly one place, carrying over the SPA's "no per-component polling loops" rule. `pixi run ci` exit 0; 638 backend tests at 96.29%. |

@@ -1,0 +1,34 @@
+# Celery application for the django-python-generate-sbom project.
+#
+# Two queues (AD-4): `pipeline` (phases 1-3, 8, plus Beat cleanup) and `analysis`
+# (phases 4-7). Task modules use @shared_task only (no Celery app import). Views
+# dispatch with delay_on_commit() (AD-10). Per-task routes are added by the
+# epics that define the tasks; the queue names, default queue, and time limits
+# are supplied via CELERY_* Django settings (read lazily through the CELERY
+# namespace) so this module touches no settings at import time.
+import os
+
+from celery import Celery
+from celery.schedules import crontab
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.local")
+
+app = Celery("inventory")
+app.config_from_object("django.conf:settings", namespace="CELERY")
+app.autodiscover_tasks()
+# The pipeline/analysis tasks live in the dedicated inventory.tasks package
+# (not a per-app tasks.py), so discover it explicitly.
+app.autodiscover_tasks(["inventory"])
+
+app.conf.beat_schedule = {
+    # Weekly refresh of the parselmouth conda↔PyPI name mapping (Story 8.10).
+    "refresh-parselmouth-mapping": {
+        "task": "inventory.tasks.maintenance.refresh_parselmouth_mapping",
+        "schedule": crontab(hour=3, minute=0, day_of_week=1),
+    },
+    # Nightly purge of expired artifact blobs; job metadata is retained (Story 7.1).
+    "purge-expired-artifacts": {
+        "task": "inventory.tasks.maintenance.purge_expired_artifacts",
+        "schedule": crontab(hour=4, minute=0),
+    },
+}

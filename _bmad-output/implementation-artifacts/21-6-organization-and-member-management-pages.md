@@ -1,6 +1,10 @@
+---
+baseline_commit: 9d7074f
+---
+
 # Story 21.6: Organization and Member Management Pages
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -46,14 +50,14 @@ so that I can add, remove, and re-role members without the SPA.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Organisation hub page (AC: #1)** — Admin-gated; links only.
-- [ ] **Task 2 — Create-org form (AC: #2)** — Global-admin gated; affordance hidden otherwise.
-- [ ] **Task 3 — Members list + add-existing + create-new (AC: #3, #4)** — Two distinct flows; one-time
+- [x] **Task 1 — Organisation hub page (AC: #1)** — Admin-gated; links only.
+- [x] **Task 2 — Create-org form (AC: #2)** — Global-admin gated; affordance hidden otherwise.
+- [x] **Task 3 — Members list + add-existing + create-new (AC: #3, #4)** — Two distinct flows; one-time
   credential reveal for create-new.
-- [ ] **Task 4 — Remove / promote / demote (AC: #3, #5)** — POST + confirm; last-admin and global-admin guards
+- [x] **Task 4 — Remove / promote / demote (AC: #3, #5)** — POST + confirm; last-admin and global-admin guards
   enforced in the service, not the template.
-- [ ] **Task 5 — Leave org (AC: #6)**.
-- [ ] **Task 6 — Tests + gate (AC: #7)**.
+- [x] **Task 5 — Leave org (AC: #6)**.
+- [x] **Task 6 — Tests + gate (AC: #7)**.
 
 ## Dev Notes
 
@@ -101,16 +105,118 @@ provisioning). Keep them as two form actions with distinct outcomes.
 
 ### Agent Model Used
 
-_(to be filled by the dev agent)_
+claude-opus-5[1m] (Claude Opus 5, 1M context)
 
 ### Debug Log References
 
-_(to be filled by the dev agent)_
+- `pixi run ci` — **exit 0**. Backend **534 passed**, coverage **96.05%**; frontend **223 passed**.
+- `mypy src` clean over 90 files; `ruff check .` clean; `manage.py check` clean.
+- **35 new tests** in `tests/unit/test_org_pages.py`.
+- Route resolution — `ui-organization` → `/organization`, `ui-org-create` →
+  `/organization/create`, `ui-org-leave` → `/organization/leave`, `ui-members` → `/members`,
+  and `ui-member-{add,create,remove,promote,demote}` → `/members/*`.
+- Authorization matrix: every one of the five member mutations returns **403** for a plain
+  member, **302 → /login** for anonymous, **405** on GET, and **403** without a CSRF token.
+- **Live server walkthrough** (seeded global admin, whose only membership is the ADMIN org):
+  - `/organization` → the **no-org state**, because Story 2.18 makes the ADMIN org never
+    resolve as a working org — while `/organization/create` stays **reachable**, which is
+    exactly the Story 21.4 split (`GlobalAdminRequiredMixin` requires no org) working in the
+    real world rather than only in tests.
+  - Created "Live Check Org" through the real form → 302, hub then renders it.
+  - Provisioned a member through the real form → the reveal page showed the temporary
+    password and the "will not be shown again" warning; a subsequent `/members` render
+    contained it **0 times**.
+  - `/keys` and `/upload` still served by the **SPA**.
 
 ### Completion Notes List
 
-_(to be filled by the dev agent)_
+**A real bug my own tests caught: the invalid-form path returned 405.** Both add-member views
+originally re-rendered by dispatching at the roster view — `MembersView.as_view()(request, ...)`
+— but `MembersView` is a `TemplateView`, which permits only GET/HEAD/OPTIONS. So *any*
+validation error (unregistered email, already-a-member, email-taken) produced
+**405 Method Not Allowed** instead of the form with its error. Extracted `_members_context()`
+and now `render()` the template directly, so the redisplayed page carries the same roster as a
+fresh one. This is the kind of failure that only shows up on the unhappy path, which is why
+three of the four initial failures were error-path tests.
+
+**One-time credential reveal is a render, not a redirect (AC #4).** `MemberCreateUserView`
+renders `member_created.html` straight from the POST. A redirect would have to carry the
+password through the session or the query string, and AC #4 names the session explicitly.
+Rendering keeps it in that single response: not in the session (asserted), not on any later
+page (asserted), and not in a log — `create_member_user`'s own docstring commits to that.
+The trade-off, stated plainly: a browser refresh re-posts the form rather than re-revealing,
+which is the correct failure mode for a secret.
+
+**Every invariant is delegated, never re-implemented.** Last-admin, global-admin protection,
+ADMIN-org protection and promote-is-not-transfer all live in the services already. The views
+catch `MembershipError` and surface `exc.message`; they contain no membership logic of their
+own. Re-implementing a guard in a view would give the HTML path different rules from the API
+path — precisely the drift Story 2.9 and AD-2 exist to prevent. The tests assert the *pages*
+route through those guards (last admin cannot be demoted or removed, a global admin cannot be
+demoted, promote leaves the promoter an admin — the bug Story 2.16 fixed).
+
+**Cross-org safety comes from the lookup, not a check.** `_MemberActionView._target()` resolves
+the target through `OrgMembership.objects.filter(org=self.org, user_id=...)`, so an admin of
+org A posting a member id from org B simply finds nothing and gets "not a member of this org".
+There is no branch that could be got wrong, and `test_an_admin_of_another_org_cannot_touch_this_orgs_members`
+pins it with a genuinely privileged outsider (an admin — of somewhere else).
+
+**The two add-member flows are kept apart deliberately.** Story 2.7 (add existing) refuses an
+unregistered email rather than auto-creating; Story 2.10 (create new) refuses an email that
+already exists and points the admin at the other flow. Two forms, two endpoints, two error
+messages — merging them would recreate the bug both stories were reopened to fix. Tested from
+both directions.
+
+**Org creation is global-admin only, enforced twice over.** The affordance is hidden on the hub
+for non-global-admins *and* `CreateOrgView` is gated by `GlobalAdminRequiredMixin`, so an org
+admin who types the URL gets 403 rather than a form. Story 2.12 deliberately reversed
+self-service creation, so "org admin" is explicitly not enough — asserted directly. On success
+the new org is made active, so the creator lands in the thing they just made.
+
+**Leaving clears the session's pinned org.** `leave_org` deletes the membership, but the session
+still names the org just left; without popping `SESSION_ACTIVE_ORG` the next request would try
+to resolve an org the user no longer belongs to. Cleared explicitly so access ends immediately
+(AC #6), and the org itself survives — both asserted.
+
+**Nav now reverses named URLs for the converted pages.** `_nav.html` resolves
+`{% url 'ui-members' %}` / `{% url 'ui-organization' %}` into variables at the top of the
+template, because `{% include %}` cannot take a `{% url %}` expression as an argument. The
+unconverted destinations remain literal paths until their stories land.
+
+**Presentation vs enforcement is stated in the template.** The roster hides the role and remove
+controls on the caller's own row, and `members.html` says in a comment that this is presentation
+only. Every guard is server-side; the sole-admin tests post directly and are refused.
+
+**Not done here.** `/keys` is Story 21.7 and still points at the SPA. There is no bulk member
+import, no invitation email (there is no email infrastructure at all — FR-1.3), and no
+role-change confirmation dialog (only the destructive remove and leave actions confirm).
+
+**Still open, unchanged:** the `beat_schedule` maintenance tasks are absent from the Celery
+registry (found in 21.1, needs its own bug story), and the four deferred pluggability
+violations.
 
 ### File List
 
-_(to be filled by the dev agent)_
+**New (5)**
+- `src/django_apps/inventory/templates/inventory/orgs/hub.html` — the link-only admin hub
+- `src/django_apps/inventory/templates/inventory/orgs/create.html` — global-admin-gated org creation
+- `src/django_apps/inventory/templates/inventory/orgs/members.html` — roster + both add forms
+- `src/django_apps/inventory/templates/inventory/orgs/member_created.html` — one-time reveal
+- `tests/unit/test_org_pages.py` (35 tests)
+
+**Modified (5)**
+- `src/django_apps/inventory/users/forms.py` — `CreateOrgForm`, `AddExistingMemberForm`,
+  `CreateMemberUserForm`
+- `src/django_apps/inventory/users/pages.py` — `OrganizationHubView`, `CreateOrgView`,
+  `MembersView`, `MemberAddExistingView`, `MemberCreateUserView`, `MemberRemoveView`,
+  `MemberPromoteView`, `MemberDemoteView`, `LeaveOrgView`, `_members_context`
+- `src/django_apps/inventory/urls_pages.py` — nine `ui-` routes
+- `src/config/urls.py` — free `organization` and `members` from the SPA catch-all
+- `src/django_service/templates/_nav.html` — reverse the two converted destinations
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`, and this story file
+
+## Change Log
+
+| Date | Change |
+|---|---|
+| 2026-08-17 | Converted the organisation hub, org creation, and member management to server-rendered pages. The hub composes by linking (Story 2.11); org creation is global-admin only (Story 2.12), gated server-side and hidden in the UI. The two add-member flows stay distinct (add-existing vs create-new), and a provisioned account's temporary password is revealed exactly once on a rendered result page — never via session, redirect, or log. Every mutation is a CSRF-protected POST delegating its invariants to the existing services, with cross-org safety coming from an org-scoped target lookup. 35 tests covering the authorization matrix and every guard. `pixi run ci` exit 0; 534 backend tests at 96.05%. |

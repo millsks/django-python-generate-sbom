@@ -1,21 +1,24 @@
 # Authentication
 
-The API supports two authentication schemes. Every endpoint requires one of
-them, except registration and login (which are open by definition).
+!!! warning "The API does not require authentication"
+
+    Story 21.24 removed the app's own authentication. **Every `/api/v1/` endpoint is open
+    to an unauthenticated caller**, who acts as the deployment's default organization.
+    Identity is intended to come from the host platform via OIDC and group claims; until
+    that lands, deploy only on a trusted network.
+
+    The API-key scheme below is **retained and still meaningful**: a caller who presents a
+    key is pinned to that key's organization instead of the default one. It is now a way to
+    select a tenant, not a way to gain access.
 
 ## Schemes
 
-### Session (browser / web UI)
+### No credentials (the default)
 
-The single-page app authenticates with a Django session cookie. Call
-[`POST /api/v1/auth/login/`](#post-apiv1authlogin) to establish the session;
-the response sets a `sessionid` cookie and a `csrftoken` cookie. Subsequent
-state-changing requests (`POST`, `DELETE`, …) must echo the CSRF token in an
-`X-CSRFToken` header. With session auth, the **active organization** is the one
-stored in the session (set at login and changed via
-[`POST /api/v1/orgs/switch/`](organizations.md#post-apiv1orgsswitch)).
+Send no `Authorization` header and no session cookie. The request is served, acting as the
+organization named by `INVENTORY_DEFAULT_ORG_SLUG` (seeded on first migrate).
 
-### API key (programmatic)
+### API key (programmatic, selects the organization)
 
 Send an organization API key in the `Authorization` header:
 
@@ -23,101 +26,52 @@ Send an organization API key in the `Authorization` header:
 Authorization: Api-Key <your-key>
 ```
 
-Create keys from [API Keys](api-keys.md). With API-key auth the **active
-organization** is fixed to the key's own organization — there is nothing to
-switch. Revoked or unknown keys return `401` with code `invalid_api_key`.
+Create keys from [API Keys](api-keys.md). With API-key auth the **active organization** is
+fixed to the key's own organization — there is nothing to switch. Revoked or unknown keys
+return `401` with code `invalid_api_key`.
 
-The permission layer accepts *either* a valid session user *or* a valid API
-key; requests with neither are rejected.
+### Session (Django admin only)
 
----
-
-## `POST /api/v1/auth/register/`
-
-Create a new user account. **No authentication.** A new user starts with **no
-organizations** — registration does not create a personal org, so `org` is
-always `null`. A user joins an org by being
-[added as a member](organizations.md#post-apiv1orgsmembers) by an admin, or by
-[creating one](organizations.md#post-apiv1orgscreate).
-
-**Request body**
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `email` | string (email) | Must not already be registered |
-| `password` | string | Minimum 8 characters |
-
-**Response `201 Created`**
-
-```json
-{
-  "user": { "id": 1, "email": "you@example.com" },
-  "org": null
-}
-```
-
-**Errors** — `400 validation_error` (invalid input or email already in use).
+`django.contrib.admin` keeps its own login at `/admin/`. A request carrying that session
+resolves its organization from the session, and state-changing requests must echo the CSRF
+token in an `X-CSRFToken` header. **CSRF protection was not removed** with the login
+requirement.
 
 ---
 
-## `POST /api/v1/auth/login/`
+## Removed endpoints
 
-Exchange credentials for a session and select the user's active org. **No
-authentication.** Sets `sessionid` and `csrftoken` cookies.
-
-**Request body**
-
-| Field | Type |
-| --- | --- |
-| `email` | string (email) |
-| `password` | string |
-
-**Response `200 OK`** — `org` is `null` when the user belongs to no org.
-
-```json
-{ "org": { "slug": "acme", "name": "Acme, Inc." } }
-```
-
-**Errors** — `400 invalid_credentials` (malformed request),
-`401 invalid_credentials` (wrong email or password).
-
----
-
-## `POST /api/v1/auth/logout/`
-
-Invalidate the current session. **Authentication required.**
-
-**Response `204 No Content`.**
+`POST /api/v1/auth/register/`, `POST /api/v1/auth/login/`, and `POST /api/v1/auth/logout/`
+were **deleted** by Story 21.24 along with the rest of the app's authentication. They
+return `404`. They are listed here rather than silently dropped so a reader working from an
+older copy of this page knows the endpoints are gone by design.
 
 ---
 
 ## `GET /api/v1/auth/me/`
 
-Return the currently authenticated user's identity and role flags.
-**Authentication required.** This is the SPA's identity signal — a logged-in user
-with **zero organizations** is still authenticated and gets a `200` here. The two
-boolean flags are the client's single source of truth for gating admin-only nav,
-routes, and affordances, so it never has to probe an admin-only endpoint to learn
-its role.
+Return the caller's identity and capability flags. **No authentication required** — it is
+retained for clients that still call it, and reports a **null identity** for the ordinary
+anonymous caller rather than refusing.
 
-**Response `200 OK`**
+**Response `200 OK`** — anonymous caller (the usual case):
 
 ```json
 {
-  "id": 1,
-  "email": "you@example.com",
-  "is_admin": false,
-  "is_global_admin": false
+  "id": null,
+  "email": null,
+  "is_admin": true,
+  "is_global_admin": true
 }
 ```
 
+A request carrying a Django-admin session reports that user instead.
+
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `id` | integer | The user's id |
-| `email` | string | The user's email (login identifier) |
-| `is_admin` | boolean | `true` when the user is an admin of the **active** organization (Story 2.6) |
-| `is_global_admin` | boolean | `true` when the user is a global admin — a member of the system ADMIN org (Story 2.12) |
+| `id` | integer \| null | The user's id, or `null` when there is no authenticated user |
+| `email` | string \| null | The user's email, or `null` |
+| `is_admin` | boolean | Admin of the **active** organization. Always `true` since Story 21.24 removed the gate |
+| `is_global_admin` | boolean | Platform-admin tier. Always `true` for an anonymous caller |
 
-**Errors** — `401` when the request carries no valid session or API key. (The
-API accepts either scheme, and its API-key challenge sets a `WWW-Authenticate`
-header, so an anonymous request renders as `401`, not `403`.)
+**Errors** — none. The endpoint does not refuse a caller.

@@ -1,0 +1,47 @@
+{% load render_table from django_tables2 %}
+{% comment %} SBOM viewer tab (Story 8.6 → 21.13).
+
+  Two views behind one toggle, defaulting to the component table. The RAW view is fetched by
+  its own request — a generated SBOM can be several megabytes, and putting it in this tab's
+  payload would make the results page unusable for large projects.
+
+  The table is fed the enrichment the document already carries (licence, ecosystem,
+  direct/transitive). The SBOM is never re-parsed to build it.
+{% endcomment %}
+
+{% if not sbom_available %}
+  {% comment %} Never produced, not finished, or purged by the retention sweep — one notice for
+    all three, because the SPA was explicit that this is a notice, not an error. {% endcomment %}
+  <div class="alert alert-secondary mb-0" role="status">
+    This SBOM is not available. Its artifacts may have been removed under the retention policy.
+  </div>
+{% else %}
+  <div class="btn-group btn-group-sm mb-3" role="group" aria-label="SBOM view">
+    <button type="button" class="btn btn-outline-secondary active" aria-pressed="true"
+            hx-get="{% url 'ui-job-tab' task_id=job.task_id tab='sbom' %}"
+            hx-target="#sbom-view" hx-select="#sbom-view" hx-swap="outerHTML">Components</button>
+    <button type="button" class="btn btn-outline-secondary" aria-pressed="false"
+            hx-get="{% url 'ui-job-sbom-raw' task_id=job.task_id %}"
+            hx-target="#sbom-view" hx-swap="innerHTML">Raw document</button>
+  </div>
+
+  <div id="sbom-view">
+    {% if sbom_metadata %}
+      <dl class="row small mb-3">
+        {% for label, value in sbom_metadata.items %}
+          <dt class="col-sm-3 text-body-secondary">{{ label }}</dt>
+          <dd class="col-sm-9 text-break">{{ value }}</dd>
+        {% endfor %}
+      </dl>
+    {% endif %}
+
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+      <p class="small text-body-secondary mb-0">{{ sbom_component_count }} component(s).</p>
+      <a class="btn btn-sm btn-outline-secondary"
+         href="{% url 'ui-job-export' task_id=job.task_id kind='sbom' %}">Export to Excel</a>
+    </div>
+    <div style="max-height: 600px; overflow: auto;">
+      {% render_table sbom_table %}
+    </div>
+  </div>
+{% endif %}

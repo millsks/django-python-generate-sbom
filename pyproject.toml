@@ -1,0 +1,135 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+# The DISTRIBUTION name. It deliberately differs from the IMPORT names this package
+# provides — `config`, `django_service`, and `inventory` (see the wheel `sources` mapping
+# below). That is ordinary Python packaging but surprises people, so: installing
+# `python-inventory-supply-lens` gives you `import inventory`, not `import python_inventory_supply_lens`.
+# The GitHub repo and the docs-site URL keep the original `django-python-generate-sbom`
+# identifier on purpose — see sonar-project.properties for why.
+name = "python-inventory-supply-lens"
+version = "0.1.0"
+description = "Django web service that generates SBOMs from Python dependency manifests"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+authors = [{ name = "Kevin Mills", email = "millsks@gmail.com" }]
+dependencies = []
+
+# Story 21.1 / reference AD-6, AD-7: this table is the ONLY import-root declaration
+# site. `sources` rewrites each packaged path's prefix so that `config`,
+# `django_service`, and `inventory` all land at the wheel root — which is what lets the
+# reusable app be imported UNQUALIFIED as `inventory` rather than `django_apps.inventory`.
+#
+# The ARRAY form the reference application flagged as unverified — sources = ["src",
+# "src/django_apps"] — DOES NOT WORK, and this was confirmed against hatchling rather
+# than assumed. hatchling normalises each entry with a trailing separator, sorts the
+# mapping ASCENDING, and applies the FIRST prefix that matches
+# (BuilderConfig.get_distribution_path). "src/" sorts before "src/django_apps/" and so
+# shadows it: every app path is rewritten to `django_apps/inventory/...` and the app is
+# importable only as the namespace package `django_apps.inventory`.
+#
+# The MAPPING form below fixes it by giving each source its own non-overlapping key —
+# no key is a prefix of another, so sort order cannot shadow anything. Values get a
+# separator appended by hatchling, and "." normalises to "" (strip the prefix outright).
+# This also keeps editable installs correct with no special-casing: hatchling derives
+# the .pth roots from the rewritten distribution paths, yielding `src` and
+# `src/django_apps`. Verified against the built wheel by
+# tests/integration/test_wheel_layout.py — never assume this.
+[tool.hatch.build.targets.wheel]
+only-include = ["src"]
+
+[tool.hatch.build.targets.wheel.sources]
+"src/config" = "config"
+"src/django_service" = "django_service"
+"src/django_apps" = "."
+
+[tool.pytest.ini_options]
+# Story 20.4: the test settings force Celery eager mode so the unit suite runs offline
+# (no Redis, no filesystem broker, no separate worker). config.settings.test inherits the
+# containerless local settings and only flips the eager flags.
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+testpaths = ["tests"]
+# No `pythonpath` entry: the editable install generated from
+# [tool.hatch.build.targets.wheel] is the ONLY import-root resolver (reference AD-7).
+addopts = "-v --tb=short"
+markers = [
+    "integration: marks tests as integration tests requiring real I/O, network, or DB",
+]
+
+[tool.ruff]
+line-length = 120
+src = ["src", "src/django_apps", "tests"]
+# Story 21.1: ruff used to be scoped by `cwd = "backend"`; running from the repo root it
+# would otherwise lint vendored BMad/agent scripts we do not own. Mirrors the `exclude`
+# in .pre-commit-config.yaml so every invocation — task, hook, or editor — agrees.
+extend-exclude = ["_bmad", "_bmad-output", ".claude", ".agents"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "RUF", "D"]
+# D104: empty package __init__.py files need no docstring.
+# D106: Django model Meta inner classes need no docstring.
+ignore = ["E501", "D104", "D106"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/config/settings/*" = ["D", "F403", "F405"]
+"src/config/*" = ["D"]
+"manage.py" = ["D"]
+"tests/*" = ["D"]
+"*/migrations/*" = ["D", "RUF012", "I001"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+known-first-party = ["config", "django_service", "inventory", "tests"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+plugins = ["mypy_django_plugin.main"]
+
+[tool.django-stubs]
+django_settings_module = "config.settings.local"
+
+[[tool.mypy.overrides]]
+module = [
+    "celery.*",
+    # Story 21.10: neither ships type stubs or a py.typed marker.
+    "django_filters.*",
+    "django_tables2.*",
+    # django-environ ships no py.typed marker; surfaced when `check` widened to src/config/.
+    "environ.*",
+    "lib4sbom.*",
+    # openpyxl ships no py.typed marker (Story 21.17).
+    "openpyxl.*",
+    "storages.*",
+    "requests_cache.*",
+    "requests_ratelimiter.*",
+]
+ignore_missing_imports = true
+
+# django-filter and django-tables2 are untyped, so their base classes are Any and strict
+# mode's `disallow_subclassing_any` rejects any subclass of them. Relaxed for exactly the two
+# modules that must subclass them — everything else in those files is still fully checked.
+[[tool.mypy.overrides]]
+module = [
+    "inventory.analysis.tables",
+    "inventory.sbom.filters",
+    "inventory.sbom.pages",
+    "inventory.sbom.tables",
+]
+disallow_subclassing_any = false
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["*/migrations/*"]
+
+[tool.bandit]
+# B314: the ElementTree.fromstring calls in sbom/document.py parse the tool's OWN
+# generated CycloneDX XML (trusted, not user input — see the in-line comments there),
+# so the XXE warning is a false positive. Revisit if untrusted XML parsing is added.
+skips = ["B314"]

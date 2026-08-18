@@ -7,7 +7,7 @@ autoscaling settings, resource sizing, TLS, and observability. Pair this with th
 ## Environment variables
 
 Every value below is read from the environment by Django
-(`backend/config/settings/base.py` and `backend/config/settings/production.py`).
+(`src/config/settings/base.py` and `src/config/settings/production.py`).
 The **Where** column is the recommendation for OpenShift: put non-sensitive values
 in a **ConfigMap**, sensitive values in a **Secret** (or an
 [ESO/Vault-backed](migration-guide.md#configuration-and-secrets) source).
@@ -80,7 +80,7 @@ OpenShift, where those services are external:
 ## Health probes
 
 The app exposes an unauthenticated `GET /health/` endpoint
-(`backend/generate_sbom/common/views.py`) that returns `{"status": "ok"}` and
+(`src/django_apps/inventory/common/views.py`) that returns `{"status": "ok"}` and
 deliberately **does not touch the database**. That makes it safe for both probe
 types on the `web` Deployment:
 
@@ -157,7 +157,7 @@ whatever host is configured, so:
   *sign* blobs — typically an internal, cluster-reachable address.
 - `AWS_S3_PUBLIC_ENDPOINT_URL` is the **browser-reachable** host that must appear in
   the presigned URL. The custom storage backend
-  (`generate_sbom.common.storage.PublicEndpointS3Storage`) rewrites presigned URLs to
+  (`inventory.common.storage.PublicEndpointS3Storage`) rewrites presigned URLs to
   use it.
 
 If `AWS_S3_PUBLIC_ENDPOINT_URL` points at an internal-only host (the classic

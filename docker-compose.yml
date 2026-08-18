@@ -1,4 +1,4 @@
-# Full local stack for django-python-generate-sbom (Story 1.2).
+# Full local stack for Python Inventory Supply Lens (Story 1.2).
 #
 # All Django/Celery services share one umbrella image (AD-13); the SPA is baked
 # in at build time. All configuration comes from .env (copy from .env.example);

@@ -5,7 +5,7 @@
 #   in-progress    — dev-story implementation underway
 #   review         — implementation complete, awaiting code-review
 #   done           — merged and verified
-last_updated: 2026-08-17
+last_updated: 2026-08-18
 
 development_status:
   epic-1: done
@@ -278,6 +278,12 @@ development_status:
   # URL conventions must be reconciled with the existing custom User, custom LoginView, and zero-org/active-org
   # session (main risk). Build order: 17.1 -> 17.2 -> 17.3 -> 17.4 -> 17.5, with 17.6 -> 17.7 as a parallel
   # resource-server track, and 17.8 last (coexistence matrix + rollout + cutover). Epic 18 depends on Epic 17.
+  # ⚠ PLANNING CONFLICT (added 2026-08-18): Story 21.24 DELETES local password auth — the login/register/
+  # logout pages, the DRF auth endpoints, and every access-control mixin — leaving the app open, with
+  # identity to be supplied by the host platform. That invalidates this epic as written: 17.2-17.5 assume
+  # login screens that will not exist, and 17.8's "coexistence flag then cutover from local password
+  # auth" has nothing left to cut over from. Run bmad-correct-course on Epic 17 (and Epic 18, which
+  # depends on it) once 21.24 lands; do not let a dev agent pick up 17.x meanwhile.
   epic-17: in-progress
   17-1-oidc-provider-configuration-and-discovery: ready-for-dev
   17-2-backend-oidc-login-bff-auth-code-pkce: ready-for-dev
@@ -406,6 +412,8 @@ development_status:
   # REACT implementations (16-1 alone cites frontend/src or .tsx 13 times). This epic invalidates those plans.
   # Epic 21 deliberately does NOT absorb them — run bmad-correct-course on Epic 16 and Story 17.5 once 21
   # merges, and do not let a dev agent pick either up meanwhile. Epic 15 is backend-only and unaffected.
+  # ⚠ PLANNING CONFLICT (added 2026-08-18): Story 21.24 removes local password auth entirely, which
+  # invalidates EPIC 17 as written — see the Epic 17 block above.
   epic-21: backlog
   21-1-restructure-to-src-layout: review
   21-2-collapse-apps-into-inventory-and-establish-django-service: review
@@ -430,3 +438,12 @@ development_status:
   21-21-documentation-reconciliation-and-product-copy-rename: ready-for-dev
   21-22-distribution-identity-rename: ready-for-dev
   21-23-test-parity-audit-and-epic-closeout: ready-for-dev
+  # ADDED 2026-08-18 by product-owner direction. 21.24 REMOVES the app's own authentication and access
+  # control outright (hard removal, not a flag): mixins, login/register/logout pages + DRF endpoints, and the
+  # HasSessionOrApiKey permission all go; anonymous requests act as a seeded default org with org-admin and
+  # global-admin capability. Identity becomes the HOST platform's job, supplied via OIDC + group claims when
+  # `inventory` is contributed to django-15-factor-base. It SUPERSEDES 21.4 in full and the auth-pages half of
+  # 21.5. Runs AFTER 21.18 (in flight; avoids a base.html conflict) and BEFORE 21.19, so Phase G retires,
+  # documents, and audits an app that is already open. Org isolation (AD-2), API keys (AD-8), CSRF, and the
+  # whole org/member/key model are RETAINED — this removes the identity gate, not the tenancy model.
+  21-24-remove-authentication-requirement: ready-for-dev

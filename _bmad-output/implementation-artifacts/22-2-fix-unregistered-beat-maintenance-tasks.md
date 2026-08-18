@@ -1,6 +1,10 @@
+---
+baseline_commit: 9f958ea
+---
+
 # Story 22.2: Fix the Unregistered Celery Beat Maintenance Tasks
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -36,26 +40,26 @@ epic's scope. Two shipped features are silently dead: **artifact retention (FR-8
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Register the maintenance module (AC: #1)**
-  - [ ] Add `maintenance` to the imports in `src/django_apps/inventory/tasks/__init__.py`, following the
+- [x] **Task 1 — Register the maintenance module (AC: #1)**
+  - [x] Add `maintenance` to the imports in `src/django_apps/inventory/tasks/__init__.py`, following the
         existing `from .sbom_pipeline import run_sbom_pipeline` pattern. Extend `__all__` to match.
-  - [ ] Verify no circular import results: `maintenance.py` imports `inventory.analysis.services.parselmouth`
+  - [x] Verify no circular import results: `maintenance.py` imports `inventory.analysis.services.parselmouth`
         and `inventory.sbom.services`, and `__init__.py` is imported by Celery autodiscovery — confirm
         `pixi run python -c "import inventory.tasks"` succeeds and `pixi run dev` starts.
-  - [ ] Prove the fix the same way the bug was found (see **Reproduce it first** below), not by reading the diff.
-- [ ] **Task 2 — Guard against recurrence (AC: #2)**
-  - [ ] Add a test that iterates `app.conf.beat_schedule.values()` and asserts each `["task"]` is in
+  - [x] Prove the fix the same way the bug was found (see **Reproduce it first** below), not by reading the diff.
+- [x] **Task 2 — Guard against recurrence (AC: #2)**
+  - [x] Add a test that iterates `app.conf.beat_schedule.values()` and asserts each `["task"]` is in
         `app.tasks` **after `app.loader.import_default_modules()`**. Calling that loader is the whole point —
         without it the test passes for the wrong reason (see **Traps** below).
-  - [ ] The failure message should name the offending schedule entry, so a future breakage is self-diagnosing.
-- [ ] **Task 3 — Execute both tasks (AC: #3)**
-  - [ ] `refresh_parselmouth_mapping` already has a delegation test
+  - [x] The failure message should name the offending schedule entry, so a future breakage is self-diagnosing.
+- [x] **Task 3 — Execute both tasks (AC: #3)**
+  - [x] `refresh_parselmouth_mapping` already has a delegation test
         (`tests/unit/test_maintenance_task.py`); keep it and add the registry-path assertion.
-  - [ ] `purge_expired_artifacts` has a service-level test
+  - [x] `purge_expired_artifacts` has a service-level test
         (`tests/unit/test_artifact_cleanup.py::test_purge_task_delegates_to_the_service`) — confirm it exercises
         the **task**, and add one that runs it end to end against real expired rows, asserting blobs are gone,
         keys nulled, and **job metadata retained** (FR-8.1).
-- [ ] **Task 4 — Gate (AC: #4)** — `pixi run ci` exits 0.
+- [x] **Task 4 — Gate (AC: #4)** — `pixi run ci` exits 0.
 
 ## Dev Notes
 
@@ -201,8 +205,75 @@ if you disagree.
 
 ### Agent Model Used
 
+claude-opus-5[1m] (Claude Opus 5, 1M context)
+
 ### Debug Log References
+
+- `pixi run ci` — **exit 0**. **848 passed**, coverage **96.03%**, floor unchanged at 90%.
+- **6 new tests** in `tests/unit/test_beat_schedule_registry.py`.
+- Registry before the fix: **9** `inventory.*` tasks, both scheduled names missing. After:
+  **11**, and the story's reproduction command prints `MISSING from registry: none`.
+- **The guard was proven to bite.** With the fix reverted, **3** of the 6 fail
+  (`test_every_scheduled_task_resolves_in_the_registry` plus both purge tests); with it
+  restored, all 6 pass.
+- `pixi run dev` starts web + worker + beat with the fix in place, and the log contains no
+  `NotRegistered`.
 
 ### Completion Notes List
 
+**Red before green, and the red was the real bug.** The guard test was written first and
+failed by naming both offending schedule entries — `refresh-parselmouth-mapping` and
+`purge-expired-artifacts` — which is the exact form of the defect. Only then was the import
+added.
+
+**The fix registers `analysis` explicitly too, even though it already worked.** It was being
+registered *incidentally*, because `sbom_pipeline` imports it to build the chord. Relying on
+that side effect is how `maintenance` came to be missed in the first place: two of three task
+modules were registered for two different reasons and nobody could see which. All three are now
+listed for one reason, and the module docstring says plainly that these imports **are task
+registration, not a public API** — because that is not obvious from reading them.
+
+**The re-export was kept deliberately.** Story context flagged that nothing consumes
+`from inventory.tasks import run_sbom_pipeline` (call sites import the submodule instead), so it
+looks like removable dead code. Removing it would have traded this bug for the same bug in
+`sbom_pipeline`. It stays, and `__all__` now lists the modules so the file's purpose reads
+correctly.
+
+**Two tests initially failed with `NotRegistered` — the production symptom, reproduced in a
+test.** Looking up `app.tasks[...]` by name only works after discovery has run, which a worker
+does at boot and a test does not. Rather than switch to a direct import (which would have
+quietly reintroduced the blind spot the whole story is about), an autouse fixture calls
+`import_default_modules()` — so every lookup travels the same path Beat's dispatch-by-name
+does. That is the detail that makes these tests capable of catching a regression.
+
+**AC #3 asserts effects on both sides of the purge.** Expired blobs are gone and their keys
+nulled (FR-8.2, AD-6), *and* the `SBOMJob` row, status, and `summary_stats` survive (FR-8.1).
+There is also an inverse test proving an unexpired job is left alone — without it, a sweep that
+deleted everything would pass.
+
+**Two things I left alone, as the story directed.** `refresh_parselmouth_mapping` stays on the
+`analysis` queue (an AD-4 interpretation question, not a bug), and `purge_expired_artifacts`
+stays a cross-org sweep (it is a system task, not a request).
+
+**Unrelated blocker cleared to reach a green gate.** `test_the_frontend_directory_is_gone`
+failed because a `frontend/` directory was still on disk — a working-tree leftover from
+switching to `main` and back, containing only `node_modules/`, `dist/`, and `coverage/` with
+zero tracked files. Removed. A comparable pre-21.1 `backend/` leftover (`.coverage`,
+`.pytest_cache`, a stale wheel, `__pycache__` — also nothing tracked) is **still present**; it
+breaks nothing and removing it was outside this story.
+
 ### File List
+
+**New (1)**
+- `tests/unit/test_beat_schedule_registry.py` (6 tests)
+
+**Modified (2)**
+- `src/django_apps/inventory/tasks/__init__.py` — imports `analysis`, `maintenance`, and
+  `sbom_pipeline`; docstring explains that these imports are registration
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`, and this story file
+
+## Change Log
+
+| Date | Change |
+|---|---|
+| 2026-08-18 | Registered the maintenance task module so Beat's two scheduled tasks exist in the Celery registry. `autodiscover_tasks(["inventory"])` imports the `inventory.tasks` package, so its `__init__.py` decides what is registered — and it imported only `sbom_pipeline`; `analysis` worked incidentally via the chord import, and `maintenance` not at all, leaving artifact retention (FR-8.2) and the parselmouth refresh silently dead. All three modules are now imported for one stated reason. Added `test_beat_schedule_registry.py`, which asks the registry the question Beat asks rather than importing the task module — the import is what masked the bug — and proved it bites by reverting the fix (3 of 6 fail). Both tasks are executed **by name from the registry** with effect assertions on each side of the purge: blobs deleted and keys nulled, job metadata retained, unexpired jobs untouched. `pixi run ci` exit 0; 848 tests at 96.03%. |

@@ -1,8 +1,77 @@
-{% comment %} Placeholder — Story 21.15 fills this tab in.
+{% comment %} Licenses tab (Story 5.4 / 8.17 → 21.15).
 
-  A NEUTRAL waiting state, deliberately not an error: the epic merges as one branch, so a
-  partially-built results page must stay navigable rather than looking broken.
+  Four legal-risk tiers in the order the REPORT supplies. The template neither sorts nor names
+  them: the backend classifier owns the "descending attention" order, and hardcoding it here
+  would make a future reclassification render wrongly with nothing to catch it.
+
+  Native <details>/<summary> rather than Bootstrap collapse: the per-tier toggle then needs no
+  JavaScript at all, leaving script only for expand/collapse-all. That suits the epic's low-JS
+  goal, and the tab still works with JS disabled apart from the two bulk buttons.
+
+  A tier with packages starts open and an empty one starts closed, matching the SPA.
 {% endcomment %}
-<p class="text-body-secondary mb-0">
-  The Licenses view arrives in Story 21.15.
-</p>
+
+{% if report_state == 'failed' %}
+  {% include "inventory/sbom/tabs/_failure_notice.html" %}
+
+{% elif report_state == 'missing' %}
+  <div class="alert alert-secondary mb-0" role="status">
+    No licence report is available for this job. Its artifacts may have been removed under the
+    retention policy.
+  </div>
+
+{% else %}
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <p class="small text-body-secondary mb-0">
+      {{ licensed_package_count }} package(s) classified.
+    </p>
+    <div class="btn-group btn-group-sm" role="group" aria-label="Expand or collapse all tiers">
+      <button type="button" class="btn btn-outline-secondary" data-license-toggle="open">Expand all</button>
+      <button type="button" class="btn btn-outline-secondary" data-license-toggle="close">Collapse all</button>
+    </div>
+  </div>
+
+  {% for tier in license_tiers %}
+    <details class="border rounded mb-2" data-license-tier {% if tier.count %}open{% endif %}>
+      <summary class="p-2 d-flex align-items-center gap-2">
+        <span class="fw-semibold">{{ tier.name }}</span>
+        <span class="badge text-bg-secondary">{{ tier.count }}</span>
+      </summary>
+      <div class="px-2 pb-2">
+        {% if tier.packages %}
+          <table class="table table-sm mb-0">
+            <caption class="visually-hidden">Packages in the {{ tier.name }} tier</caption>
+            <thead>
+              <tr><th scope="col">Package</th><th scope="col">Version</th><th scope="col">License</th></tr>
+            </thead>
+            <tbody>
+              {% for package in tier.packages %}
+                <tr>
+                  <td>{{ package.name }}</td>
+                  <td>{{ package.version|default:"—" }}</td>
+                  <td>{{ package.license|default:"—" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="small text-body-secondary mb-0">No packages in this tier.</p>
+        {% endif %}
+      </div>
+    </details>
+  {% endfor %}
+
+  <script>
+    // The only JavaScript this tab needs: the per-tier toggle is native <details> behaviour.
+    (function () {
+      document.querySelectorAll('[data-license-toggle]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          var open = button.getAttribute('data-license-toggle') === 'open';
+          document.querySelectorAll('[data-license-tier]').forEach(function (tier) {
+            tier.open = open;
+          });
+        });
+      });
+    })();
+  </script>
+{% endif %}

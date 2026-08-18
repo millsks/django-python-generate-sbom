@@ -100,8 +100,11 @@ def test_the_active_tab_lives_in_the_url_and_survives_a_refresh(org_client) -> N
 
     html = client.get(f"/results/{job.task_id}?tab=licenses").content.decode()
 
-    # Rendered server-side, so this works with no JavaScript at all.
-    assert "Licenses view arrives in Story 21.15" in html
+    # Rendered server-side, so this works with no JavaScript at all. The job here has no
+    # licence report, so the tab renders its no-data notice — which is still proof that the
+    # LICENCES tab, not the Overview, was the one rendered for ?tab=licenses.
+    assert "licence report is available" in html
+    assert "Total packages" not in html
     assert 'aria-selected="true"' in html
 
 
@@ -146,9 +149,9 @@ def test_placeholder_tabs_are_neutral_not_errors(org_client) -> None:  # type: i
     client, org = org_client
     job = _job(org)
 
-    # `sbom` (21.13) and `vulnerabilities` (21.14) are filled in; the rest follow in
-    # 21.15-21.16, and each story narrows this list as it lands.
-    for tab in ("licenses", "versions"):
+    # `sbom` (21.13), `vulnerabilities` (21.14) and `licenses` (21.15) are filled in;
+    # `versions` follows in 21.16, which empties this list entirely.
+    for tab in ("versions",):
         body = client.get(f"/results/{job.task_id}/tab/{tab}").content.decode().lower()
         assert "arrives in story" in body
         assert "error" not in body

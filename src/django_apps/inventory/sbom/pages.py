@@ -389,10 +389,41 @@ def vulnerabilities_tab_context(request: HttpRequest, job: SBOMJob) -> dict[str,
     }
 
 
+def licenses_tab_context(request: HttpRequest, job: SBOMJob) -> dict[str, Any]:
+    """Build the Licenses tab's context (Story 21.15).
+
+    The four legal-risk tiers are read **in the order the report supplies them** — the backend
+    classifier owns that "descending attention" ordering (Story 4.3). Sorting or naming the
+    tiers here would mean a future change to the classification silently renders in the wrong
+    order, which is the one thing the Dev Notes warn against.
+    """
+    result = read_report(job, AnalysisReport.ReportType.LICENSE)
+    if result.failed:
+        return {"report_state": "failed", "failure_reason": result.failure_reason}
+    if not result.ok:
+        return {"report_state": "missing"}
+
+    report = result.data or {}
+    tiers = [
+        {
+            "name": tier.get("tier"),
+            "packages": tier.get("packages") or [],
+            "count": len(tier.get("packages") or []),
+        }
+        for tier in report.get("tiers") or []
+    ]
+    return {
+        "report_state": "ok",
+        "license_tiers": tiers,
+        "licensed_package_count": sum(tier["count"] for tier in tiers),
+    }
+
+
 #: Per-tab context builders. A tab with no entry needs none — the placeholders do not.
 TAB_CONTEXT_BUILDERS = {
     "sbom": sbom_tab_context,
     "vulnerabilities": vulnerabilities_tab_context,
+    "licenses": licenses_tab_context,
 }
 
 

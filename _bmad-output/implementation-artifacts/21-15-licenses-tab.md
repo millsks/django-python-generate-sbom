@@ -1,6 +1,10 @@
+---
+baseline_commit: 5184696
+---
+
 # Story 21.15: Licenses Tab
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -33,11 +37,11 @@ so that I can assess licence compliance at a glance.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Tier rendering (AC: #1, #2)** — Four collapsible sections in backend order; counts; empty
+- [x] **Task 1 — Tier rendering (AC: #1, #2)** — Four collapsible sections in backend order; counts; empty
   tiers collapsed.
-- [ ] **Task 2 — Expand/collapse-all (AC: #3)** — Minimal vanilla JS or Bootstrap collapse API.
-- [ ] **Task 3 — Failure notice reuse (AC: #4)**.
-- [ ] **Task 4 — Tests + gate (AC: #5)**.
+- [x] **Task 2 — Expand/collapse-all (AC: #3)** — Minimal vanilla JS or Bootstrap collapse API.
+- [x] **Task 3 — Failure notice reuse (AC: #4)**.
+- [x] **Task 4 — Tests + gate (AC: #5)**.
 
 ## Dev Notes
 
@@ -81,16 +85,79 @@ toggle, leaving JS only for expand/collapse-all — worth preferring given the e
 
 ### Agent Model Used
 
-_(to be filled by the dev agent)_
+claude-opus-5[1m] (Claude Opus 5, 1M context)
 
 ### Debug Log References
 
-_(to be filled by the dev agent)_
+- `pixi run ci` — **exit 0**. Backend **715 passed**, coverage **96.50%**; frontend **223 passed**.
+- **15 new tests** in `tests/unit/test_licenses_tab.py`.
+- Tier ordering asserted twice: once against the order the fixture supplied, and once by
+  **reversing** the payload and checking the rendering reverses with it.
+- Collapse state: 4 `<details>` rendered, 3 carrying `open`; with the Weak Copyleft tier
+  populated, all 4 carry `open`.
+- The shared notice verified by rendering it from **both** the licences and the vulnerabilities
+  tab and asserting the same heading appears in each.
 
 ### Completion Notes List
 
-_(to be filled by the dev agent)_
+**The ordering test is the one that would actually catch a hardcoded template.** Asserting
+"tiers appear in the report's order" passes just as happily against a template that names the
+four tiers itself, because the fixture and the hardcoded list agree. So there is a second test
+that **reverses the payload's tier list** and asserts the rendering reverses too — that fails
+against any template-side ordering. The Dev Notes warned that a hardcoded order renders
+correctly today and silently wrongly after a classifier change; this is what makes that
+detectable.
+
+**Native `<details>`/`<summary>`, as the Dev Notes preferred.** The per-tier toggle then needs
+no JavaScript at all — the tab is fully usable with JS disabled apart from the two bulk
+buttons, which is a better floor than a Bootstrap-collapse implementation would have given.
+Script is ~10 lines, doing only expand/collapse-all.
+
+**Empty tiers are collapsed, not hidden.** A tier being empty is itself information ("no strong
+copyleft here"), so it renders with a zero badge and an explicit "No packages in this tier."
+Hiding it would silently change the shape of the page depending on the data.
+
+**A test that guards against a coincidence.** `test_an_empty_tier_starts_collapsed_and_a_populated_one_open`
+could pass for the wrong reason if the collapse logic keyed off tier *position* rather than
+count, so a second fixture populates the previously-empty tier and asserts all four open.
+
+**Two assertions initially counted the wrong things.** `html.count("<details")` returned 5, not
+4, and `html.count("data-license-tier")` likewise — because the tab's own inline script mentions
+`<details>` in a comment and uses `[data-license-tier]` as a selector. Both now match the full
+opening tag, with the reason recorded in the test module so nobody loosens them back.
+
+**The failure notice is genuinely reused, and there is a test proving it.** Rather than
+asserting the licences tab contains some warning text, the test renders a failed licences tab
+*and* a failed vulnerabilities tab and asserts the same heading appears in both — which is the
+observable form of "shared partial, not copied".
+
+**Missing and failed stay distinct here too**, on the same `read_report` three-state result that
+21.14 introduced. This tab has no separate "clean" state: a licence report always carries all
+four tiers, so an all-empty report is a legitimately rendered set of zero-count tiers rather
+than a special case.
+
+**Not done here.** The Excel export of this report is Story 21.17. There is no per-tier sorting
+or filtering — the SPA had neither, and the tiers are the organising principle rather than a
+table to slice.
+
+**Still open, unchanged:** the `beat_schedule` maintenance tasks are absent from the Celery
+registry (found in 21.1, needs its own bug story), and the four deferred pluggability violations.
 
 ### File List
 
-_(to be filled by the dev agent)_
+**New (2)**
+- `src/django_apps/inventory/templates/inventory/sbom/tabs/_licenses.html` — the real tab
+- `tests/unit/test_licenses_tab.py` (15 tests)
+
+**Modified (2)**
+- `src/django_apps/inventory/sbom/pages.py` — `licenses_tab_context`, registered in
+  `TAB_CONTEXT_BUILDERS`
+- `tests/unit/test_results_page.py` — placeholder list narrowed to `versions`; the
+  bookmarkable-tab test now asserts real licences content instead of the retired placeholder
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`, and this story file
+
+## Change Log
+
+| Date | Change |
+|---|---|
+| 2026-08-18 | Filled in the Licenses tab: the four legal-risk tiers rendered in the order the report supplies, each a native `<details>` section that starts open when populated and collapsed when empty, with expand/collapse-all. Tier order is proven backend-owned by a test that reverses the payload and requires the rendering to reverse with it. Reuses Story 21.14's shared failure notice, verified by asserting the same heading renders from both tabs. `pixi run ci` exit 0; 715 backend tests at 96.50%. |

@@ -108,7 +108,12 @@ ignore_missing_imports = true
 # mode's `disallow_subclassing_any` rejects any subclass of them. Relaxed for exactly the two
 # modules that must subclass them — everything else in those files is still fully checked.
 [[tool.mypy.overrides]]
-module = ["inventory.sbom.filters", "inventory.sbom.pages", "inventory.sbom.tables"]
+module = [
+    "inventory.analysis.tables",
+    "inventory.sbom.filters",
+    "inventory.sbom.pages",
+    "inventory.sbom.tables",
+]
 disallow_subclassing_any = false
 
 [tool.coverage.run]

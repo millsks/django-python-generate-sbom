@@ -17,6 +17,10 @@ from django.views.generic import FormView
 from django_filters.views import FilterView
 from django_tables2 import RequestConfig, SingleTableMixin
 
+from inventory.analysis.filters import filter_by_severity
+from inventory.analysis.models import AnalysisReport
+from inventory.analysis.reports import read_report
+from inventory.analysis.tables import SEVERITY_CHOICES, VulnerabilityTable, vulnerability_rows
 from inventory.common.access import OrgAdminRequiredMixin, OrgMemberRequiredMixin
 from inventory.common.users import UserT
 from inventory.manifests.detection import ManifestParseError, UnsupportedFormatError
@@ -250,8 +254,7 @@ class JobResultsView(_JobScopedView):
             "artifact_tabs": ARTIFACT_TABS,
             "metrics": build_metrics(job.summary_stats),
         }
-        if active_tab == "sbom":
-            context.update(sbom_tab_context(request, job))
+        context.update(tab_context(request, job, active_tab))
         return render(request, "inventory/sbom/results.html", context)
 
 
@@ -269,8 +272,7 @@ class JobTabPartialView(_JobScopedView):
             "artifacts_available": bool(job.result_key),
             "metrics": build_metrics(job.summary_stats),
         }
-        if tab == "sbom":
-            context.update(sbom_tab_context(request, job))
+        context.update(tab_context(request, job, tab))
         return render(request, _tab_template(tab), context)
 
 
@@ -347,3 +349,58 @@ class SbomRawView(_JobScopedView):
             if not context["too_large"]:
                 context["raw"] = document.raw.decode("utf-8", errors="replace")
         return render(request, "inventory/sbom/tabs/_sbom_raw.html", context)
+
+
+def vulnerabilities_tab_context(request: HttpRequest, job: SBOMJob) -> dict[str, Any]:
+    """Build the Vulnerabilities tab's context (Story 21.14).
+
+    Keeps the three empty-ish states apart, which is the whole point of this tab:
+
+    - a **failed** phase renders the shared notice with its reason;
+    - a **missing** report renders the no-data notice;
+    - an **ok** report with no findings renders the explicit clean-scan state, which is
+      visibly different from "no data" — a clean scan is a result, not an absence.
+    """
+    result = read_report(job, AnalysisReport.ReportType.VULN)
+    if result.failed:
+        return {"report_state": "failed", "failure_reason": result.failure_reason}
+    if not result.ok:
+        return {"report_state": "missing"}
+
+    report = result.data or {}
+    rows = vulnerability_rows(report)
+    severity = request.GET.get("severity", "")
+
+    if not rows:
+        # The scan ran and found nothing. Report the package count so the statement is
+        # concrete rather than merely reassuring.
+        summary = report.get("summary") or {}
+        scanned = job.summary_stats.get("total_packages") or summary.get("vulnerable_package_count") or 0
+        return {"report_state": "clean", "scanned_packages": scanned}
+
+    table = VulnerabilityTable(filter_by_severity(rows, severity))
+    RequestConfig(request, paginate=False).configure(table)
+    return {
+        "report_state": "ok",
+        "vuln_table": table,
+        "severity_choices": SEVERITY_CHOICES,
+        "selected_severity": severity,
+        "finding_count": len(rows),
+    }
+
+
+#: Per-tab context builders. A tab with no entry needs none — the placeholders do not.
+TAB_CONTEXT_BUILDERS = {
+    "sbom": sbom_tab_context,
+    "vulnerabilities": vulnerabilities_tab_context,
+}
+
+
+def tab_context(request: HttpRequest, job: SBOMJob, tab: str) -> dict[str, Any]:
+    """Return the extra context a tab needs, or nothing.
+
+    One dispatch point shared by the shell and the htmx partial, so a tab rendered cold from
+    ``?tab=`` and the same tab fetched by a click cannot diverge.
+    """
+    builder = TAB_CONTEXT_BUILDERS.get(tab)
+    return builder(request, job) if builder else {}

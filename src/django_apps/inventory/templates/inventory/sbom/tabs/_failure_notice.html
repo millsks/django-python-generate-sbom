@@ -1,0 +1,14 @@
+{% comment %} Shared per-tab failure notice (FR-4.5 / FR-6.7), converted from
+  TabFailureNotice.tsx. Used by the vulnerabilities, licenses, and version-currency tabs —
+  built once here in Story 21.14 and included by 21.15 and 21.16 rather than copied.
+
+  The wording carries the SPA's key reassurance: one failed phase does not invalidate the
+  rest of the results.
+{% endcomment %}
+<div class="alert alert-warning mb-0" role="status">
+  <h2 class="alert-heading h6">This report could not be generated</h2>
+  <p class="mb-0">
+    {% if failure_reason %}Reason: {{ failure_reason }}. {% endif %}
+    The SBOM download and other reports remain available.
+  </p>
+</div>

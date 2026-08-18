@@ -91,7 +91,7 @@ def test_every_page_route_is_actually_reachable(default_org: Org) -> None:
 
     A page that 500s or 404s would satisfy the two tests above while being just as broken.
     """
-    for path in ("/", "/upload", "/history", "/keys", "/organization"):
+    for path in ("/", "/upload", "/history", "/keys"):
         assert Client().get(path).status_code == 200, path
 
 

@@ -21,14 +21,15 @@ PASSWORD = "pw12345678"
 TEMPLATE_ROOT = Path(__file__).resolve().parents[2] / "src" / "django_service" / "templates"
 
 # Labels as they appear in the rendered nav.
-#: The five destinations that remain. Story 21.24 removed the role gates (so the old
-#: ALWAYS_VISIBLE / ADMIN_ONLY / GLOBAL_ADMIN_ONLY split stopped meaning anything), and
-#: Story 22.9 removed Members and Global Admins entirely.
-NAV_ITEMS = ["Home", "Upload", "History", "API Keys", "Organization"]
+#: The four destinations that remain. Story 21.24 removed the role gates (so the old
+#: ALWAYS_VISIBLE / ADMIN_ONLY / GLOBAL_ADMIN_ONLY split stopped meaning anything),
+#: Story 22.9 removed Members and Global Admins, and Story 22.11 removed Organization —
+#: orgs are seeded from orgs.yml, so a creation form is redundant.
+NAV_ITEMS = ["Home", "Upload", "History", "API Keys"]
 
 #: Asserted absent, not merely "not required": a dead nav entry pointing at a deleted route
 #: is worse than a missing one.
-REMOVED_ITEMS = ["Members", "Global Admins"]
+REMOVED_ITEMS = ["Members", "Global Admins", "Organization"]
 
 
 def _nav_html(client: Client) -> str:

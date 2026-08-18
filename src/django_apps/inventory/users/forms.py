@@ -22,23 +22,6 @@ from django import forms
 INVALID_CREDENTIALS = "Incorrect email or password."
 
 
-class CreateOrgForm(forms.Form):
-    """Create an organisation (Story 2.12; ungated by Story 21.24).
-
-    The creator becomes the new org's admin, and every other global admin is provisioned
-    into it by ``create_org`` (Story 2.8) — so this form carries no admin field. Story 2.12
-    deliberately reversed self-service org creation and gated this on the global-admin tier;
-    Story 21.24 removed that gate with the rest of the app's access control, so creation is
-    open until identity comes back from the host platform (Epics 17-18).
-    """
-
-    name = forms.CharField(
-        max_length=255,
-        label="Organization name",
-        widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Acme Corp"}),
-    )
-
-
 class CreateApiKeyForm(forms.Form):
     """Name a new API key (Story 2.4).
 

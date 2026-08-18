@@ -33,15 +33,11 @@ from inventory.users.pages import (
     ApiKeyCreateView,
     ApiKeyRevokeView,
     ApiKeysView,
-    CreateOrgView,
-    OrganizationHubView,
 )
 
 urlpatterns = [
     # Story 21.5 — authentication
     # Story 21.6 — organisation administration
-    path("organization", OrganizationHubView.as_view(), name="ui-organization"),
-    path("organization/create", CreateOrgView.as_view(), name="ui-org-create"),
     path("keys", ApiKeysView.as_view(), name="ui-keys"),
     path("keys/create", ApiKeyCreateView.as_view(), name="ui-key-create"),
     path("keys/revoke", ApiKeyRevokeView.as_view(), name="ui-key-revoke"),

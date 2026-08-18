@@ -1,6 +1,6 @@
 {% load static %}
-{% comment %} The five navigation destinations, in the Story 2.15 / 10.8 order that SideNav.tsx
-  established: Home first, then Upload, History, API Keys, and Organization.
+{% comment %} The four navigation destinations, in the Story 2.15 / 10.8 order that SideNav.tsx
+  established: Home first, then Upload, History, and API Keys.
 
   Included twice by base.html — once for the md+ sidebar and once for the mobile
   offcanvas — so the two can never drift apart. Edit this partial, never the include sites.
@@ -9,12 +9,12 @@
   `is_org_admin` / `is_global_admin` gates went with it rather than being left as conditions
   that are always true.
 
-  Story 22.9 then removed the **Members** and **Global Admins** destinations entirely. Both
-  edited records that gate nothing without identity, and both were broken for the anonymous
-  caller that is now the ordinary one. The org/membership MODEL survives as the seam OIDC
-  group claims re-attach to (Epics 17-18) — only the human-facing management UI is gone.
+  Story 22.9 removed **Members** and **Global Admins**; Story 22.11 removed **Organization**.
+  Organizations are now seeded from `orgs.yml` by `seed_orgs`, so a creation form is redundant,
+  and the hub only linked to surfaces the nav already offers. Orgs remain first-class DATA —
+  the header switcher selects one, and the upload form files a job against one. Only the
+  management UI is gone; the model is the seam OIDC group claims re-attach to (Epics 17-18).
 {% endcomment %}
-{% url 'ui-organization' as organization_url %}
 {% url 'ui-keys' as keys_url %}
 {% url 'ui-upload' as upload_url %}
 {% url 'ui-history' as history_url %}
@@ -23,5 +23,4 @@
   {% include "_nav_item.html" with url=upload_url label="Upload" icon="nav.upload" %}
   {% include "_nav_item.html" with url=history_url label="History" icon="nav.history" %}
   {% include "_nav_item.html" with url=keys_url label="API Keys" icon="nav.keys" %}
-  {% include "_nav_item.html" with url=organization_url label="Organization" icon="nav.organization" %}
 </nav>

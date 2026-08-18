@@ -10,7 +10,7 @@ API-key consumer.
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any
 
 from django.contrib import messages
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
@@ -18,21 +18,15 @@ from django.http.response import HttpResponseBase
 from django.shortcuts import render
 from django.urls import reverse
 from django.views import View
-from django.views.generic import FormView, TemplateView
+from django.views.generic import TemplateView
 
 from inventory.common.access import OrgContextMixin
-from inventory.common.users import UserT
-from inventory.users.auth import set_active_org_by_slug
-from inventory.users.forms import (
-    CreateApiKeyForm,
-    CreateOrgForm,
-)
+from inventory.users.forms import CreateApiKeyForm
 from inventory.users.models import Org
 from inventory.users.selectors import get_api_keys
 from inventory.users.services import (
     MembershipError,
     create_api_key,
-    create_org,
     revoke_api_key,
 )
 
@@ -42,39 +36,6 @@ DEFAULT_AFTER_LOGIN = "/"
 #: Query/POST parameter carrying the originally requested page. Matches the name Django's
 #: own `redirect_to_login` uses, which is what the Story 21.4 mixins emit.
 REDIRECT_FIELD_NAME = "next"
-
-
-class OrganizationHubView(OrgContextMixin, TemplateView):
-    """The admin-facing hub (Story 2.11), converted from ``OrganizationPage.tsx``.
-
-    It **links** to the management pages rather than duplicating their logic — the SPA page's
-    own header comment made that explicit, and it is what keeps this page from drifting out of
-    step with the pages it points at.
-    """
-
-    template_name = "inventory/orgs/hub.html"
-
-
-class CreateOrgView(FormView):  # type: ignore[type-arg]
-    """Create an organisation. Ungated since Story 21.24 (was global-admins-only, Story 2.12)."""
-
-    template_name = "inventory/orgs/create.html"
-    form_class = CreateOrgForm
-
-    def form_valid(self, form: CreateOrgForm) -> HttpResponse:
-        """Create the org — with the caller as its admin when there is one — then switch to it.
-
-        An anonymous caller is the ordinary case after Story 21.24 and has no user to make an
-        admin. Passing ``AnonymousUser`` straight through raised a ``ValueError`` from the
-        membership FK, so this page returned **500** for the normal case until Story 22.8.
-        """
-        creator = cast(UserT, self.request.user) if self.request.user.is_authenticated else None
-        org = create_org(name=form.cleaned_data["name"], admin_user=creator)
-        # Make the new org the active one, so the admin lands in the thing they just made
-        # rather than in whichever org happened to be active.
-        set_active_org_by_slug(self.request, org.slug)
-        messages.success(self.request, f"Created {org.name}.")
-        return HttpResponseRedirect(reverse("ui-organization"))
 
 
 KEYS_TEMPLATE = "inventory/keys/list.html"

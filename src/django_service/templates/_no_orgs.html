@@ -21,9 +21,9 @@
     {% icon 'nav.organization' 48 css_class="bi text-body-secondary mb-3" %}
     <h1 class="h4">No organizations exist</h1>
     <p class="text-body-secondary mx-auto" style="max-width: 36rem;">
-      This page works against an organization, and the database has none. Create one to
-      continue &mdash; or restore the seeded organization by re-running the migrations.
+      This page works against an organization, and the database has none. Organizations are
+      seeded from <code>orgs.yml</code> &mdash; run <code>pixi run seed-orgs</code> to create
+      them, then reload.
     </p>
-    <a class="btn btn-primary mt-2" href="{% url 'ui-organization' %}">Create organization</a>
   </div>
 {% endblock %}

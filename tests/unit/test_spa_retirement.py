@@ -36,9 +36,10 @@ PASSWORD = "pw12345678"
 #:   /register, /login             — Story 21.24 removed the app's own authentication
 #:   /members, /platform/global-admins — Story 22.9 removed surfaces that edited records which
 #:                                   gate nothing without identity (and were broken anonymously)
+#:   /organization                 — Story 22.11: orgs are seeded from orgs.yml, so the hub and
+#:                                   creation form were redundant
 SPA_ROUTES = (
     "/",
-    "/organization",
     "/keys",
     "/upload",
     "/results/00000000-0000-0000-0000-000000000000",

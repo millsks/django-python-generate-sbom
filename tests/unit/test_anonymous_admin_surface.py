@@ -8,7 +8,9 @@ that is now the ordinary one.
 
 1. **Org creation returned 500 for an anonymous caller**, on the API *and* the page.
    `create_org` assigned `admin_user` to `OrgMembership.user`, and an `AnonymousUser` raises
-   `ValueError: Cannot assign ... must be a "User" instance`.
+   `ValueError: Cannot assign ... must be a "User" instance`. (Story 22.11 later removed the
+   *page*; the API path and the underlying `create_org` fix are still covered below, and
+   `seed_orgs` creates orgs with no user at all — the same userless path.)
 
 2. **A logged-in ordinary user was MORE restricted than an anonymous one.** Four DRF views kept
    an in-body `is_global_admin(...)` check. `is_global_admin` returns `True` for anonymous
@@ -51,17 +53,6 @@ def test_an_anonymous_caller_can_create_an_org_through_the_api() -> None:
     response = Client().post("/api/v1/orgs/create/", {"name": "Anon API"}, content_type="application/json")
 
     assert response.status_code == 201, response.content
-    assert Org.objects.count() == before + 1
-
-
-@pytest.mark.django_db
-def test_an_anonymous_caller_can_create_an_org_through_the_page() -> None:
-    before = Org.objects.count()
-
-    response = Client().post("/organization/create", {"name": "Anon Page"})
-
-    assert response.status_code == 302, response.content
-    assert Org.objects.filter(name="Anon Page").exists()
     assert Org.objects.count() == before + 1
 
 

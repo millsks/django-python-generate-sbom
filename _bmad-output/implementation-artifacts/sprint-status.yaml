@@ -508,3 +508,8 @@ development_status:
   # Placeholder list ORG001-ORG005 pending the real one. The org-creation UI is RETAINED for
   # now — retiring it is a separate decision (see the story notes).
   22-10-seed-orgs-from-a-list: review
+  # ADDED 2026-08-18. With orgs seeded from orgs.yml (22.10), the creation form is redundant
+  # and the hub only linked to surfaces the nav already offers — so the Organization UI goes
+  # too. Nav is now Home/Upload/History/API Keys. Orgs remain first-class DATA: the header
+  # switcher selects one and the upload form files a job against one.
+  22-11-remove-organization-ui: review

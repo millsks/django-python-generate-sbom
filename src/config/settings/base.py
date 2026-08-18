@@ -5,6 +5,8 @@
 # runnable without a populated .env. Object storage (django-storages / S3) is
 # wired by the first story that persists artifacts (Epic 3); this module wires
 # the database, Redis/Celery, and structured logging.
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _package_version
 from pathlib import Path
 
 import environ
@@ -139,6 +141,12 @@ TEMPLATES = [
                 # hardcodes either string or recomputes the role gates (Story 21.3).
                 "django_service.context_processors.ui",
             ],
+            # Registered explicitly because `django_service` is the host PACKAGE, not an
+            # installed app — Django only auto-discovers templatetags/ from INSTALLED_APPS.
+            # Adding the package as an app purely to expose one tag would also pull its
+            # templates and static in through APP_DIRS, which the explicit DIRS and
+            # STATICFILES_DIRS already handle (Story 21.18).
+            "libraries": {"ui_icons": "django_service.templatetags.ui_icons"},
         },
     },
 ]
@@ -220,7 +228,14 @@ PRODUCT_NAME_SHORT = "Supply Lens"
 # Footer + header chrome values, mirroring the SPA's config.ts so the server-rendered
 # shell reproduces it (Story 12.3 footer, Story 11.8 header links, Story 11.20 API docs
 # link). Env-overridable exactly as the Vite VITE_* equivalents were.
-PRODUCT_VERSION = env.str("PRODUCT_VERSION", default="0.1.0")
+# Read from the installed distribution rather than hardcoded: the SPA footer mirrored
+# package.json, and Story 21.19 deletes that. Still env-overridable so a deployment can pin a
+# display version without a rebuild, matching the old VITE_* behaviour.
+try:
+    _DISTRIBUTION_VERSION = _package_version("generate-sbom")
+except PackageNotFoundError:  # pragma: no cover - only when running from a bare checkout
+    _DISTRIBUTION_VERSION = "0.0.0"
+PRODUCT_VERSION = env.str("PRODUCT_VERSION", default=_DISTRIBUTION_VERSION)
 REPO_URL = env.str("REPO_URL", default="https://github.com/millsks/django-python-generate-sbom")
 DOCS_URL = env.str("DOCS_URL", default="https://millsks.github.io/django-python-generate-sbom/")
 

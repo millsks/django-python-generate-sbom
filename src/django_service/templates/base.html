@@ -1,4 +1,4 @@
-{% load static %}<!doctype html>
+{% load ui_icons %}{% load static %}<!doctype html>
 {% comment %} ---------------------------------------------------------------------------
   The project shell (Story 21.3). Reproduces the React SPA's Layout.tsx +
   SideNav.tsx + Footer.tsx: header, role-gated side navigation, messages, footer.
@@ -52,11 +52,11 @@
           <button class="navbar-toggler border-0 me-2" type="button" data-bs-toggle="offcanvas"
                   data-bs-target="#mobile-nav" aria-controls="mobile-nav"
                   aria-label="Toggle navigation">
-            <svg class="bi" width="24" height="24" aria-hidden="true"><use href="{% static 'images/icons.svg' %}#bi-list"/></svg>
+            {% icon 'chrome.menu' 24 %}
           </button>
 
           <a class="navbar-brand d-flex align-items-center gap-2" href="/">
-            <svg class="bi" width="24" height="24" aria-hidden="true"><use href="{% static 'images/icons.svg' %}#bi-box-seam"/></svg>
+            {% icon 'chrome.brand' 24 %}
             <span>{{ product_name_short }}</span>
           </a>
 
@@ -65,29 +65,29 @@
             {% if api_docs_url %}
               <a class="btn btn-link link-body-emphasis p-2" href="{{ api_docs_url }}"
                  target="_blank" rel="noopener noreferrer" aria-label="API docs" title="API docs">
-                <svg class="bi" width="18" height="18" aria-hidden="true"><use href="{% static 'images/icons.svg' %}#bi-braces"/></svg>
+                {% icon 'chrome.api' 18 %}
               </a>
             {% endif %}
             <a class="btn btn-link link-body-emphasis p-2" href="{{ docs_url }}"
                target="_blank" rel="noopener noreferrer" aria-label="Documentation" title="Documentation">
-              <svg class="bi" width="18" height="18" aria-hidden="true"><use href="{% static 'images/icons.svg' %}#bi-book"/></svg>
+              {% icon 'chrome.docs' 18 %}
             </a>
             <a class="btn btn-link link-body-emphasis p-2" href="{{ repo_url }}"
                target="_blank" rel="noopener noreferrer" aria-label="GitHub repository" title="GitHub repository">
-              <svg class="bi" width="18" height="18" aria-hidden="true"><use href="{% static 'images/icons.svg' %}#bi-github"/></svg>
+              {% icon 'chrome.repo' 18 %}
             </a>
 
             <button class="btn btn-link link-body-emphasis p-2" type="button" id="theme-toggle"
                     aria-label="Toggle light/dark theme" title="Toggle light/dark theme">
-              <svg class="bi" width="18" height="18" aria-hidden="true" data-theme-icon-dark hidden><use href="{% static 'images/icons.svg' %}#bi-sun"/></svg>
-              <svg class="bi" width="18" height="18" aria-hidden="true" data-theme-icon-light hidden><use href="{% static 'images/icons.svg' %}#bi-moon-stars"/></svg>
+              {% icon 'chrome.theme_light' 18 %}
+              {% icon 'chrome.theme_dark' 18 %}
             </button>
 
             {% if user.is_authenticated %}
               <div class="dropdown">
                 <button class="btn btn-link link-body-emphasis p-2 d-flex align-items-center gap-2 dropdown-toggle"
                         type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                  <svg class="bi" width="20" height="20" aria-hidden="true"><use href="{% static 'images/icons.svg' %}#bi-person-circle"/></svg>
+                  {% icon 'chrome.account' 20 %}
                   <span class="d-none d-lg-inline small">{{ user.email }}</span>
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end">
@@ -103,7 +103,7 @@
                     <form method="post" action="{% url 'ui-logout' %}">
                       {% csrf_token %}
                       <button type="submit" class="dropdown-item d-flex align-items-center gap-2">
-                        <svg class="bi" width="16" height="16" aria-hidden="true"><use href="{% static 'images/icons.svg' %}#bi-box-arrow-right"/></svg>
+                        {% icon 'action.logout' 16 %}
                         Sign out
                       </button>
                     </form>

@@ -9,10 +9,13 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path, re_path
 
-from django_service.views import OrgSwitchView, ShellPreviewView
+from django_service.views import LandingPageView, OrgSwitchView, ShellPreviewView
 from inventory.common.views import SpaView, health
 
 urlpatterns = [
+    # Story 21.18: the landing page owns "/". With this, every route has a Django owner,
+    # which is the precondition Story 21.19 needs before it can delete the SPA.
+    path("", LandingPageView.as_view(), name="ui-home"),
     path("health/", health, name="health"),
     path("admin/", admin.site.urls),
     # Story 21.3: the server-rendered shell, mounted under a TEMPORARY prefix.

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load ui_icons %}
 {% load static %}
 {% comment %} The shared "no organisation" state (Story 21.4, AC #4), carrying over
   NoOrgState.tsx. Rendered BY THE MIXIN in place of any org-scoped page, so every such
@@ -13,9 +14,7 @@
 
 {% block content %}
   <div class="py-5 text-center">
-    <svg class="bi text-body-secondary mb-3" width="48" height="48" aria-hidden="true">
-      <use href="{% static 'images/icons.svg' %}#bi-people"/>
-    </svg>
+    {% icon 'nav.members' 48 css_class="bi text-body-secondary mb-3" %}
     <h1 class="h4">No organization yet</h1>
     <p class="text-body-secondary mx-auto" style="max-width: 34rem;">
       You&rsquo;re not in an organization yet &mdash; create one or ask an admin to add you.

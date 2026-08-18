@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load ui_icons %}
 {% load static %}
 {% comment %} Temporary page (Story 21.3, AC #7) proving the foundation renders: the shell, the
   crispy template pack, the icon sprite, htmx, and the theme toggle. No business page is
@@ -21,13 +22,13 @@
             Vendored subset of Bootstrap Icons, inheriting colour via <code>currentColor</code>.
           </p>
           <div class="d-flex flex-wrap gap-3 fs-4">
-            <svg class="bi" width="24" height="24" aria-hidden="true"><use href="{% static 'images/icons.svg' %}#bi-house-door"/></svg>
-            <svg class="bi" width="24" height="24" aria-hidden="true"><use href="{% static 'images/icons.svg' %}#bi-cloud-arrow-up"/></svg>
-            <svg class="bi" width="24" height="24" aria-hidden="true"><use href="{% static 'images/icons.svg' %}#bi-clock-history"/></svg>
-            <svg class="bi" width="24" height="24" aria-hidden="true"><use href="{% static 'images/icons.svg' %}#bi-people"/></svg>
-            <svg class="bi" width="24" height="24" aria-hidden="true"><use href="{% static 'images/icons.svg' %}#bi-key"/></svg>
-            <svg class="bi" width="24" height="24" aria-hidden="true"><use href="{% static 'images/icons.svg' %}#bi-building"/></svg>
-            <svg class="bi" width="24" height="24" aria-hidden="true"><use href="{% static 'images/icons.svg' %}#bi-shield-lock"/></svg>
+            {% icon 'nav.home' 24 %}
+            {% icon 'nav.upload' 24 %}
+            {% icon 'nav.history' 24 %}
+            {% icon 'nav.members' 24 %}
+            {% icon 'nav.keys' 24 %}
+            {% icon 'nav.organization' 24 %}
+            {% icon 'nav.global_admins' 24 %}
           </div>
         </div>
       </div>

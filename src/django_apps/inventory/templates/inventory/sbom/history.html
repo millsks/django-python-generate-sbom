@@ -53,7 +53,9 @@
         onsubmit="return confirm('Delete the SBOM and report files for the selected jobs on this page? The job records and their metadata are kept — only the downloadable files are removed.');">
     {% csrf_token %}
 
-    <div class="mt-3">
+    {% comment %} `table-responsive` so a narrow viewport scrolls the TABLE rather than the
+      page — this table has eight columns and is the widest thing in the app. {% endcomment %}
+    <div class="table-responsive mt-3">
       {% render_table table %}
     </div>
 

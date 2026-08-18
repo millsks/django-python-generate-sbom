@@ -126,7 +126,9 @@ def test_the_access_control_names_no_longer_exist(name: str) -> None:
 def test_no_source_file_imports_djangos_auth_mixins() -> None:
     """`LoginRequiredMixin` and friends are how the gate would most easily reappear."""
     offenders = [
-        str(path.relative_to(SRC)) for path in SRC.rglob("*.py") if "django.contrib.auth.mixins" in path.read_text()
+        str(path.relative_to(SRC))
+        for path in SRC.rglob("*.py")
+        if "django.contrib.auth.mixins" in path.read_text(encoding="utf-8")
     ]
     assert not offenders, f"auth mixins imported by: {offenders}"
 
@@ -150,7 +152,7 @@ def test_no_login_redirect_settings_remain() -> None:
     from django.conf import settings
 
     # Django supplies its own defaults, so absence is asserted against the project module.
-    project_settings = (SRC / "config" / "settings" / "base.py").read_text()
+    project_settings = (SRC / "config" / "settings" / "base.py").read_text(encoding="utf-8")
     for name in ("LOGIN_URL", "LOGIN_REDIRECT_URL", "LOGOUT_REDIRECT_URL"):
         assert f"\n{name} =" not in project_settings, name
     assert settings.REST_FRAMEWORK["DEFAULT_PERMISSION_CLASSES"] == ["rest_framework.permissions.AllowAny"]

@@ -143,13 +143,18 @@ def test_no_template_spells_out_a_sprite_symbol_id() -> None:
     A `bi-*` literal in a template routes around the mapping, which is exactly what makes an
     icon-set change a twenty-file edit instead of a one-file edit.
     """
-    offenders = [path.name for root in TEMPLATE_ROOTS for path in root.rglob("*.html") if "#bi-" in path.read_text()]
+    offenders = [
+        path.name
+        for root in TEMPLATE_ROOTS
+        for path in root.rglob("*.html")
+        if "#bi-" in path.read_text(encoding="utf-8")
+    ]
     assert not offenders, f"templates referencing sprite ids directly: {offenders}"
 
 
 def test_every_mapped_icon_exists_in_the_sprite() -> None:
     # A name missing from the sprite renders an invisible empty box, which is easy to miss.
-    sprite = SPRITE.read_text()
+    sprite = SPRITE.read_text(encoding="utf-8")
     from django_service.icons import ACTION, CHROME
 
     for group in (NAV, TAB, ACTION, CHROME):
@@ -191,7 +196,7 @@ def test_the_navigation_collapses_on_narrow_viewports() -> None:
 def test_wide_tables_scroll_inside_their_own_container() -> None:
     """The page itself must not scroll horizontally because a report table is wide."""
     for template in ("history.html", "tabs/_versions.html", "tabs/_vulnerabilities.html", "tabs/_sbom.html"):
-        source = (TEMPLATE_ROOTS[1] / "inventory" / "sbom" / template).read_text()
+        source = (TEMPLATE_ROOTS[1] / "inventory" / "sbom" / template).read_text(encoding="utf-8")
         assert "overflow" in source or "table-responsive" in source, template
 
 

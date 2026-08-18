@@ -107,7 +107,8 @@ def test_no_template_hardcodes_the_product_name() -> None:
     offenders = [
         path.name
         for path in TEMPLATE_ROOT.rglob("*.html")
-        if "Python Inventory Supply Lens" in path.read_text() or "Supply Lens" in path.read_text()
+        if "Python Inventory Supply Lens" in path.read_text(encoding="utf-8")
+        or "Supply Lens" in path.read_text(encoding="utf-8")
     ]
     assert not offenders, f"templates hardcoding the product name: {offenders}"
 
@@ -147,7 +148,7 @@ def test_no_template_references_an_external_asset() -> None:
 
     offenders: list[str] = []
     for path in TEMPLATE_ROOT.rglob("*.html"):
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
         if asset_attr.search(text):
             offenders.append(f"{path.name}: external src")
         offenders.extend(
@@ -183,7 +184,9 @@ def test_no_template_uses_a_multi_line_hash_comment() -> None:
     offenders: list[str] = []
     pattern = re.compile(r"\{#(.*?)#\}", re.DOTALL)
     for path in TEMPLATE_ROOT.rglob("*.html"):
-        offenders.extend(f"{path.name}" for m in pattern.finditer(path.read_text()) if "\n" in m.group(1))
+        offenders.extend(
+            f"{path.name}" for m in pattern.finditer(path.read_text(encoding="utf-8")) if "\n" in m.group(1)
+        )
     assert not offenders, f"multi-line {{# #}} comments (use {{% comment %}}): {sorted(set(offenders))}"
 
 
@@ -212,6 +215,6 @@ def test_crispy_renders_the_configured_bootstrap5_pack() -> None:
 def test_the_icon_sprite_is_a_subset_not_the_full_icon_set() -> None:
     # The product owner chose a curated sprite over the ~2000-icon webfont. If someone
     # later drops in the whole distribution, this notices.
-    sprite = (TEMPLATE_ROOT.parent / "static" / "images" / "icons.svg").read_text()
+    sprite = (TEMPLATE_ROOT.parent / "static" / "images" / "icons.svg").read_text(encoding="utf-8")
     symbols = sprite.count("<symbol ")
     assert 0 < symbols < 60, f"sprite carries {symbols} symbols — expected a small subset"

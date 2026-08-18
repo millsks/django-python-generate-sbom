@@ -33,7 +33,7 @@ def test_the_app_has_modules_to_check() -> None:
 def test_no_app_module_imports_from_the_host_package() -> None:
     offenders: list[str] = []
     for path in _app_modules():
-        tree = ast.parse(path.read_text(), filename=str(path))
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and (node.module or "").startswith(HOST_PACKAGE):
                 offenders.append(f"{path.relative_to(APP_ROOT)}:{node.lineno} from {node.module}")
@@ -52,7 +52,7 @@ def test_no_app_module_imports_a_symbol_named_user() -> None:
     # `AbstractUser`, and `UserManager` are the sanctioned names and are left alone.
     offenders: list[str] = []
     for path in _app_modules():
-        tree = ast.parse(path.read_text(), filename=str(path))
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if not isinstance(node, ast.ImportFrom):
                 continue

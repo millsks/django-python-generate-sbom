@@ -284,5 +284,5 @@ def test_the_trigger_is_produced_in_exactly_one_place() -> None:
     from pathlib import Path
 
     app = Path(__file__).resolve().parents[2] / "src" / "django_apps" / "inventory"
-    producers = [path.name for path in app.rglob("*.py") if "hx-trigger" in path.read_text()]
+    producers = [path.name for path in app.rglob("*.py") if "hx-trigger" in path.read_text(encoding="utf-8")]
     assert producers == ["tables.py"], producers

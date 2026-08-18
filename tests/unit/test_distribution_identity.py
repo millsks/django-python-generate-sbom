@@ -29,12 +29,12 @@ EXTERNAL_IDENTITY = "django-python-generate-sbom"
 
 @pytest.fixture(scope="module")
 def pyproject() -> dict:  # type: ignore[type-arg]
-    return tomllib.loads((REPO / "pyproject.toml").read_text())
+    return tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))
 
 
 @pytest.fixture(scope="module")
 def pixi() -> dict:  # type: ignore[type-arg]
-    return tomllib.loads((REPO / "pixi.toml").read_text())
+    return tomllib.loads((REPO / "pixi.toml").read_text(encoding="utf-8"))
 
 
 # --- AC #1: the distribution name -----------------------------------------------------
@@ -93,7 +93,7 @@ def test_the_wheel_maps_the_import_roots(pyproject: dict) -> None:  # type: igno
 
 def test_the_sonarcloud_project_is_unchanged() -> None:
     """A projectKey cannot be renamed; a new project discards all historical analysis."""
-    text = (REPO / "sonar-project.properties").read_text()
+    text = (REPO / "sonar-project.properties").read_text(encoding="utf-8")
 
     assert f"sonar.projectKey=millsks_{EXTERNAL_IDENTITY}" in text
     assert f"sonar.projectName={EXTERNAL_IDENTITY}" in text
@@ -105,14 +105,14 @@ def test_sonarlint_stays_bound_to_the_same_project() -> None:
     """Changing one of these two without the other silently disconnects the IDE."""
     import json
 
-    settings_json = json.loads((REPO / ".vscode/settings.json").read_text())
+    settings_json = json.loads((REPO / ".vscode/settings.json").read_text(encoding="utf-8"))
 
     assert settings_json["sonarlint.connectedMode.project"]["projectKey"] == f"millsks_{EXTERNAL_IDENTITY}"
 
 
 def test_the_repo_and_docs_urls_are_unchanged() -> None:
     """Renaming these breaks every published link and every badge."""
-    mkdocs = (REPO / "mkdocs.yml").read_text()
+    mkdocs = (REPO / "mkdocs.yml").read_text(encoding="utf-8")
 
     assert f"site_url: https://millsks.github.io/{EXTERNAL_IDENTITY}/" in mkdocs
     assert f"repo_url: https://github.com/millsks/{EXTERNAL_IDENTITY}" in mkdocs
@@ -132,7 +132,7 @@ def test_the_product_name_is_not_the_distribution_name() -> None:
 
 def test_the_changelog_keeps_its_history() -> None:
     """Released entries record what shipped under the old name; rewriting them is a lie."""
-    changelog = (REPO / "CHANGELOG.md").read_text()
+    changelog = (REPO / "CHANGELOG.md").read_text(encoding="utf-8")
 
     assert EXTERNAL_IDENTITY in changelog
 
@@ -147,7 +147,7 @@ def test_the_release_workflow_builds_no_frontend_bundle() -> None:
     step was removed, and a test that forbade saying so would force the history out of the
     place it is most useful.
     """
-    lines = (REPO / ".github/workflows/release.yml").read_text().splitlines()
+    lines = (REPO / ".github/workflows/release.yml").read_text(encoding="utf-8").splitlines()
     executable = "\n".join(line for line in lines if not line.lstrip().startswith("#"))
 
     for dead in ("fe-build", "frontend", "Vite"):
@@ -155,7 +155,7 @@ def test_the_release_workflow_builds_no_frontend_bundle() -> None:
 
 
 def test_the_release_workflow_names_the_new_wheel() -> None:
-    text = (REPO / ".github/workflows/release.yml").read_text()
+    text = (REPO / ".github/workflows/release.yml").read_text(encoding="utf-8")
 
     assert "python_inventory_supply_lens-*.whl" in text
     assert "generate_sbom-*.whl" not in text

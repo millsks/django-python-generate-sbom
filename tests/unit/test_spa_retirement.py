@@ -157,7 +157,7 @@ def test_the_frontend_directory_is_gone() -> None:
 
 
 def test_pixi_has_no_node_and_no_fe_tasks() -> None:
-    manifest = tomllib.loads((REPO / "pixi.toml").read_text())
+    manifest = tomllib.loads((REPO / "pixi.toml").read_text(encoding="utf-8"))
 
     assert "nodejs" not in manifest.get("dependencies", {})
 
@@ -167,7 +167,7 @@ def test_pixi_has_no_node_and_no_fe_tasks() -> None:
 
 def test_the_ci_task_does_not_depend_on_a_deleted_task() -> None:
     """A stale `depends-on` entry breaks the gate itself, which is how this would be found."""
-    manifest = tomllib.loads((REPO / "pixi.toml").read_text())
+    manifest = tomllib.loads((REPO / "pixi.toml").read_text(encoding="utf-8"))
     tasks = manifest["tasks"]
     defined = set(tasks)
 
@@ -191,7 +191,7 @@ def test_the_ci_task_does_not_depend_on_a_deleted_task() -> None:
     ],
 )
 def test_no_build_or_ci_file_references_the_frontend(relative: str) -> None:
-    text = (REPO / relative).read_text()
+    text = (REPO / relative).read_text(encoding="utf-8")
     for needle in (
         "frontend",
         "fe-install",
@@ -210,6 +210,6 @@ def test_no_build_or_ci_file_references_the_frontend(relative: str) -> None:
 
 def test_the_windows_job_kept_its_python_coverage() -> None:
     """Only the frontend half of the win-64 job goes; Story 20.6 is why the job exists."""
-    text = (REPO / ".github/workflows/ci.yml").read_text()
+    text = (REPO / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     assert "windows" in text.lower()
     assert "cov" in text

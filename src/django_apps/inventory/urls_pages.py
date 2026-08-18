@@ -24,6 +24,7 @@ from inventory.sbom.pages import (
     JobResultsView,
     JobRowPartialView,
     JobTabPartialView,
+    SbomRawView,
     UploadPageView,
 )
 from inventory.users.pages import (
@@ -89,4 +90,7 @@ urlpatterns = [
     path("results/<uuid:task_id>/progress", JobProgressPartialView.as_view(), name="ui-job-progress"),
     # Story 21.12 — one tab-partial endpoint for all five tabs; 21.13-21.16 fill the bodies.
     path("results/<uuid:task_id>/tab/<str:tab>", JobTabPartialView.as_view(), name="ui-job-tab"),
+    # Story 21.13 — the raw document has its own endpoint so it never rides along in the
+    # SBOM tab's payload.
+    path("results/<uuid:task_id>/sbom/raw", SbomRawView.as_view(), name="ui-job-sbom-raw"),
 ]

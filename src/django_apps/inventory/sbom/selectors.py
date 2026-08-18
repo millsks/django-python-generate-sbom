@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from typing import cast
+from dataclasses import dataclass
+from typing import Any, cast
 
+from django.core.files.storage import default_storage
 from django.db.models import QuerySet
 
 from inventory.manifests.models import ManifestUpload
 from inventory.users.models import Org
 
+from .document import normalize_components, parse_metadata
 from .models import SBOMJob
 
 
@@ -55,3 +58,46 @@ def get_jobs(
         else:
             jobs = jobs.none()
     return jobs
+
+
+@dataclass(frozen=True)
+class InlineDocument:
+    """A job's generated SBOM, read back for in-page viewing (AD-5)."""
+
+    output_format: str
+    metadata: dict[str, Any]
+    components: list[dict[str, Any]]
+    raw: bytes
+
+    @property
+    def size_bytes(self) -> int:
+        """Size of the raw document, used to decide inline-vs-download."""
+        return len(self.raw)
+
+
+def read_inline_document(job: SBOMJob) -> InlineDocument | None:
+    """Read and parse a job's SBOM for the viewer, or return None if it is unavailable.
+
+    "Unavailable" covers every reason the bytes are not there — never produced, not finished,
+    or purged by the retention sweep (Story 7.3) — because the viewer's response is the same
+    in all three cases: a notice, not an error. Extracted in Story 21.13 so the DRF endpoint
+    and the server-rendered tab read the document the same way.
+
+    Args:
+        job: The job whose document to read.
+
+    Returns:
+        The parsed document, or None when there is nothing to show.
+    """
+    if job.status != SBOMJob.Status.SUCCESS or not job.result_key:
+        return None
+    if not default_storage.exists(job.result_key):
+        return None
+    with default_storage.open(job.result_key) as handle:
+        raw = handle.read()
+    return InlineDocument(
+        output_format=job.output_format,
+        metadata=parse_metadata(raw, job.output_format),
+        components=normalize_components(raw, job.output_format),
+        raw=raw,
+    )

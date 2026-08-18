@@ -146,7 +146,9 @@ def test_placeholder_tabs_are_neutral_not_errors(org_client) -> None:  # type: i
     client, org = org_client
     job = _job(org)
 
-    for tab in ("sbom", "vulnerabilities", "licenses", "versions"):
+    # `sbom` was filled in by Story 21.13 and is no longer a placeholder; the rest follow in
+    # 21.14-21.16, and each story narrows this list as it lands.
+    for tab in ("vulnerabilities", "licenses", "versions"):
         body = client.get(f"/results/{job.task_id}/tab/{tab}").content.decode().lower()
         assert "arrives in story" in body
         assert "error" not in body

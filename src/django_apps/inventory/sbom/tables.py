@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import django_tables2 as tables
 from django.urls import reverse
 from django.utils import timezone
@@ -172,3 +174,39 @@ def _artifacts_purged(job: SBOMJob) -> bool:
     A job that never succeeded has no artifacts to have lost.
     """
     return bool(job.status == SBOMJob.Status.SUCCESS and not job.result_key)
+
+
+class SbomComponentTable(tables.Table):
+    """The generated SBOM's components (converted from ``SbomTab.tsx``).
+
+    Fed the **already-enriched** dicts the document carries — licence (Story 8.25),
+    ecosystem and purl type (Story 8.26), direct/transitive relationship (Stories 8.3-8.4).
+    The SBOM is never re-parsed to build this table; the enrichment was written at generation
+    time and is read back as-is.
+
+    Sorting is server-side via ``?sort=``, a deliberate change from the SPA's in-browser sort:
+    it costs a round trip but makes a sorted view linkable.
+    """
+
+    name = tables.Column(verbose_name="Name")
+    version = tables.Column(verbose_name="Version", default="—")
+    type = tables.Column(verbose_name="Type", default="—")
+    license = tables.Column(verbose_name="License", default="—")
+    relationship = tables.Column(verbose_name="Relationship", default="—")
+    ecosystem = tables.Column(verbose_name="Ecosystem", default="—")
+
+    class Meta:
+        # Story 8.16: name ascending is the default sort, matching the SPA.
+        order_by = "name"
+        attrs = {"class": "table table-sm align-middle"}  # noqa: RUF012  # tables2 Meta option
+        empty_text = "This SBOM lists no components."
+
+    def __init__(self, data: list[dict[str, Any]], *args: Any, **kwargs: Any) -> None:
+        """Hide the Relationship column when no component carries one.
+
+        Mirrors the SPA's `showRelationship`: direct/transitive data only exists for formats
+        and runs where resolution captured it, and an all-em-dash column is worse than none.
+        """
+        super().__init__(data, *args, **kwargs)
+        if not any(row.get("relationship") for row in data):
+            self.columns.hide("relationship")

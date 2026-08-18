@@ -30,9 +30,8 @@ from inventory.manifests.detection import ManifestParseError, UnsupportedFormatE
 from inventory.users.auth import get_admin_org, get_request_org
 from inventory.users.serializers import ErrorResponseSerializer
 
-from .document import normalize_components, parse_metadata
 from .models import SBOMJob
-from .selectors import get_job, get_jobs
+from .selectors import get_job, get_jobs, read_inline_document
 from .serializers import (
     BulkDeleteArtifactsSerializer,
     BulkDeleteResponseSerializer,
@@ -299,19 +298,19 @@ class SbomDocumentView(APIView):
             job = get_job(org, task_id)
         except SBOMJob.DoesNotExist:
             return Response({"error": "Job not found.", "code": "not_found"}, status=status.HTTP_404_NOT_FOUND)
-        if job.status != SBOMJob.Status.SUCCESS or not job.result_key or not default_storage.exists(job.result_key):
+        document = read_inline_document(job)
+        if document is None:
             # Never produced, not finished, or artifacts expired/deleted (Epic 7).
             return Response(
                 {"error": "SBOM not available.", "code": "not_ready"},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        with default_storage.open(job.result_key) as handle:
-            raw = handle.read()
+        raw = document.raw
         return Response(
             {
-                "format": job.output_format,
-                "metadata": parse_metadata(raw, job.output_format),
-                "components": normalize_components(raw, job.output_format),
+                "format": document.output_format,
+                "metadata": document.metadata,
+                "components": document.components,
                 "raw": raw.decode("utf-8"),
             }
         )

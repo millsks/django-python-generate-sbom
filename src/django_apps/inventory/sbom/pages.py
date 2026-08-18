@@ -15,7 +15,7 @@ from django.urls import reverse
 from django.views import View
 from django.views.generic import FormView
 from django_filters.views import FilterView
-from django_tables2 import SingleTableMixin
+from django_tables2 import RequestConfig, SingleTableMixin
 
 from inventory.common.access import OrgAdminRequiredMixin, OrgMemberRequiredMixin
 from inventory.common.users import UserT
@@ -25,9 +25,9 @@ from .filters import JobFilterSet
 from .forms import ManifestUploadForm
 from .models import SBOMJob
 from .overview import build_metrics
-from .selectors import get_job, get_jobs
+from .selectors import get_job, get_jobs, read_inline_document
 from .services import TERMINAL_STATUSES, ConcurrencyLimitError, delete_artifacts_for_jobs, submit_job
-from .tables import JobTable
+from .tables import JobTable, SbomComponentTable
 
 
 class UploadPageView(OrgMemberRequiredMixin, FormView):  # type: ignore[type-arg]
@@ -237,7 +237,7 @@ class JobResultsView(_JobScopedView):
         job = self.get_job_or_404(task_id)
         terminal = job.status in TERMINAL_STATUSES
         active_tab = _resolve_tab(request)
-        context = {
+        context: dict[str, Any] = {
             "job": job,
             "org": self.org,
             "job_is_terminal": terminal,
@@ -250,6 +250,8 @@ class JobResultsView(_JobScopedView):
             "artifact_tabs": ARTIFACT_TABS,
             "metrics": build_metrics(job.summary_stats),
         }
+        if active_tab == "sbom":
+            context.update(sbom_tab_context(request, job))
         return render(request, "inventory/sbom/results.html", context)
 
 
@@ -261,12 +263,14 @@ class JobTabPartialView(_JobScopedView):
         if tab not in dict(RESULT_TABS):
             raise Http404
         job = self.get_job_or_404(task_id)
-        context = {
+        context: dict[str, Any] = {
             "job": job,
             "active_tab": tab,
             "artifacts_available": bool(job.result_key),
             "metrics": build_metrics(job.summary_stats),
         }
+        if tab == "sbom":
+            context.update(sbom_tab_context(request, job))
         return render(request, _tab_template(tab), context)
 
 
@@ -286,3 +290,60 @@ class JobProgressPartialView(_JobScopedView):
         if terminal:
             response["HX-Refresh"] = "true"
         return response
+
+
+#: A raw document larger than this is offered as a download instead of being inlined. A
+#: multi-megabyte <pre> block makes the results page unusable, and the browser has to hold the
+#: whole thing in the DOM — the Dev Notes call the raw view "the size risk".
+RAW_INLINE_MAX_BYTES = 2 * 1024 * 1024
+
+
+def sbom_tab_context(request: HttpRequest, job: SBOMJob) -> dict[str, Any]:
+    """Build the SBOM tab's context: the component table, or the unavailable notice.
+
+    The **raw document is deliberately absent**. It is fetched by its own request so a
+    multi-megabyte document never rides along in this tab's payload (AC #4).
+    """
+    document = read_inline_document(job)
+    if document is None:
+        # Never produced, not finished, or purged — one notice covers all three, which is
+        # what the SPA did ("an unavailable/expired artifact shows a notice, not an error").
+        return {"sbom_available": False}
+
+    table = SbomComponentTable(document.components)
+    # RequestConfig applies ?sort= from the querystring, which is what moves sorting
+    # server-side while keeping a sorted view linkable.
+    RequestConfig(request, paginate=False).configure(table)
+    return {
+        "sbom_available": True,
+        "sbom_table": table,
+        "sbom_metadata": document.metadata,
+        "sbom_component_count": len(document.components),
+    }
+
+
+class SbomRawView(_JobScopedView):
+    """Serve the raw SBOM text for the viewer's raw mode (loaded on demand).
+
+    Its own endpoint precisely so the document is not part of the SBOM tab's initial payload.
+    Above :data:`RAW_INLINE_MAX_BYTES` it declines to inline and points at the download
+    instead, rather than shipping megabytes of text into the DOM.
+
+    This is the *inline* read (AD-5) and is distinct from the presigned download (AD-11) —
+    the two must not be conflated.
+    """
+
+    def get(self, request: HttpRequest, task_id: str) -> HttpResponse:
+        """Return the raw document, a too-large notice, or the unavailable notice."""
+        job = self.get_job_or_404(task_id)
+        document = read_inline_document(job)
+        context: dict[str, Any] = {"job": job}
+        if document is None:
+            context["sbom_available"] = False
+        else:
+            context["sbom_available"] = True
+            context["too_large"] = document.size_bytes > RAW_INLINE_MAX_BYTES
+            context["size_bytes"] = document.size_bytes
+            if not context["too_large"]:
+                context["raw"] = document.raw.decode("utf-8", errors="replace")
+        return render(request, "inventory/sbom/tabs/_sbom_raw.html", context)

@@ -476,3 +476,9 @@ development_status:
   22-3-windows-ci-parity-full-gate: backlog
   22-4-prove-local-pipeline-end-to-end: backlog
   22-5-state-the-no-container-contract: backlog
+  # ADDED 2026-08-18 by product-owner direction, mid-epic: "remove the requirement to cleanup
+  # expired artifacts — we can do that manually when we need to review." AMENDS FR-8.2 (which
+  # specified a scheduled cleanup). Expiry is still TRACKED via artifacts_expire_at; only the
+  # unattended nightly purge goes. Lands right after 22.2 registered that task, which is what
+  # makes removing one schedule entry safe to reason about.
+  22-6-manual-reviewable-artifact-purge: review

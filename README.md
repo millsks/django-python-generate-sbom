@@ -51,7 +51,7 @@ is multi-tenant and scoped to your organization.
 - **Accounts & orgs** — registration, org switching, membership management,
   and API keys; session and API-key authentication.
 - **Async pipeline** — a Celery workflow with live progress, MinIO artifact
-  storage, and scheduled retention/cleanup.
+  storage, and retention tracking with an on-request artifact purge.
 - **Server-rendered web UI** (Django templates, Bootstrap, htmx) and a **REST API**,
   served from one origin — one language, one toolchain, no build step.
 

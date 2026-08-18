@@ -61,7 +61,7 @@ into every existing org. See [Architecture](architecture.md) for the tier's desi
 | `result_key` | Storage key of the generated SBOM blob (not the blob itself, AD-6) |
 | `summary_stats` | JSON roll-up for the results overview |
 | `created_at` / `completed_at` | Timestamps |
-| `artifacts_expire_at` | Drives scheduled artifact expiry |
+| `artifacts_expire_at` | Marks a job's artifacts as purgeable. Tracked automatically; purged only on request (Story 22.6) |
 | `failure_reason` | Set by the phase guard on failure |
 
 ## Analysis (`analysis/`)

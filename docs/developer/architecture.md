@@ -35,7 +35,7 @@ backend for the UI.
 | `web` | Django + DRF (gunicorn) — serves the server-rendered UI, the REST API, and static assets |
 | `worker-pipeline` | Celery worker on the `pipeline` queue (sequential SBOM phases) |
 | `worker-analysis` | Celery worker on the `analysis` queue (parallel enrichment) |
-| `beat` | Celery Beat — scheduled maintenance (artifact expiry, mapping refresh) |
+| `beat` | Celery Beat — scheduled maintenance (the conda↔PyPI mapping refresh; **artifact purging is manual**, see below) |
 | `postgres` | Relational store |
 | `redis` | Celery broker + result backend |
 | `minio` | S3-compatible artifact blob storage |
@@ -56,6 +56,10 @@ These are the load-bearing rules from the spine. Respect them when adding code.
   the HTTP API. (This supersedes **AD-5**, which mandated a React SPA; Epic 21 reversed it.)
 - **AD-6 — Storage triad.** Artifact **blobs live in S3/MinIO only** — never in
   PostgreSQL or Redis. The pipeline passes storage **keys**, not blobs, between phases.
+  Expiry is *tracked* on every job (`artifacts_expire_at`) but **nothing is purged on a
+  schedule** (Story 22.6): run `pixi run python manage.py purge_expired_artifacts --dry-run`
+  to review, then the same command without the flag to delete. Job records are never removed
+  (FR-8.1).
 - **AD-7 — Per-org concurrency gate at enqueue.** The generate endpoint gates
   concurrent jobs per org and creates the `ManifestUpload` + `SBOMJob` in one
   transaction before dispatch.

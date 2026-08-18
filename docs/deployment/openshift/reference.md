@@ -52,7 +52,7 @@ in a **ConfigMap**, sensitive values in a **Secret** (or an
 | Variable | Purpose | Where | Example |
 |---|---|---|---|
 | `SBOM_MAX_CONCURRENT_JOBS_PER_ORG` | Per-org concurrency gate at enqueue (AD-7). | ConfigMap | `5` |
-| `ARTIFACT_RETENTION_DAYS` | Days before artifact blobs are purged by the Beat cleanup. Metadata is kept forever. | ConfigMap | `30` |
+| `ARTIFACT_RETENTION_DAYS` | Days after which artifact blobs become **eligible** for purging. Nothing is purged automatically since Story 22.6 — run `manage.py purge_expired_artifacts`. Metadata is kept forever. | ConfigMap | `30` |
 | `SBOM_LTS_REGISTRY` | JSON file path or inline JSON of package→LTS-version overrides. | ConfigMap | `{}` |
 | `PARSELMOUTH_MAPPING_URL` | conda↔PyPI bulk name-mapping source (refreshed by a Beat task). | ConfigMap | *(default upstream URL)* |
 | `PARSELMOUTH_PYPI_TO_CONDA_URL` | Per-package PyPI→conda disambiguation lookup; set empty to disable the network call. | ConfigMap | *(default upstream URL)* |

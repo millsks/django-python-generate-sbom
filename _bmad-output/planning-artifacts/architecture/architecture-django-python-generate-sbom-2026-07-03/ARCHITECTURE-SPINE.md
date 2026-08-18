@@ -60,7 +60,7 @@ Server-rendered Django templates are the UI layer (**AD-15**, Epic 21 — supers
 
 - **Binds:** `tasks/sbom_pipeline.py`, `tasks/analysis.py`, Docker Compose worker definitions
 - **Prevents:** long vulnerability scans starving new job submissions from other orgs
-- **Rule:** Phases 1–3 (detect, resolve, generate) and Phase 8 (persist) route to the `pipeline` queue. Phases 4–7 (vulnerability, license, graph, version) route to the `analysis` queue. Celery Beat cleanup tasks (FR-8.2) also route to the `pipeline` queue — low-frequency housekeeping that does not compete with analysis work. Two separate Celery worker processes, one per queue. A task must never be enqueued to the wrong queue.
+- **Rule:** Phases 1–3 (detect, resolve, generate) and Phase 8 (persist) route to the `pipeline` queue. Phases 4–7 (vulnerability, license, graph, version) route to the `analysis` queue. Beat's remaining scheduled task — the weekly conda↔PyPI mapping refresh — routes to `analysis`. *(The nightly artifact purge that this clause was written for was retired by Story 22.6, 2026-08-18: purging is now manual. The `purge_expired_artifacts` task remains registered on the `pipeline` queue for manual dispatch.)* Two separate Celery worker processes, one per queue. A task must never be enqueued to the wrong queue.
 
 ### AD-5 — React SPA: REST API only, no Django template coupling [SUPERSEDED by AD-15, Epic 21]
 
@@ -262,7 +262,7 @@ Since Epic 21 collapsed these into one app (**AD-16**), the boxes are **packages
 | Storage paths — manifests | `manifest-uploads/{org_id}/{upload_id}/{filename}` |
 | Storage paths — artifacts | `sbom-results/{org_id}/{task_id}/{filename}.{ext}` |
 | Analysis chord envelope | Each analysis task returns `{"report_type": "vuln|license|graph|version", "artifact_key": "<s3_key>|null", "summary": {...}, "failed": bool, "failure_reason": "<str>|null"}`; chord callback sets `AnalysisReport.failed` and `artifact_key` from these fields |
-| Artifact cleanup | `artifacts_expire_at` set at job creation (`completed_at + 10 days`); cleanup selector: `SBOMJob.objects.filter(artifacts_expire_at__lte=now(), result_key__isnull=False)`; after S3 deletion null `result_key` on `SBOMJob` and `artifact_key` on all related `AnalysisReport` rows; job record is never deleted |
+| Artifact cleanup | `artifacts_expire_at` set at job creation (`completed_at + ARTIFACT_RETENTION_DAYS`, default 30); selector: `SBOMJob.objects.filter(artifacts_expire_at__lte=now(), result_key__isnull=False)`; after storage deletion null `result_key` on `SBOMJob` and `artifact_key` on all related `AnalysisReport` rows; job record is **never** deleted. **Runs only on request** since Story 22.6 — `manage.py purge_expired_artifacts [--dry-run]`; expiry is tracked, not enforced |
 | Pagination | `PageNumberPagination`; default `page_size=25`, max 100 via `?page_size=`; envelope: `{"count": N, "next": "<url>\|null", "previous": "<url>\|null", "results": [...]}` |
 | Health check | `GET /health/` returns `{"status": "ok"}` with `200`; unauthenticated; used for Docker Compose `healthcheck:` directive |
 | Logging | `structlog` with JSON renderer; every log entry binds `org_id`, `task_id` (where applicable), `user_id`; never `print()` or stdlib `logging` |
@@ -479,3 +479,8 @@ django-python-generate-sbom/          ← repo root == BASE_DIR (pixi umbrella, 
 
   Also **not** implemented, and required before contribution: the contribution module, `component.toml`, `src/config/startup/` composition, `django_service.__api_version__`, the navigation registry, and an adoption-gate test that would fail on any of the above.
 - **AD-9 and the dependency-graph stack entries are stale and were left alone** — Story 20.1 retired the dependency graph (`analysis/services/graph.py` is gone; NetworkX, pygraphviz, and the three Cytoscape packages are no longer dependencies) but never reconciled the spine. The Cytoscape rows were removed here because Story 21.20's AC #4 names them; **AD-9 itself still describes a graph API that no longer exists** and needs its own correct-course pass on Epic 20 rather than a silent edit from an Epic 21 story.
+- **Scheduled artifact purging** — **removed on purpose** (Story 22.6, 2026-08-18), amending **FR-8.2**, which
+  specified an unattended nightly sweep. Deleting artifacts is now a deliberate act taken after reviewing what
+  would go (`manage.py purge_expired_artifacts --dry-run`). `artifacts_expire_at` still marks eligibility on
+  every job, so re-adding a schedule is a one-entry change if the decision is ever reversed — but do not add one
+  without the product owner, and see **AD-4**'s note on which queue it belonged to.

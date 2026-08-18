@@ -7169,3 +7169,42 @@ gate, may require a container.
 4. **The docs stop implying Docker is expected.**
    Given `setup.md` currently frames Compose as a normal alternative, when it is updated, then the
    containerless path is unambiguously the supported local path and Compose is qualified accordingly.
+
+### Story 22.6: Make Expired-Artifact Purging Manual and Reviewable
+
+As a maintainer,
+I want artifact purging to happen only when I ask for it, after I have seen what would be deleted,
+so that blob deletion is a deliberate act rather than something that happens unattended overnight.
+
+**Context:** Added mid-epic at the product owner's direction: *"remove the requirement to cleanup expired
+artifacts — we can do that manually when we need to review."* This **amends FR-8.2**, which specified a
+scheduled cleanup, and it lands immediately after Story 22.2 registered that very task. The sequence is
+deliberate rather than wasted: 22.2 established that the schedule and the registry cannot silently disagree,
+which is what makes removing one entry safe to reason about.
+
+**What is retained:** `artifacts_expire_at` is still stamped on every job (`completed_at + ARTIFACT_RETENTION_DAYS`),
+so expiry is still *tracked* — nothing is purged until somebody asks. `delete_job_artifacts`,
+`purge_expired_artifacts`, the org-scoped delete controls on the history page, and FR-8.1 (job records are never
+deleted) are all unchanged.
+
+**Acceptance Criteria:**
+
+1. **Nothing purges on a schedule.**
+   Given Beat ran the purge nightly at 04:00, when the schedule is amended, then `beat_schedule` contains no
+   purge entry, Beat dispatches no purge, and a test asserts the absence rather than trusting the diff.
+2. **The remaining schedule is still guarded.**
+   Given Story 22.2 added a registry guard, when an entry is removed, then that guard still passes for what
+   remains and still fails for a schedule entry naming an unregistered task.
+3. **A manual sweep exists and is reviewable.**
+   Given "manually" must not mean hand-writing a shell one-liner, when the story completes, then a management
+   command performs the sweep, and a `--dry-run` mode reports exactly which jobs and how many blobs *would* be
+   purged **without deleting anything**.
+4. **The manual sweep behaves like the scheduled one did.**
+   Given the selection rule is `artifacts_expire_at <= now AND result_key IS NOT NULL`, when the command runs,
+   then it purges exactly those jobs, nulls `result_key` and each related `AnalysisReport.artifact_key`, and
+   **retains every job record and its metadata** (FR-8.1, AD-6).
+5. **The retirement is recorded where it will be read.**
+   Given FR-8.2 specified a scheduled cleanup and several documents describe one, when the story completes,
+   then the architecture spine, `README.md`, the developer architecture and data-model pages, and the OpenShift
+   reference no longer describe an automatic purge, and each says how to run it instead.
+6. **Gate green.** `pixi run ci` exits 0.

@@ -443,7 +443,7 @@ development_status:
   21-19-retire-react-spa-and-node-toolchain: review
   21-20-architecture-reconciliation: review
   21-21-documentation-reconciliation-and-product-copy-rename: review
-  21-22-distribution-identity-rename: ready-for-dev
+  21-22-distribution-identity-rename: review
   21-23-test-parity-audit-and-epic-closeout: review
   # ADDED 2026-08-18 by product-owner direction. 21.24 REMOVES the app's own authentication and access
   # control outright (hard removal, not a flag): mixins, login/register/logout pages + DRF endpoints, and the

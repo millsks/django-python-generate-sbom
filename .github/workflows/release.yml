@@ -2,7 +2,7 @@ name: Release
 
 # Scheduled + on-demand releases, built on this repo's pixi umbrella toolchain
 # (git-cliff via `pixi run changelog`, the
-# `pixi run ci` gate, a backend wheel + a frontend bundle — no conda/PyPI publishing).
+# `pixi run ci` gate and a Python wheel — no conda/PyPI publishing).
 #
 # Operator prerequisite: releases push a tag/commit to `main` under branch protection,
 # so the default GITHUB_TOKEN is not enough. Create a GitHub App with `contents: write`
@@ -225,24 +225,16 @@ jobs:
           git push origin HEAD:main --tags
 
       # -----------------------------------------------------------------------
-      # Build release artifacts: backend wheel + frontend bundle tarball.
+      # Build release artifacts. Story 21.19 retired the SPA, so the frontend bundle
+      # step that used to run here is gone — `pixi run fe-build` no longer exists and
+      # would fail the release outright.
       # -----------------------------------------------------------------------
-      - name: Build backend wheel
+      - name: Build the wheel
         if: steps.should_skip.outputs.skip != 'true'
         run: |
           pixi run build
-          echo "Backend wheel built"
+          echo "Wheel built"
           ls -lh dist/
-
-      - name: Build and archive the frontend bundle
-        if: steps.should_skip.outputs.skip != 'true'
-        run: |
-          pixi run fe-build
-          mkdir -p dist
-          ARCHIVE="dist/${{ github.event.repository.name }}-frontend-${{ env.NEW_TAG }}.tar.gz"
-          tar -czf "${ARCHIVE}" -C frontend dist
-          echo "Frontend archive created: ${ARCHIVE}"
-          ls -lh "${ARCHIVE}"
 
       # -----------------------------------------------------------------------
       # Release notes (extract this version's section from CHANGELOG.md)
@@ -267,8 +259,7 @@ jobs:
                 echo ""
                 echo "| Artifact | Description |"
                 echo "|---|---|"
-                echo "| \`*-frontend-*.tar.gz\` | Vite production bundle (serve with any static host or Nginx) |"
-                echo "| \`generate_sbom-*.whl\` | Backend Python wheel (install via \`pip\`) |"
+                echo "| \`python_inventory_supply_lens-*.whl\` | Python wheel (install via \`pip\`) |"
                 echo ""
                 echo "Full changelog: [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)"
                 echo "RELEASE_NOTES"
@@ -295,7 +286,6 @@ jobs:
           prerelease: ${{ github.event.inputs.prerelease }}
           files: |
             dist/*.whl
-            dist/${{ github.event.repository.name }}-frontend-${{ env.NEW_TAG }}.tar.gz
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Release summary

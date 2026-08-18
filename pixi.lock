@@ -6479,5 +6479,5 @@ packages:
   size: 388453
   timestamp: 1764777142545
 - pypi: .
-  name: generate-sbom
+  name: python-inventory-supply-lens
   requires_python: '>=3.12'

@@ -157,7 +157,7 @@ whatever host is configured, so:
   *sign* blobs — typically an internal, cluster-reachable address.
 - `AWS_S3_PUBLIC_ENDPOINT_URL` is the **browser-reachable** host that must appear in
   the presigned URL. The custom storage backend
-  (`generate_sbom.common.storage.PublicEndpointS3Storage`) rewrites presigned URLs to
+  (`inventory.common.storage.PublicEndpointS3Storage`) rewrites presigned URLs to
   use it.
 
 If `AWS_S3_PUBLIC_ENDPOINT_URL` points at an internal-only host (the classic

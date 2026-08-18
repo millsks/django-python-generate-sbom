@@ -3,7 +3,13 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "generate-sbom"
+# The DISTRIBUTION name. It deliberately differs from the IMPORT names this package
+# provides — `config`, `django_service`, and `inventory` (see the wheel `sources` mapping
+# below). That is ordinary Python packaging but surprises people, so: installing
+# `python-inventory-supply-lens` gives you `import inventory`, not `import python_inventory_supply_lens`.
+# The GitHub repo and the docs-site URL keep the original `django-python-generate-sbom`
+# identifier on purpose — see sonar-project.properties for why.
+name = "python-inventory-supply-lens"
 version = "0.1.0"
 description = "Django web service that generates SBOMs from Python dependency manifests"
 requires-python = ">=3.12"

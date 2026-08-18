@@ -225,7 +225,7 @@ PRODUCT_NAME_SHORT = "Supply Lens"
 # package.json, and Story 21.19 deletes that. Still env-overridable so a deployment can pin a
 # display version without a rebuild, matching the old VITE_* behaviour.
 try:
-    _DISTRIBUTION_VERSION = _package_version("generate-sbom")
+    _DISTRIBUTION_VERSION = _package_version("python-inventory-supply-lens")
 except PackageNotFoundError:  # pragma: no cover - only when running from a bare checkout
     _DISTRIBUTION_VERSION = "0.0.0"
 PRODUCT_VERSION = env.str("PRODUCT_VERSION", default=_DISTRIBUTION_VERSION)

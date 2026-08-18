@@ -1,6 +1,10 @@
+---
+baseline_commit: cb1ff12
+---
+
 # Story 21.22: Distribution Identity Rename (L4)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -49,14 +53,14 @@ so that the distribution, containers, and tooling refer to the product by its ac
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — `pixi.toml` + `pyproject.toml` names (AC: #1, #2)** — Confirm the wheel builds and the
+- [x] **Task 1 — `pixi.toml` + `pyproject.toml` names (AC: #1, #2)** — Confirm the wheel builds and the
   editable install still resolves; confirm import names unchanged.
-- [ ] **Task 2 — Compose + env examples (AC: #3)** — `docker-compose.yml`, `.env.example`,
+- [x] **Task 2 — Compose + env examples (AC: #3)** — `docker-compose.yml`, `.env.example`,
   `.env.local.example`, `.env.container.example`, and the stray `.env.local copy.example`.
-- [ ] **Task 3 — `cliff.toml`, `.vscode/settings.json`, `release.yml` (AC: #3)**.
-- [ ] **Task 4 — Leave history alone (AC: #4)** — Explicitly verify no changelog/tag rewrite.
-- [ ] **Task 5 — Record the L5 exclusion (AC: #5)** — Comment in `sonar-project.properties`.
-- [ ] **Task 6 — Tests + gate (AC: #6)**.
+- [x] **Task 3 — `cliff.toml`, `.vscode/settings.json`, `release.yml` (AC: #3)**.
+- [x] **Task 4 — Leave history alone (AC: #4)** — Explicitly verify no changelog/tag rewrite.
+- [x] **Task 5 — Record the L5 exclusion (AC: #5)** — Comment in `sonar-project.properties`.
+- [x] **Task 6 — Tests + gate (AC: #6)**.
 
 ## Dev Notes
 
@@ -104,16 +108,118 @@ surprises people. Add a comment in `pyproject.toml` next to the name so the dive
 
 ### Agent Model Used
 
-_(to be filled by the dev agent)_
+claude-opus-5[1m] (Claude Opus 5, 1M context)
 
 ### Debug Log References
 
-_(to be filled by the dev agent)_
+- `pixi run ci` — **exit 0**. **879 passed** (up from 863), coverage **96.72%**.
+- **16 new tests** in `tests/unit/test_distribution_identity.py`.
+- New distribution name: **`python-inventory-supply-lens`**. `pixi run build` produces
+  `python_inventory_supply_lens-0.1.0-py3-none-any.whl`; `pixi install` re-solved and
+  `pixi.lock` now contains **zero** occurrences of the old name.
+- **Docker image built and run** (AC #6): `docker build` succeeds — `pixi install --locked`
+  then `collectstatic` (191 files, 344 post-processed). Inside the image,
+  `version("python-inventory-supply-lens")` → `0.1.0` and `inventory`, `config`, and
+  `django_service` all import unqualified.
+- `.env.example`, `.env.local.example`, `.env.container.example` carry **no** identity
+  string — their `sbom` occurrences are the Postgres database/user and the S3 bucket name
+  (`sbom-artifacts`), which are domain values, not the product name. Left unchanged.
+- The stray `.env.local copy.example` named in the Dev Notes was already deleted earlier in
+  this epic with product-owner approval; nothing half-renamed remains.
 
 ### Completion Notes List
 
-_(to be filled by the dev agent)_
+**Three names now do three jobs, and the divergence is written down where each is
+declared.** The **product** is "Python Inventory Supply Lens" (Story 21.21), the
+**distribution** is `python-inventory-supply-lens` (this story), and the **imports** stay
+`config`, `django_service`, and `inventory`. Installing the distribution gives you
+`import inventory` — ordinary Python packaging that reliably surprises people — so
+`pyproject.toml` says so in a comment beside the name, as the Dev Notes asked.
+
+**Renaming the distribution silently breaks the footer version, and a test now catches
+that.** `PRODUCT_VERSION` resolves `importlib.metadata.version("generate-sbom")` by
+literal string (added in Story 21.18). Renaming the distribution without updating that
+lookup does not raise — the `PackageNotFoundError` branch falls back to `"0.0.0"`, and the
+footer shows a wrong version forever. Updated, and
+`test_the_footer_version_still_resolves` asserts it equals the installed version rather
+than merely being non-empty.
+
+**AC #3 lists `.vscode/settings.json` among the files to rename. It must not be.** Its only
+occurrence is the SonarCloud `projectKey`, which is layer **L5** — the same value
+`sonar-project.properties` carries, and the one the story's own scope boundary says is out
+of scope. Renaming it there would silently disconnect SonarLint from the project while
+leaving the server-side config correct. I left it, and recorded the reason where a reader
+will look, with a test asserting the two stay bound to the same key.
+
+**The L5 exclusion note explains the cost, not just the rule.** A comment saying "do not
+rename" invites someone to rename it anyway. The note in `sonar-project.properties` says a
+`projectKey` cannot be renamed and that creating a new project discards every historical
+analysis, the new-code baseline, and the issue triage — and each L5 test states its own
+reason, so a failure explains itself rather than reading as an arbitrary constraint.
+
+### Two defects found while in here, both fixed
+
+**1. Story 21.19 missed `.github/workflows/release.yml`, and the next release would have
+failed.** It still ran `pixi run fe-build` and tarred `frontend/dist` — a task and a
+directory that no longer exist. 21.19's AC #4 named `ci.yml` and `maintenance.yml` only, and
+my removal test in that story checked exactly those files, so nothing caught it. AC #3 names
+`release.yml` here, so it is fixed in scope: the frontend bundle step, its release-notes row,
+and its upload entry are gone, and the wheel row now names the new artifact. The guard test
+strips comment lines before asserting, because the file legitimately *explains* that the step
+was removed and a test forbidding that would push the history out of the place it is most
+useful.
+
+**2. Story 21.21 left one stale dotted import path.** `docs/deployment/openshift/reference.md`
+still named `generate_sbom.common.storage.PublicEndpointS3Storage`; the real path has been
+`inventory.common.storage.PublicEndpointS3Storage` since Story 21.2. That sweep searched for
+`backend/`-prefixed *file* paths, not dotted *module* paths, which is why it survived. Fixed
+and verified against `production.py`.
+
+**History is untouched (AC #4).** `CHANGELOG.md` still records what shipped under the old
+name, and no git tag was moved. There is a test asserting the changelog still contains the
+old identity — the inverse of the usual assertion, because *removing* it would be the defect.
+
+**`pixi.lock` was re-solved, not hand-edited**, as the Dev Notes required. It now contains
+zero occurrences of the old distribution name, and the editable install still resolves — the
+`[pypi-dependencies]` key had to be renamed in lockstep with `[project] name`, and a mismatch
+there installs nothing and fails later at import time, far from the cause. A test pins both.
+
+**Not renamed, deliberately:** the GitHub repository, the docs-site URL, the SonarCloud
+project key and name, and the `.pptx`/`.pdf` deck filenames. The README's opening note and
+`mkdocs.yml`'s comment already explain the first two to a reader who notices the mismatch.
+
+**Still open, unchanged:** Story 21.24 (remove the authentication requirement) is the last
+outstanding story of the epic, and Story 21.23's AC #4 product-owner walkthrough remains —
+along with the brand-palette finding from that audit and Story 21.18's side-by-side visual
+review. The `beat_schedule` maintenance tasks are still absent from the Celery registry;
+`solution-design.md` and `architecture-diagrams.html` still carry Story 21.20's
+not-reconciled notices; AD-9 still needs an Epic 20 correct-course; the decks still need
+re-rendering.
 
 ### File List
 
-_(to be filled by the dev agent)_
+**New (1)**
+- `tests/unit/test_distribution_identity.py` (16 tests) — the distribution name, the
+  unchanged import names, and each L5 exclusion with its reason
+
+**Modified (8)**
+- `pyproject.toml` — distribution renamed, with the distribution-vs-import note
+- `pixi.toml` / `pixi.lock` — `[workspace] name` and the editable-install key; lock re-solved
+- `src/config/settings/base.py` — the `PRODUCT_VERSION` distribution lookup
+- `.github/workflows/release.yml` — frontend bundle step removed (Story 21.19 leftover);
+  wheel artifact renamed
+- `sonar-project.properties` — the L5 exclusion recorded in place, covering
+  `.vscode/settings.json` too
+- `docker-compose.yml`, `cliff.toml` — header comments
+- `docs/deployment/openshift/reference.md` — stale `generate_sbom.` module path
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`, and this story file
+
+**Deliberately unchanged:** `.vscode/settings.json` (SonarLint binding — L5),
+`sonar.projectKey`/`projectName`, `mkdocs.yml`'s `site_url`/`repo_url`/`repo_name`,
+`CHANGELOG.md`, git tags, and the `.env*.example` files.
+
+## Change Log
+
+| Date | Change |
+|---|---|
+| 2026-08-18 | Renamed the distribution to `python-inventory-supply-lens` across `pyproject.toml`, `pixi.toml`, the re-solved lock, the `PRODUCT_VERSION` lookup, and the release workflow's artifact name, while leaving the import names `config` / `django_service` / `inventory` untouched — the divergence is now documented beside the declaration. Verified end to end: the wheel builds under the new name, and the Docker image builds and resolves the distribution while still importing `inventory` unqualified. Recorded the L5 exclusion in `sonar-project.properties` with the cost spelled out, and did **not** rename `.vscode/settings.json` despite AC #3 listing it — its only occurrence is the SonarLint binding to that same immutable project key. Found and fixed two defects from earlier stories: `release.yml` still ran the deleted `pixi run fe-build` and would have failed the next release, and one stale `generate_sbom.` module path survived Story 21.21's sweep because that sweep searched file paths rather than dotted paths. `pixi run ci` exit 0; 879 tests at 96.72%. |

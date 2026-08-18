@@ -97,3 +97,33 @@ def test_no_source_file_hardcodes_a_posix_only_path() -> None:
     ]
 
     assert not offenders, f"POSIX-only paths are not portable to Windows: {offenders}"
+
+
+def test_windows_declares_pywin32_for_the_filesystem_broker() -> None:
+    """Story 22.7: without it the Celery worker cannot start on Windows at all.
+
+    Kombu's `filesystem://` transport — the local broker — locks message files with
+    `LockFileEx`, so `kombu/transport/filesystem.py` unconditionally imports `pywintypes`,
+    `win32con`, and `win32file` under `os.name == "nt"`. Missing, `pixi run worker`,
+    `pixi run beat`, and `pixi run dev` all die at import on the one platform with no Docker
+    fallback.
+
+    Asserted here rather than trusted, because the failure is invisible on macOS and Linux:
+    it shipped from Epic 20 and was only caught when Story 22.4 first started a real worker
+    on `windows-latest`.
+    """
+    import tomllib
+
+    manifest = tomllib.loads((REPO / "pixi.toml").read_text(encoding="utf-8"))
+    win64 = manifest.get("target", {}).get("win-64", {}).get("dependencies", {})
+
+    assert "pywin32" in win64, "win-64 must declare pywin32 or the Celery worker cannot start there"
+
+
+def test_pywin32_is_not_installed_on_every_platform() -> None:
+    """Scoped to win-64 on purpose — it is meaningless elsewhere and would bloat the env."""
+    import tomllib
+
+    manifest = tomllib.loads((REPO / "pixi.toml").read_text(encoding="utf-8"))
+
+    assert "pywin32" not in manifest["dependencies"]

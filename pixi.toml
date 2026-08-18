@@ -71,6 +71,24 @@ gunicorn = ">=22"
 cmd = "celery -A config.celery_app worker -Q pipeline,analysis --pool=solo"
 env = { DJANGO_SETTINGS_MODULE = "config.settings.local" }
 
+# Windows-only, and REQUIRED for the containerless worker to start at all (Story 22.7).
+#
+# Kombu's filesystem:// transport — the local broker (Story 20.4) — locks its message files
+# with LockFileEx on Windows, so `kombu/transport/filesystem.py` does an unconditional
+# `import pywintypes / win32con / win32file` at module import under `os.name == "nt"`. Its own
+# comment reads "needs win32all to work on Windows". Without pywin32 the import raises
+# ModuleNotFoundError and `pixi run worker`, `pixi run beat`, and therefore `pixi run dev` all
+# die at startup — on the one platform with no Docker fallback.
+#
+# This was broken from the moment Epic 20 shipped the containerless path. Nothing caught it
+# because the Windows CI job ran unit tests only, and those use eager Celery, which never loads
+# the transport. Story 22.3 widened that job and Story 22.4 added a real-worker test; it failed
+# on the first Windows run.
+#
+# Scoped to win-64 so macOS and Linux environments are untouched.
+[target.win-64.dependencies]
+pywin32 = ">=306"
+
 [pypi-dependencies]
 python-inventory-supply-lens = { path = ".", editable = true }
 

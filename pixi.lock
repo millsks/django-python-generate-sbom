@@ -805,6 +805,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/psycopg-c-3.3.4-py313h6325bfc_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/python-3.13.14-h09917c8_100_cp313.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/python-librt-0.12.0-py313h5fd188c_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/pywin32-312-py313h40c08fc_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pyyaml-6.0.3-py313hd650c13_1.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/rpds-py-2026.6.3-py313ha9ea572_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/ruff-0.15.20-h45713df_0.conda
@@ -6252,6 +6253,22 @@ packages:
   run_exports: {}
   size: 110041
   timestamp: 1782847531918
+- conda: https://conda.anaconda.org/conda-forge/win-64/pywin32-312-py313h40c08fc_0.conda
+  sha256: 38caa16a0b9cc55bfaaf84d273ce6d768f8bce8d5949b5c41a8746ec65741b20
+  md5: 5c1dea2e266c8f03d16bde15f09169cd
+  depends:
+  - python
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  - ucrt >=10.0.20348.0
+  - python_abi 3.13.* *_cp313
+  license: PSF-2.0
+  license_family: PSF
+  purls:
+  - pkg:pypi/pywin32?source=hash-mapping
+  run_exports: {}
+  size: 4466467
+  timestamp: 1781362878201
 - conda: https://conda.anaconda.org/conda-forge/win-64/pyyaml-6.0.3-py313hd650c13_1.conda
   sha256: dfaed50de8ee72a51096163b87631921688851001e38c78a841eba1ae8b35889
   md5: c1bdb8dd255c79fb9c428ad25cc6ee54

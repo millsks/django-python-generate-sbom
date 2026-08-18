@@ -6,6 +6,8 @@
 # Docker. Do NOT add a DATABASES/STORAGES swap here — the base defaults ARE the containerless
 # defaults. manage.py, config.celery_app, and pytest all default to this module; wsgi.py and
 # asgi.py default to config.settings.production and belong to the container/prod path only.
+from pathlib import Path
+
 from config.settings.base import *
 
 DEBUG = True
@@ -32,7 +34,11 @@ configure_structlog(json_logs=False)
 # checkout can start a worker without a manual mkdir. NOTE: the transport writes messages to
 # `data_folder_out` and reads them from `data_folder_in`, so both MUST be the SAME directory for
 # a producer and a consumer to exchange messages; `processed_folder` holds consumed messages.
-CELERY_DIR = BASE_DIR / ".celery"
+# Overridable via CELERY_DIR so a second checkout — or a test that must not race a running
+# `pixi run dev` — can have its own broker. The shared directory is a real hazard, not a
+# theoretical one: every process pointed at this checkout drains the SAME queue, so a stray
+# worker silently steals another's messages (Story 22.4 was caught by exactly that).
+CELERY_DIR = Path(env.str("CELERY_DIR", default=str(BASE_DIR / ".celery")))
 _CELERY_BROKER_DIR = CELERY_DIR / "broker"
 _CELERY_BROKER_MESSAGES = _CELERY_BROKER_DIR / "messages"
 _CELERY_BROKER_PROCESSED = _CELERY_BROKER_DIR / "processed"

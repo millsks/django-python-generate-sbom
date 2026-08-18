@@ -72,14 +72,16 @@ def stack(tmp_path: Path) -> dict[str, object]:
     """A migrated temp database, a temp broker directory, and the env both processes share."""
     db_path = tmp_path / "e2e.sqlite3"
 
-    # Only the DATABASE is isolated. MEDIA_ROOT and CELERY_DIR are hardcoded to BASE_DIR in
-    # settings and are not env-overridable, and inventing an override purely to make a test
-    # tidier would be changing production configuration for the test's convenience. Both
-    # directories are gitignored and are exactly what `pixi run dev` writes to anyway.
+    # The broker gets its own directory. This is not tidiness: every process pointed at this
+    # checkout drains the SAME `.celery/broker/`, so a `pixi run dev` left running in another
+    # terminal silently steals this test's messages and the job stalls at PROGRESS. That
+    # happened during development, which is why `CELERY_DIR` is overridable at all.
+    # MEDIA_ROOT stays shared — it is gitignored and write-only here.
     env = {
         **os.environ,
         "DJANGO_SETTINGS_MODULE": "config.settings.local",
         "DATABASE_URL": f"sqlite:///{db_path}",
+        "CELERY_DIR": str(tmp_path / ".celery"),
         # Keep the analysis phases from waiting on real network timeouts.
         "PARSELMOUTH_PYPI_TO_CONDA_URL": "",
     }

@@ -7208,3 +7208,31 @@ deleted) are all unchanged.
    then the architecture spine, `README.md`, the developer architecture and data-model pages, and the OpenShift
    reference no longer describe an automatic purge, and each says how to run it instead.
 6. **Gate green.** `pixi run ci` exits 0.
+
+### Story 22.7: Fix the Celery Worker Failing to Start on Windows
+
+As a developer on Windows,
+I want the containerless Celery worker to start,
+so that background jobs run at all on the platform that has no Docker fallback.
+
+**Context:** Found by Story 22.4's real-worker test on its **first** run against `windows-latest`, and
+**shipping broken since Epic 20**. Kombu's `filesystem://` transport locks its message files with
+`LockFileEx`, so `kombu/transport/filesystem.py` unconditionally imports `pywintypes`, `win32con`, and
+`win32file` under `os.name == "nt"` — its own comment reads *"needs win32all to work on Windows"*. `pywin32`
+was never declared, so `pixi run worker`, `pixi run beat`, and therefore `pixi run dev` all died at import
+with `ModuleNotFoundError`.
+
+Nothing could have caught this earlier: Story 20.6's Windows job ran unit tests only, and those use eager
+Celery, which never loads the transport. This is the second real defect the Epic 22 hardening has surfaced.
+
+**Acceptance Criteria:**
+
+1. **The worker starts on Windows.**
+   Given the transport needs `pywin32`, when the dependency is declared, then a real Celery worker boots on
+   `windows-latest` and Story 22.4's end-to-end test passes there.
+2. **The dependency is scoped to the platform that needs it.**
+   Given `pywin32` is meaningless on macOS and Linux, when it is added, then it is declared under
+   `[target.win-64.dependencies]` only and does not appear in any other platform's resolved environment.
+3. **It cannot be dropped silently.**
+   Given the failure is invisible on macOS and Linux, when the story completes, then a test asserts the
+   win-64 declaration exists, and the reason is recorded beside it.

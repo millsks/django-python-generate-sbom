@@ -482,3 +482,8 @@ development_status:
   # unattended nightly purge goes. Lands right after 22.2 registered that task, which is what
   # makes removing one schedule entry safe to reason about.
   22-6-manual-reviewable-artifact-purge: review
+  # ADDED 2026-08-18. Found by Story 22.4's real-worker test on its FIRST Windows run, and
+  # shipping broken since Epic 20: kombu's filesystem:// transport imports pywintypes/win32file
+  # on Windows, pywin32 was never declared, so the worker/beat/dev all died at import. The one
+  # platform with no Docker fallback had no working background-job path at all.
+  22-7-fix-windows-worker-pywin32: review

@@ -142,15 +142,41 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-  # --- Windows cross-platform unit guard (Story 20.6) ---
-  # Additive to the Ubuntu jobs above (which remain the merge gate). Runs the
-  # backend unit suite on windows-latest against the gunicorn-free
-  # win-64 pixi environment (Story 20.2). The backend suite runs offline under
-  # config.settings.test (eager Celery + SQLite + portable paths — Stories
-  # 20.3/20.4), so the POSIX-path, Celery-pool, and gunicorn-import risks are
-  # exercised without a broker, worker, or web server.
-  unit-windows:
-    name: Windows Unit Tests
+  # --- Windows cross-platform guard (Story 20.6, widened by Story 22.3) ---
+  #
+  # NOT advisory. Docker and Podman are unavailable on Windows under the destination
+  # organization's security policy, so the containerless path is the ONLY local path for part
+  # of the team — a regression there stops their work outright, with no workaround.
+  #
+  # This job earned its keep on PR #197: it failed with
+  #     UnicodeDecodeError: 'charmap' codec can't decode byte 0x8f
+  # while the entire Ubuntu gate passed. A bare `read_text` uses locale.getencoding() — UTF-8
+  # on macOS/Linux, cp1252 on Windows — and 25 call sites depended on that difference. Nothing
+  # else in CI could have caught it.
+  #
+  # Runs the FULL suite (`cov` = unit + integration under the same >=90% floor) rather than
+  # `test`, so the parts most likely to break here are actually exercised: the filesystem
+  # broker's locking, the --pool=solo worker override (prefork is Unix-only), the Beat schedule
+  # file, SQLite paths, and the wheel build inside test_wheel_layout. `test` + `test-integration`
+  # are deliberately NOT listed alongside `cov` — that would run everything three times.
+  #
+  # Deliberately skipped here, and why (AC #4):
+  #   lint / fmt-check / precommit / docs-build / security — text analysis with pinned tool
+  #     versions and no platform-dependent behaviour; running them twice adds minutes and no
+  #     information.
+  #   build — covered indirectly: tests/integration/test_wheel_layout.py builds a real wheel.
+  #   check (mypy) — same sources, same pinned config; a platform-specific typing problem would
+  #     surface in the tests this job now runs.
+  #
+  # Expect this to be the slowest job (the unit suite alone was ~6m40s). That is the cost of
+  # the guarantee.
+  #
+  # ⚠ Renaming this job DETACHES any branch-protection required-status-check entry, because
+  # GitHub matches required checks by NAME. Protection then passes because the named check
+  # never reports — worse than having none. Update the branch-protection entry in the same
+  # change if you rename it.
+  suite-windows:
+    name: Windows Full Suite
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -158,5 +184,5 @@ jobs:
         uses: prefix-dev/setup-pixi@v0.8.1
         with:
           pixi-version: latest
-      - name: Run backend unit tests
-        run: pixi run test
+      - name: Run the full suite with the coverage gate
+        run: pixi run cov

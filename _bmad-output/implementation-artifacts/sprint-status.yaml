@@ -513,3 +513,15 @@ development_status:
   # too. Nav is now Home/Upload/History/API Keys. Orgs remain first-class DATA: the header
   # switcher selects one and the upload form files a job against one.
   22-11-remove-organization-ui: review
+  # ADDED 2026-08-18, closing the three findings from the post-refactor suite audit:
+  #   (a) get_org_scoped_object_or_404 was documented as the org-isolation boundary and had
+  #       ZERO callers — every real lookup went through .for_org(). Deleted: a function that
+  #       looks like the security boundary and enforces nothing invites the next reader to
+  #       trust it.
+  #   (b) the no-organizations state (common/access.py) was entirely untested, and it turned
+  #       out to be the SAME condition behind most of users/views.py's uncovered lines, since
+  #       get_admin_org == get_request_org after 21.24. One scenario closed both.
+  #   (c) test-only _ScopedThing (no table, cascading FK to Org) made ANY Org delete fail once
+  #       its module was collected — a pass/fail that depended on test order. Table now created
+  #       for models declared under tests/.
+  22-12-close-post-refactor-audit-findings: review

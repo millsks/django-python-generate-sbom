@@ -10,13 +10,20 @@ the enforcement is ever wanted back, but it would be the wrong shape for the des
 it was built on a Django session plus local ``OrgMembership`` roles.
 
 **Tenancy is not authentication, and it survives untouched.** AD-2 makes the org the
-isolation boundary regardless of who is asking, so:
+isolation boundary regardless of who is asking. :class:`OrgContextMixin` resolves the acting
+org for a view — it is *not* a gate, it rejects nobody — so view classes do not each repeat
+the same two lines and they keep the ``self.org`` attribute the deleted mixins supplied.
 
-* :class:`OrgContextMixin` resolves the acting org for a view. It is *not* a gate — it
-  rejects nobody — it exists so nineteen view classes do not each repeat the same two lines,
-  and so they keep the ``self.org`` attribute the deleted mixin used to supply.
-* :func:`get_org_scoped_object_or_404` still refuses to serve another org's object, and
-  still makes that refusal indistinguishable from a missing one.
+**Where isolation is actually enforced**, since this module used to claim it and did not:
+``OrgScopedModel``'s ``.for_org(org)`` queryset, applied by the selectors
+(``inventory.sbom.selectors.get_job``, ``get_jobs``, …). Filtering happens *inside the query*,
+so "belongs to another org" and "does not exist" are the same miss by construction — which is
+what makes them indistinguishable, rather than any check performed afterwards.
+
+Story 22.12 removed a ``get_org_scoped_object_or_404`` helper that lived here. It had **zero
+callers**: it was documented as the boundary while every real lookup went through ``.for_org``.
+A function that looks like the security boundary and enforces nothing is worse than no
+function, because it invites the next reader to trust it.
 
 CSRF protection, the POST-only org switcher, and the open-redirect guard on ``next`` are all
 unaffected. This story removed *who you are*, not *what a browser may be made to do*.
@@ -26,7 +33,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.http import Http404, HttpRequest
+from django.http import HttpRequest
 from django.http.response import HttpResponseBase
 from django.shortcuts import render
 from django.views import View
@@ -65,31 +72,3 @@ class OrgContextMixin(View):
             return render(request, NO_ORGS_TEMPLATE)
         self.org = org
         return super().dispatch(request, *args, **kwargs)
-
-
-def get_org_scoped_object_or_404(model: Any, org: Org, **lookup: Any) -> Any:
-    """Fetch one org-owned object, or raise ``Http404`` (AD-2).
-
-    Wrong-org and non-existent must be **indistinguishable** to the caller — otherwise a
-    404-vs-403 difference tells an attacker that an object they cannot see does exist. The
-    SPA relied on the same rule (``useJobStatus.ts``: "Cross-org and unknown jobs both
-    surface as 403/404 — no existence leak"), and the server-rendered path must preserve
-    it. So the org filter is applied as part of the query rather than checked afterwards:
-    there is no code path here that can distinguish the two cases, by construction.
-
-    Args:
-        model: An ``OrgScopedModel`` subclass.
-        org: The organisation the caller is acting as.
-        **lookup: Field lookups identifying the object within that org.
-
-    Returns:
-        The matching instance.
-
-    Raises:
-        Http404: If no object matches — whether because it does not exist or because it
-            belongs to a different organisation.
-    """
-    instance = model.objects.for_org(org).filter(**lookup).first()
-    if instance is None:
-        raise Http404
-    return instance

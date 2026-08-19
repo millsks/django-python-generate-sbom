@@ -115,3 +115,39 @@ def test_every_doc_in_the_nav_exists_and_every_page_is_in_the_nav() -> None:
     unlisted = sorted(on_disk - listed - {"index.md"})
 
     assert not unlisted, f"these pages are not reachable from the nav: {unlisted}"
+
+
+# --- The upload form, field by field ----------------------------------------------------------
+
+
+#: The user guide names fields by their form **label**, so that is what is compared.
+UPLOAD_GUIDE = DOCS / "user-guide" / "generating-an-sbom.md"
+
+
+def test_the_upload_guide_documents_every_field_on_the_form() -> None:
+    """A field added to the form and not to the guide is invisible drift.
+
+    It happened: `org` was added to `ManifestUploadForm` in Story 21.9 and the guide's
+    "Fill in the form" list was never updated, so the one field whose choice is permanent —
+    it is written into the SBOM as the supplier — went undocumented through three stories.
+    The earlier accuracy checks could not catch it, because they look for things that should
+    **not** be there.
+    """
+    from inventory.sbom.forms import ManifestUploadForm
+
+    guide = _text(UPLOAD_GUIDE)
+    labels = [str(field.label) for field in ManifestUploadForm().fields.values()]
+
+    missing = [label for label in labels if f"**{label}**" not in guide]
+
+    assert not missing, f"the upload guide does not document these form fields: {missing}"
+
+
+def test_the_upload_guide_does_not_document_fields_that_were_removed() -> None:
+    """The inverse: a field dropped from the form must not linger in the instructions."""
+    from inventory.sbom.forms import ManifestUploadForm
+
+    labels = {str(field.label) for field in ManifestUploadForm().fields.values()}
+    documented = set(re.findall(r"^\d+\. \*\*(.+?)\*\*", _text(UPLOAD_GUIDE), re.MULTILINE))
+
+    assert documented <= labels, f"the guide documents fields the form does not have: {documented - labels}"

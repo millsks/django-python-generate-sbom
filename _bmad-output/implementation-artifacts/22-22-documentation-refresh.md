@@ -33,7 +33,8 @@ doubt the app rather than the page.
 4. **The developer docs carry the amended decisions** — AD-2 narrowed to the API, the `JobTask` model, and
    derived progress.
 5. **The two audit pages are marked as frozen evidence** rather than silently rotting.
-6. **A test enforces it**, because prose is exactly what nobody re-reads.
+6. **A test enforces it**, because prose is exactly what nobody re-reads — including a check
+   that the upload guide documents **every** field the form actually has.
 7. **Gate green.**
 
 ## Tasks / Subtasks
@@ -46,6 +47,8 @@ doubt the app rather than the page.
 - [x] **Task 5 — Describe the task list in `reading-the-results.md` (AC: #3)**
 - [x] **Task 6 — Freeze-mark the rename and test-parity audits (AC: #5)**
 - [x] **Task 7 — `tests/unit/test_documentation_accuracy.py` (AC: #6)**
+- [x] **Task 7b — Document the upload form's Organization field, and check the form's fields
+      against the guide in both directions (AC: #6)**
 - [x] **Task 8 — Gate (AC: #7)**
 
 ## Dev Notes
@@ -73,6 +76,19 @@ banner.
 - *"History is scoped to your active organization"* — already fixed in Story 22.17, and the page it lived on
   had to be rewritten again here.
 
+### The check that only existed after it was needed
+
+Every original accuracy check looked for things that should **not** be in the docs — a removed control, a
+retired route, a dead link. None of them could see something **missing**, and the product owner immediately
+found one: the upload form's **Organization** field, added in Story 21.9 and never documented, went unnoticed
+through three stories that changed what it does. It is the field whose choice is permanent — it is written
+into the SBOM as the supplier — so it was the worst one to omit.
+
+`test_the_upload_guide_documents_every_field_on_the_form` now compares the guide against
+`ManifestUploadForm().fields` by label, and its inverse catches a field removed from the form but left in the
+instructions. Absence needs a different kind of test from presence, and that is worth remembering for the
+next doc guard.
+
 ### Traps
 
 - **The accuracy tests must not ban a word, only an instruction.** A page explaining *why* the switcher was
@@ -89,16 +105,21 @@ claude-opus-5[1m] (Claude Opus 5, 1M context)
 
 ### Debug Log References
 
-- 108 checks in `tests/unit/test_documentation_accuracy.py` (mostly parametrized per page).
+- 110 checks in `tests/unit/test_documentation_accuracy.py` (mostly parametrized per page).
 - **Ablation:** reintroducing "Sign in", "organization switcher" and `/history` into one how-to fails three
   of them; restoring passes all 108.
-- `pixi run docs-build` — clean. `pixi run ci` — **exit 0**, 1068 tests, 97.24%.
+- `pixi run docs-build` — clean. `pixi run ci` — **exit 0**, 1070 tests, 97.24%.
+- **Ablation:** deleting the Organization entry from the guide fails the field check.
 
 ### Completion Notes List
 
 **The guard is the deliverable, not the prose.** Any of these pages could go stale again next epic. The
 tests check what is mechanically checkable — routes, links, removed controls, sign-in instructions — and
 deliberately claim nothing about whether a paragraph is well written.
+
+**The first version of the guard could only see what was wrongly present.** The product owner found what was
+missing within minutes. Both directions are now checked for the upload form; the lesson generalizes to any
+future doc guard.
 
 **A nav-coverage check came out of it.** `mkdocs --strict` fails on a nav entry with no page; nothing failed
 on a *page with no nav entry*, which is how a page gets written, linked from nowhere, and never read.

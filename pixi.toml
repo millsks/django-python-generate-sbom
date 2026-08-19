@@ -261,7 +261,7 @@ cmd = "git cliff --unreleased --prepend CHANGELOG.md"
 # --- Documentation site (MkDocs Material → GitHub Pages; Story 11.1) ---
 # Live-reload preview at http://localhost:8000.
 [tasks.docs-serve]
-cmd = "mkdocs serve"
+cmd = "mkdocs serve --dev-addr=0.0.0.0:8888"
 
 # Strict build (broken links/nav fail); outputs the static site to ./site.
 [tasks.docs-build]

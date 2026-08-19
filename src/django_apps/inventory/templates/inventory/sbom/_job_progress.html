@@ -15,7 +15,9 @@
   {% if job_is_terminal %}
     <p class="text-body-secondary">Finished.</p>
   {% else %}
-    <h2 class="h6">{{ job.current_step|default:"Queued" }}</h2>
+    {% comment %} `capfirst`, not `title`: the phase names contain "SBOM", which title-casing
+      would mangle to "Sbom". Only the first letter is touched. {% endcomment %}
+    <h2 class="h6">{{ job.current_step|default:"Queued"|capfirst }}</h2>
     <div class="progress" role="progressbar" aria-valuenow="{{ job.progress }}"
          aria-valuemin="0" aria-valuemax="100" style="height: 8px;">
       <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: {{ job.progress }}%"></div>

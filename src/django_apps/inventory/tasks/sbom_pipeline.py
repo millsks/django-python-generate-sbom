@@ -39,9 +39,14 @@ logger = structlog.get_logger()
 
 
 def _report(task: Any, task_id: str, progress: int, step: str) -> None:
-    """Report progress via Celery state and mirror it to the job (keeps polled progress monotonic)."""
+    """Report progress via Celery state and mirror it to the job row.
+
+    Uses :func:`services.advance_job_progress` rather than a blind update (Story 22.19): once
+    the analysis phases mirror their own progress, phase 8's ``aggregate analysis`` at 95 lands
+    *after* version currency's 97 and would otherwise drag the bar backwards.
+    """
     task.update_state(state="PROGRESS", meta={"progress": progress, "current_step": step})
-    services.update_job_status(task_id, SBOMJob.Status.PROGRESS, progress=progress, current_step=step)
+    services.advance_job_progress(task_id, progress, step)
 
 
 def _fail_if_unfinished(task_id: str, *, failure_reason: str) -> None:
@@ -186,7 +191,7 @@ def aggregate_analysis_results(results: list[dict[str, Any]], task_id: str) -> d
     their reason). Analysis-task failures never abort the chord — each task always
     returns an envelope (FR-4.5).
     """
-    services.update_job_status(task_id, SBOMJob.Status.PROGRESS, progress=95, current_step="aggregate analysis")
+    services.advance_job_progress(task_id, 95, "aggregate analysis")
     job = get_job_by_task_id(task_id)
     for envelope in results:
         write_report(job, envelope)

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import django_tables2 as tables
+from django.template.defaultfilters import capfirst
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html
@@ -138,7 +139,7 @@ class JobTable(tables.Table):
                 'aria-valuenow="{}" aria-valuemin="0" aria-valuemax="100">'
                 '<div class="progress-bar" style="width:{}%"></div></div>',
                 badge,
-                record.current_step or "Queued",
+                capfirst(record.current_step or "Queued"),
                 record.progress,
                 record.progress,
             )

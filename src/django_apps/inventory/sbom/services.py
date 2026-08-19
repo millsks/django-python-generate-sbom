@@ -207,6 +207,34 @@ def update_job_status(
     )
 
 
+def advance_job_progress(task_id: str, progress: int, current_step: str) -> None:
+    """Move a running job's progress forward and name the phase doing the work (Story 22.19).
+
+    Separate from :func:`update_job_status` because progress reporting has a constraint status
+    writing does not: it must never go **backwards**. The three analysis phases run
+    concurrently in a chord group whose order is not defined, and their bands are 55, 80 and
+    93 — so the low band can be written after the high one. A bar that jumps from 93% back to
+    55% reads as a broken job to anyone watching it.
+
+    The guard lives in the UPDATE's own ``WHERE`` clause rather than in a read-then-write, so
+    two workers reporting at the same moment cannot interleave into a regression. ``__lte``
+    rather than ``__lt`` on purpose: phase 8 persists at 97 and version currency also *ends* at
+    97, and rejecting equal values would leave the text stuck on the analysis phase through the
+    final write. Only a genuine regression is refused.
+
+    Only a job that is still pending or running is eligible — stated as a whitelist rather than
+    as "not terminal" so a status added later has to be considered rather than silently
+    accepted. The chord callback can finalize while a group member is still unwinding, and a
+    job that flips back to "In progress" after showing Success is worse than a stale
+    percentage.
+    """
+    SBOMJob.objects.filter(
+        task_id=task_id,
+        progress__lte=progress,
+        status__in=(SBOMJob.Status.PENDING, SBOMJob.Status.PROGRESS),
+    ).update(status=SBOMJob.Status.PROGRESS, progress=progress, current_step=current_step)
+
+
 def record_generation(task_id: str, result_key: str, package_count: int) -> None:
     """Store the generated artifact key + package count on the job (Phase 3, pre-SUCCESS).
 

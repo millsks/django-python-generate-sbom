@@ -28,7 +28,7 @@ from inventory.analysis.services import vulnerability
 from inventory.analysis.services.reports import make_envelope
 from inventory.sbom.parsers import PackageSpec
 from inventory.sbom.selectors import get_job_by_task_id
-from inventory.sbom.services import resolve_job_packages
+from inventory.sbom.services import advance_job_progress, resolve_job_packages
 
 logger = structlog.get_logger()
 
@@ -59,6 +59,11 @@ def _run_phase(
     # failures left the investigation with nothing to go on (Stories 22.15, 22.18).
     logger.info(f"phase_{report_type}_started", task_id=str(task_id), step=step)
     task.update_state(state="PROGRESS", meta={"progress": start_pct, "current_step": step})
+    # Story 22.19: mirror to the job row as well. Reporting only to Celery's result backend
+    # left the Job Status page showing "generate SBOM document — 45%" for the whole analysis
+    # fan-out, which on a real manifest is the longest part of the run: the bar looked stuck
+    # exactly when the most work was happening.
+    advance_job_progress(task_id, start_pct, step)
     job = get_job_by_task_id(task_id)
     logger.debug(f"phase_{report_type}_job_loaded", task_id=str(task_id), org_id=job.org_id)
     started = time.monotonic()
@@ -87,7 +92,13 @@ def _run_phase(
         )
         envelope = make_envelope(report_type, failed=True, failure_reason=fail_reason)
 
-    task.update_state(state="PROGRESS", meta={"progress": end_pct, "current_step": f"{step} complete"})
+    # Progress advances either way — FR-4.5 keeps the job running when an analysis phase
+    # fails, so stalling the bar would misreport a job that is still going. The *label* follows
+    # the outcome: a failed phase saying "complete" is the one thing worse than saying nothing,
+    # and "unavailable" is the word the report tabs already use for the same state.
+    outcome = "unavailable" if envelope.get("failed") else "complete"
+    task.update_state(state="PROGRESS", meta={"progress": end_pct, "current_step": f"{step} {outcome}"})
+    advance_job_progress(task_id, end_pct, f"{step} {outcome}")
     return envelope
 
 

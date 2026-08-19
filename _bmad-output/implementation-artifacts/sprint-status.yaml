@@ -575,3 +575,10 @@ development_status:
   # usual 12s). Stories 22.15 (missing HTTP timeouts) was a real defect found on the way and
   # stands on its own; it was not this one.
   22-18-drain-the-worker-pipe: review
+  # ADDED 2026-08-19 by product-owner direction: "the progress bar on the job status page
+  # [should] update the text with the name of the phase that is currently being processed."
+  # The label existed since 6.2; the ANALYSIS phases never wrote it (task.update_state only),
+  # so a job read "generate SBOM document - 45%" for the whole fan-out. Needed a monotonic,
+  # race-safe advance: the three phases run concurrently with bands 55/80/93 and phase 8
+  # reports 95. Also fixed a failed phase reporting "complete" -> now "unavailable".
+  22-19-live-phase-name-on-the-progress-bar: review

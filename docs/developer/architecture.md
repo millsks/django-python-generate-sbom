@@ -100,18 +100,35 @@ Identity and tenancy were always **decoupled**, and tenancy is the half that sur
 `Org` is a tenant boundary; an `OrgMembership` records who belongs to it. See the
 [Data Model](data-model.md) for the fields.
 
-- **Org isolation is untouched (AD-2).** It is a tenancy invariant, not an authentication
-  one. Every org-scoped query still goes through `.for_org(org)`, and
-  `get_org_scoped_object_or_404` still makes another org's object indistinguishable from a
-  missing one. Removing the login did **not** make organizations visible to each other.
+- **Org isolation now binds the API, not the pages (AD-2, amended by Story 22.16).** Every
+  API query still goes through `.for_org(org)`, because an API key genuinely pins one tenant
+  (AD-8) and a programmatic caller must never see another org's jobs.
+
+    The **pages** are deliberately cross-org: Job Status lists every organization with a
+    column and a filter, and its rows open. That is not a reduction in real isolation — since
+    Story 21.24 removed authentication, the org switcher accepted any non-ADMIN org from
+    anyone, so another org's work was always two clicks away. The switcher made that a
+    detour; listing it makes it honest. `get_all_jobs` / `get_any_job` serve the pages;
+    `get_jobs` / `get_job` stay scoped for the API.
+
+- **The organization is provenance (Story 22.16).** It is chosen on the upload form, recorded
+  on the job, shown as a Job Status column, and written into the generated SBOM as its
+  **supplier** (Story 22.14). It is no longer a mode the interface sits in — the header
+  switcher is gone.
 
 - **The acting org.** `get_request_org` resolves it, in one place, for both the pages and
   the API (AD-2). A presented API key wins and pins the caller to that key's org; otherwise
   a Django-admin session's org applies; otherwise the default org. The system ADMIN org is
   never the acting org (Story 2.18) — it is a platform tier, not a workspace.
 
-- **Membership and the global-admin tier still exist and are still editable.** They no
-  longer gate anything, and are the seam that host-supplied group claims will re-attach to.
+- **Organizations are seeded, not created in the app (Story 22.10).** `seed_orgs` reads a
+  committed `orgs.yml`, matching by slug because the slug is what the default-org setting and
+  every API key reference. Removing a line deletes nothing.
+
+- **Membership and the global-admin tier still exist as data**, and are still editable
+  through `/api/v1/`. They no longer gate anything, their management screens were removed
+  (Stories 22.9 and 22.11), and `OrgMembership.role` is read by nothing outside the
+  membership services themselves. They are the seam host-supplied group claims re-attach to.
 
 - **Per-org promote / demote.** Admins add or remove *per-org* admins with
   `promote_member_to_admin` (Story 2.16) and `demote_admin_to_member` (Story 2.20);

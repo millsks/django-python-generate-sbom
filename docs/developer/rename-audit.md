@@ -1,5 +1,12 @@
 # Product-Rename Residue Audit
 
+!!! warning "A dated snapshot, not maintained reference"
+
+    This page is the **acceptance evidence for one story**, frozen at the date it was
+    written. It is deliberately not kept in step with later work — several files it names
+    have since been renamed or deleted — because rewriting it would destroy the record it
+    exists to be. Read it as "what was true when that story merged".
+
 Story 21.21 renamed the **product** to **Python Inventory Supply Lens** ("Supply Lens"
 for short). It did **not** rename the artifact the product makes: "SBOM", "CycloneDX",
 and "SPDX" stay wherever they name the document or the standard.

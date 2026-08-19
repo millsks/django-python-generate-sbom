@@ -233,7 +233,7 @@ pixi run docker-shell       # open a shell in the web container
 | Org | Seeded by | Purpose |
 |---|---|---|
 | **Enterprise Wells Fargo Technology** (`enterprise-wells-fargo-technology`) | `inventory.0003_seed_default_org` | The org an anonymous caller acts as. Override the slug with `INVENTORY_DEFAULT_ORG_SLUG`. |
-| **Admin** (`admin`) | `inventory.0002_seed_admin_org` | The platform-admin tier. Never a workspace — it is not offered in the org switcher or on the upload form. |
+| **Admin** (`admin`) | `inventory.0002_seed_admin_org` | The platform-admin tier. Never a workspace — it is not offered on the upload form. |
 
 Open [http://localhost:8000](http://localhost:8000) and go straight to **Upload**, picking the
 organization on the form.
@@ -259,7 +259,7 @@ migrate && seed-orgs && seed-superuser && web
 Two rules worth knowing before you edit the list:
 
 - **The slug is the identity, and must never change.** `INVENTORY_DEFAULT_ORG_SLUG`, the org
-  switcher, and every API key reference it. Names may be corrected freely; a changed name is
+  upload form's options, and every API key reference it. Names may be corrected freely; a changed name is
   *reported* on the next run and left alone rather than rewritten.
 - **Removing a line deletes nothing.** Deleting an org would orphan its jobs and artifacts, so
   it is a deliberate act rather than a side effect of editing a file.

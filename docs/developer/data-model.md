@@ -14,7 +14,9 @@ filtering.
 | `OrgApiKey` | Per-org API key, an `AbstractAPIKey` subclass (AD-8) |
 
 `Org` is the tenancy boundary: every scoped record belongs to exactly one org, and
-requests act within the caller's active org. `OrgMembership.role` is per-org
+requests act within the caller's active org. Since Story 21.24 `OrgMembership.role` gates
+nothing — it is read only by the membership services themselves and echoed in the roster
+payload — and is retained as the seam OIDC group claims re-attach to. `OrgMembership.role` is per-org
 (`admin` or `member`): an org may have any number of admins, and a member's role
 toggles via `promote_member_to_admin` / `demote_admin_to_member` (Stories
 2.16/2.20) — independent of the global-admin tier below.
@@ -74,6 +76,25 @@ Each report has a `report_type` (`vuln`, `license`, `version`), an optional
 `artifact_key` (blob in storage), and a JSON `summary`. A job has up to three reports —
 one per analysis phase.
 
+## Job tasks
+
+| Model | Purpose |
+|---|---|
+| `JobTask` | One pipeline task's state for one job |
+
+Seeded when the job is created, one row per task in `inventory.sbom.pipeline_tasks`, each
+with a `key`, an `ordinal` for display order, and a `state` of `PENDING`, `RUNNING`,
+`COMPLETE`, or `ERROR`.
+
+**A row per task rather than a field on the job** because the three analysis tasks run
+concurrently in a chord (AD-4): each writes only its own row, so there is nothing to race
+on, and the interface can show two tasks running at once — which a single "current step"
+string cannot express. `SBOMJob.progress` is **derived** from how many rows are terminal,
+an equal share each, so no task picks its own percentage.
+
+`SBOMJob.current_step` is still maintained as a one-line summary for the Job Status table
+cell and the API's `current_phase` field.
+
 ## Relationships
 
 ```mermaid
@@ -85,6 +106,7 @@ erDiagram
     ManifestUpload ||--o{ SBOMJob : produces
     User ||--o{ SBOMJob : submits
     SBOMJob ||--o{ AnalysisReport : has
+    SBOMJob ||--o{ JobTask : tracks
 ```
 
 The `User`–`OrgMembership` edge is zero-or-many: a user may hold no memberships at

@@ -1,7 +1,15 @@
 # Reading the Results
 
-The **Results** page shows one job's SBOM and analysis across a set of tabs. While the job
-runs you see a progress bar; once it finishes the tabs populate.
+The **Results** page shows one job's SBOM and analysis across a set of tabs.
+
+While the job runs, the page lists **every task in the pipeline** instead of the tabs. The
+tasks currently being worked on animate with a row of dots; each shows `[COMPLETE]` or
+`[ERROR]` as it finishes, and the bar underneath advances as tasks complete. More than one
+task can be running at once — the three analysis tasks run in parallel. The page moves to
+the tabs by itself when the job is done; you do not need to reload it.
+
+An `[ERROR]` beside one task does not stop the job: an analysis that cannot reach its data
+source is reported as unavailable while everything else carries on.
 
 The tabs, left to right, are: **Overview**, **SBOM**, **Vulnerabilities**, **Licenses**,
 and **Version Currency**.

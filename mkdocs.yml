@@ -89,7 +89,7 @@ markdown_extensions:
 nav:
   - User Guide:
       - user-guide/index.md
-      - Accounts & Organizations: user-guide/accounts-and-organizations.md
+      - Organizations: user-guide/accounts-and-organizations.md
       - Generating an SBOM: user-guide/generating-an-sbom.md
       - Reading the Results: user-guide/reading-the-results.md
       - Exporting & Downloading: user-guide/exporting-and-downloading.md
@@ -103,7 +103,6 @@ nav:
       - Find outdated dependencies: how-to/find-outdated-dependencies.md
       - Export a report to Excel: how-to/export-to-excel.md
       - Create and use an API key: how-to/manage-api-keys.md
-      - Invite a member / switch organizations: how-to/manage-organization.md
   - Developer:
       - developer/index.md
       - Architecture: developer/architecture.md

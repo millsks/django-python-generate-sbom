@@ -1,5 +1,12 @@
 # Test-Parity Audit — Epic 21
 
+!!! warning "A dated snapshot, not maintained reference"
+
+    This page is the **acceptance evidence for one story**, frozen at the date it was
+    written. It is deliberately not kept in step with later work — several files it names
+    have since been renamed or deleted — because rewriting it would destroy the record it
+    exists to be. Read it as "what was true when that story merged".
+
 Story 21.19 deleted **39 vitest files (223 test cases, 3,645 lines)** along with the React
 SPA. Coverage percentage cannot detect what that removed: it measures the Python tree,
 which grew. A behaviour previously covered by a vitest file and now covered by nothing

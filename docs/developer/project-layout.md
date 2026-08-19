@@ -23,7 +23,7 @@ django-python-generate-sbom/          # repo root == BASE_DIR (pixi umbrella)
       templates/                      # base.html · landing.html · nav · 404/500
       static/                         # vendored Bootstrap · htmx · icons.svg
       icons.py                        # semantic icon map, used by the {% icon %} tag
-      views.py                        # landing page · org switcher
+      views.py                        # landing page · shell preview
     django_apps/                      # a PATH ROOT, not a package — carries no __init__.py
       inventory/                      # the single reusable app, imported as `inventory`
         common/                       # OrgScopedModel · access mixins · the user seam

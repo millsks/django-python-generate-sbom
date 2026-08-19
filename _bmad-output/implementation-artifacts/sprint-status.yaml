@@ -597,3 +597,12 @@ development_status:
   # The existing test asserted `hx-target="#tab-content"` — i.e. it pinned the bug and would
   # have passed forever.
   22-21-tab-strip-swaps-with-its-body: review
+  # ADDED 2026-08-19 by product-owner direction: "review and refresh all of the
+  # documentation … update, delete, do what needs to be done." Epic 22 removed the org
+  # switcher, the Members/Global Admins/Organization screens and the last sign-in language,
+  # renamed History to Job Status, made the pages cross-org and replaced the progress line
+  # with a task list — the docs still described all of it as current. Deleted the
+  # organization how-to outright; marked the two Epic 21 audit pages as FROZEN acceptance
+  # evidence rather than reference. Added test_documentation_accuracy.py so it fails the gate
+  # next time instead of rotting silently.
+  22-22-documentation-refresh: review

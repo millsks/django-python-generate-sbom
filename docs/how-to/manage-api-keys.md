@@ -5,8 +5,7 @@ of a session.
 
 ## Create a key
 
-1. Sign in with the target organization active.
-2. Go to **API Keys** (`/keys`).
+1. Go to **API Keys** (`/keys`). There is no sign-in.
 3. Create a new key and give it a recognizable name.
 4. Copy the key value **immediately** — it is shown once and cannot be retrieved later.
    Store it somewhere safe (a secret manager, not source control).

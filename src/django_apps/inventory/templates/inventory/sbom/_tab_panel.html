@@ -1,0 +1,12 @@
+{% comment %} The tab strip and the active tab's body, swapped together (Story 22.21).
+
+  One target, so the highlighted tab and the visible body can never disagree. Rendered by the
+  full results page on load and by `ui-job-tab` on every click, from the same two includes.
+{% endcomment %}
+<div id="tab-panel">
+  {% include "inventory/sbom/_result_tabs.html" %}
+
+  <div id="tab-content" class="border border-top-0 rounded-bottom p-3">
+    {% include active_tab_template %}
+  </div>
+</div>

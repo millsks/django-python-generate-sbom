@@ -126,7 +126,11 @@ def test_tabs_load_their_content_over_htmx(org_client) -> None:  # type: ignore[
     html = client.get(f"/results/{job.task_id}").content.decode()
 
     assert f"/results/{job.task_id}/tab/vulnerabilities" in html
-    assert 'hx-target="#tab-content"' in html
+    # Story 22.21: the whole panel is the target, tab strip included. Targeting the body alone
+    # left the strip as first rendered, so the clicked tab's content appeared while "Overview"
+    # stayed highlighted.
+    assert 'hx-target="#tab-panel"' in html
+    assert 'hx-swap="outerHTML"' in html
     # The URL is pushed so a click leaves a shareable address behind.
     assert 'hx-push-url="?tab=vulnerabilities"' in html
 
@@ -343,3 +347,42 @@ def test_a_running_job_still_shows_the_progress_gate(org_client) -> None:  # typ
 
     assert 'hx-trigger="every 5s"' in html
     assert "Total packages" not in html
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("tab", [slug for slug, _label in RESULT_TABS])
+def test_the_clicked_tab_is_the_one_marked_active(org_client, tab: str) -> None:  # type: ignore[no-untyped-def]
+    """Story 22.21: the strip and the body must never disagree about which tab is showing.
+
+    htmx swapped only `#tab-content`, so the `active` class stayed exactly where the server
+    first put it — the Version Currency table would render under a highlighted "Overview", with
+    the clicked tab showing nothing but a focus outline.
+
+    Asserted on the fragment htmx actually receives, per tab, because the bug was invisible on
+    first load and appeared only after a click.
+    """
+    import re
+
+    client, org = org_client
+    job = _job(org)
+
+    fragment = client.get(f"/results/{job.task_id}/tab/{tab}").content.decode()
+
+    active = re.findall(r'<a class="nav-link active"[^>]*hx-push-url="\?tab=([a-z]+)"', fragment)
+    assert active == [tab], f"expected only {tab} active, got {active}"
+
+
+@pytest.mark.django_db
+def test_the_tab_fragment_carries_the_whole_strip(org_client) -> None:  # type: ignore[no-untyped-def]
+    """The fragment replaces the panel, so it has to bring every tab with it.
+
+    Returning only the body would leave the user with no way back to the other tabs.
+    """
+    client, org = org_client
+    job = _job(org)
+
+    fragment = client.get(f"/results/{job.task_id}/tab/licenses").content.decode()
+
+    assert 'id="tab-panel"' in fragment
+    for slug, _label in RESULT_TABS:
+        assert f"/tab/{slug}" in fragment, slug

@@ -342,9 +342,16 @@ class JobTabPartialView(_JobScopedView):
             "active_tab": tab,
             "artifacts_available": bool(job.result_key),
             "metrics": build_metrics(job.summary_stats),
+            # Story 22.21: the tab STRIP is swapped along with the body, so this fragment has
+            # to supply what the strip needs. Returning only the body left the strip as the
+            # server first rendered it — the clicked tab's content appeared while "Overview"
+            # stayed highlighted.
+            "tabs": RESULT_TABS,
+            "artifact_tabs": ARTIFACT_TABS,
+            "active_tab_template": _tab_template(tab),
         }
         context.update(tab_context(request, job, tab))
-        return render(request, _tab_template(tab), context)
+        return render(request, "inventory/sbom/_tab_panel.html", context)
 
 
 class JobProgressPartialView(_JobScopedView):

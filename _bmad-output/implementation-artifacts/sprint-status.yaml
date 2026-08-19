@@ -590,3 +590,10 @@ development_status:
   # from finished tasks. Supersedes 22.19's `advance_job_progress` mechanism entirely.
   # Also fixed the browser tab still reading "History" (22.17 missed the title block).
   22-20-job-task-list-progress: review
+  # ADDED 2026-08-19, reported by the product owner: clicking a results tab left "Overview"
+  # highlighted with only a focus outline on the clicked one. The BODY was loading correctly
+  # the whole time — htmx targeted #tab-content alone, so the tab strip kept the `active`
+  # class the server first rendered. Strip and body are now one swap target from one template.
+  # The existing test asserted `hx-target="#tab-content"` — i.e. it pinned the bug and would
+  # have passed forever.
+  22-21-tab-strip-swaps-with-its-body: review

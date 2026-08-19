@@ -44,29 +44,6 @@
       </div>
     {% endif %}
 
-    <ul class="nav nav-tabs mt-4" role="tablist">
-      {% for slug, label in tabs %}
-        <li class="nav-item" role="presentation">
-          {% if slug in artifact_tabs and not artifacts_available %}
-            <span class="nav-link disabled" aria-disabled="true" title="Artifacts were removed">{{ label }}</span>
-          {% else %}
-            <a class="nav-link {% if slug == active_tab %}active{% endif %}"
-               href="?tab={{ slug }}"
-               role="tab"
-               aria-selected="{% if slug == active_tab %}true{% else %}false{% endif %}"
-               hx-get="{% url 'ui-job-tab' task_id=job.task_id tab=slug %}"
-               hx-target="#tab-content"
-               hx-swap="innerHTML"
-               {% comment %} Keeps the URL in step with the visible tab, so refreshing or
-                 sharing after a click lands on the same place. {% endcomment %}
-               hx-push-url="?tab={{ slug }}">{{ label }}</a>
-          {% endif %}
-        </li>
-      {% endfor %}
-    </ul>
-
-    <div id="tab-content" class="border border-top-0 rounded-bottom p-3">
-      {% include active_tab_template %}
-    </div>
+    {% include "inventory/sbom/_tab_panel.html" %}
   {% endif %}
 {% endblock %}

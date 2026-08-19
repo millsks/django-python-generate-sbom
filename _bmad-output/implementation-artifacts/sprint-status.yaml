@@ -631,3 +631,10 @@ development_status:
   # looking at. Fixed in the view rather than the template so the links are right however the
   # fragment is requested.
   22-25-sorting-a-tab-keeps-the-tab: review
+  # ADDED 2026-08-19 by product-owner direction: show Application and Component on Job Status
+  # between Organization and Submitted, and link back to the original manifest so it can be
+  # reviewed. The manifest had been write-only since upload — parsed once, then unreachable —
+  # so a surprising SBOM could not be checked against its input. Rendered into an ESCAPED
+  # <pre> on a normal page rather than served as a file: a manifest is whatever someone
+  # uploaded, and a raw response would let it choose how the browser treats it.
+  22-26-application-component-and-manifest-review: review

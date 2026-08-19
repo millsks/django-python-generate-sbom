@@ -89,6 +89,12 @@ class JobTable(tables.Table):
     # what says which one a job was filed against. It leads the data columns because that is
     # the question the switcher used to answer before you read anything else.
     org = tables.Column(accessor="org__name", verbose_name="Organization", orderable=True)
+    # Story 22.26: which application and component this job describes. The Manifest column is
+    # often the same word on every row — "requirements.txt" identifies nothing — so these are
+    # what let a reader tell one job from another, and they sit next to the organization
+    # because that is the same question at a finer grain.
+    application_id = tables.Column(accessor="manifest__application_id", verbose_name="Application")
+    component_name = tables.Column(accessor="manifest__component_name", verbose_name="Component")
     created_at = tables.DateTimeColumn(verbose_name="Submitted", format="Y-m-d H:i")
     manifest = tables.Column(accessor="manifest__original_filename", verbose_name="Manifest", orderable=False)
     detected_format = tables.Column(accessor="manifest__detected_format", verbose_name="Format", orderable=False)
@@ -101,7 +107,18 @@ class JobTable(tables.Table):
         # django-tables2 Meta options, not mutable dataclass defaults — same exemption the
         # project already applies to Django model Meta classes.
         model = SBOMJob
-        fields = ("select", "org", "created_at", "manifest", "detected_format", "output_format", "status", "elapsed")
+        fields = (
+            "select",
+            "org",
+            "application_id",
+            "component_name",
+            "created_at",
+            "manifest",
+            "detected_format",
+            "output_format",
+            "status",
+            "elapsed",
+        )
         # Newest-first is the queryset's ordering; stated here too so a user clearing the sort
         # returns to it rather than to an undefined order.
         order_by = "-created_at"
@@ -122,6 +139,18 @@ class JobTable(tables.Table):
                 for name in ("hx-get", "hx-trigger", "hx-swap")
             },
         }
+
+    def render_manifest(self, record: SBOMJob) -> SafeString:
+        """Link the manifest's filename to a page that shows what was uploaded (Story 22.26).
+
+        The file was previously write-only — uploaded, parsed, and unreachable — so a
+        surprising SBOM could not be checked against the input that produced it.
+        """
+        return format_html(
+            '<a href="{}">{}</a>',
+            reverse("ui-job-manifest", kwargs={"task_id": record.task_id}),
+            record.manifest.original_filename,
+        )
 
     def render_detected_format(self, value: str, record: SBOMJob) -> str:
         """Show the manifest format's human label rather than its code."""

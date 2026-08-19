@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% comment %} The manifest a job was generated from (Story 22.26).
+
+  The content goes through `{{ }}` so Django escapes it. That is the reason this is a page at
+  all rather than a file response: a manifest is whatever someone uploaded, and serving it raw
+  would let the upload decide how the browser treats it. Here it can only ever be text.
+{% endcomment %}
+
+{% block title %}{{ manifest.original_filename }} · {{ product_name_short }}{% endblock %}
+
+{% block content %}
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mt-4">
+    <div>
+      <h1 class="h3 mb-0">{{ manifest.original_filename }}</h1>
+      <p class="text-body-secondary mb-0">
+        {{ manifest.application_id }} &middot; {{ manifest.component_name }}
+        &middot; {{ manifest.get_detected_format_display }}
+      </p>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'ui-job-status' %}">Back to job status</a>
+      {% if job.result_key %}
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'ui-job-results' task_id=job.task_id %}">Results</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <dl class="row small mt-3 mb-4">
+    <dt class="col-sm-3 col-lg-2 text-body-secondary fw-normal">Organization</dt>
+    <dd class="col-sm-9 col-lg-10">{{ job.org.name }}</dd>
+    <dt class="col-sm-3 col-lg-2 text-body-secondary fw-normal">Repository</dt>
+    <dd class="col-sm-9 col-lg-10">{{ manifest.repository_url }} ({{ manifest.source_branch }})</dd>
+    <dt class="col-sm-3 col-lg-2 text-body-secondary fw-normal">Uploaded</dt>
+    <dd class="col-sm-9 col-lg-10">{{ manifest.created_at|date:"Y-m-d H:i" }}</dd>
+  </dl>
+
+  {% if not manifest_available %}
+    <div class="alert alert-secondary" role="alert">
+      <strong>This manifest is no longer available.</strong>
+      The job's record is kept permanently, but the uploaded file is gone from storage.
+    </div>
+  {% elif too_large %}
+    <div class="alert alert-secondary" role="alert">
+      <strong>This manifest is too large to show.</strong>
+      It is {{ size_bytes|filesizeformat }}, which would not be readable on a page.
+    </div>
+  {% else %}
+    <div class="border rounded p-3 bg-body-tertiary" style="overflow-x: auto;">
+      <pre class="mb-0"><code>{{ content }}</code></pre>
+    </div>
+  {% endif %}
+{% endblock %}

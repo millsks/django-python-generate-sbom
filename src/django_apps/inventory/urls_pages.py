@@ -20,6 +20,7 @@ from inventory.sbom.pages import (
     CombinedExportView,
     JobArtifactsDeleteAllView,
     JobArtifactsDeleteView,
+    JobManifestView,
     JobProgressPartialView,
     JobResultsView,
     JobRowPartialView,
@@ -54,6 +55,8 @@ urlpatterns = [
     # Story 21.11 — live progress. ONE partial per surface and one trigger convention; a later
     # tab story must reuse these rather than adding a poller of its own.
     path("job-status/row/<uuid:task_id>", JobRowPartialView.as_view(), name="ui-job-row"),
+    # Story 22.26 — review the manifest a job was generated from.
+    path("job-status/manifest/<uuid:task_id>", JobManifestView.as_view(), name="ui-job-manifest"),
     path("results/<uuid:task_id>", JobResultsView.as_view(), name="ui-job-results"),
     path("results/<uuid:task_id>/progress", JobProgressPartialView.as_view(), name="ui-job-progress"),
     # Story 21.12 — one tab-partial endpoint for all five tabs; 21.13-21.16 fill the bodies.

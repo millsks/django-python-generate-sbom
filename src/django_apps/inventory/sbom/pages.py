@@ -369,6 +369,41 @@ class JobTabPartialView(_JobScopedView):
         return render(request, "inventory/sbom/_tab_panel.html", context)
 
 
+class JobManifestView(_JobScopedView):
+    """Show the manifest a job was generated from (Story 22.26).
+
+    Rendered into an escaped `<pre>` on a normal page rather than served as a file. A manifest
+    is **whatever someone uploaded**: a raw response would let it choose how the browser treats
+    it, and the point here is to read the input next to the job it produced, not to download
+    it.
+
+    Cross-org like every other page (Story 22.16) — Job Status lists every organization's jobs,
+    so their rows have to open.
+    """
+
+    def get(self, request: HttpRequest, task_id: str) -> HttpResponse:
+        """Return the manifest page: its content, a too-large notice, or a missing notice."""
+        job = self.get_job_or_404(task_id)
+        manifest = job.manifest
+        context: dict[str, Any] = {"job": job, "manifest": manifest, "org": self.org}
+
+        try:
+            size = manifest.file.size
+        except (FileNotFoundError, ValueError):
+            # The row outlives the blob: a purge clears artifacts and keeps metadata (FR-8.1),
+            # and local storage can simply lose a file. Saying so beats a 500.
+            context["manifest_available"] = False
+            return render(request, "inventory/sbom/manifest.html", context)
+
+        context["manifest_available"] = True
+        context["size_bytes"] = size
+        context["too_large"] = size > MANIFEST_INLINE_MAX_BYTES
+        if not context["too_large"]:
+            with manifest.file.open("rb") as handle:
+                context["content"] = handle.read().decode("utf-8", errors="replace")
+        return render(request, "inventory/sbom/manifest.html", context)
+
+
 class JobProgressPartialView(_JobScopedView):
     """The results page's polled fragment.
 
@@ -390,6 +425,11 @@ class JobProgressPartialView(_JobScopedView):
             response["HX-Refresh"] = "true"
         return response
 
+
+#: A manifest larger than this is described rather than shown. The upload cap is 50 MB
+#: (FR-3.4) and a `<pre>` that size makes the page unusable, so the limit here is about what a
+#: person can read, not about what the server can send.
+MANIFEST_INLINE_MAX_BYTES = 1024 * 1024
 
 #: A raw document larger than this is offered as a download instead of being inlined. A
 #: multi-megabyte <pre> block makes the results page unusable, and the browser has to hold the

@@ -312,6 +312,10 @@ class JobResultsView(_JobScopedView):
             "job": job,
             "org": self.org,
             "job_is_terminal": terminal,
+            # The same list the polled fragment renders (Story 22.20). Supplied here too, or
+            # the first paint of a running job would show an empty task list until the first
+            # poll five seconds later.
+            "job_tasks": list(job.tasks.all()),
             "tabs": RESULT_TABS,
             "active_tab": active_tab,
             # Rendered server-side so a bookmarked ?tab= survives a refresh with no
@@ -355,7 +359,11 @@ class JobProgressPartialView(_JobScopedView):
         """Return the progress fragment, or ask htmx to reload once the job is done."""
         job = self.get_job_or_404(task_id)
         terminal = job.status in TERMINAL_STATUSES
-        response = render(request, "inventory/sbom/_job_progress.html", {"job": job, "job_is_terminal": terminal})
+        response = render(
+            request,
+            "inventory/sbom/_job_progress.html",
+            {"job": job, "job_is_terminal": terminal, "job_tasks": list(job.tasks.all())},
+        )
         if terminal:
             response["HX-Refresh"] = "true"
         return response

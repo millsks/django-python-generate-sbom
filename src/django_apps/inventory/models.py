@@ -19,11 +19,12 @@ constrain it.
 from inventory.analysis.models import AnalysisReport
 from inventory.common.models import OrgScopedManager, OrgScopedModel, OrgScopedQuerySet
 from inventory.manifests.models import ManifestUpload
-from inventory.sbom.models import SBOMJob
+from inventory.sbom.models import JobTask, SBOMJob
 from inventory.users.models import Org, OrgApiKey, OrgApiKeyManager, OrgMembership
 
 __all__ = [
     "AnalysisReport",
+    "JobTask",
     "ManifestUpload",
     "Org",
     "OrgApiKey",

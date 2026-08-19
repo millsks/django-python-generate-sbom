@@ -139,6 +139,10 @@
     <script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
     <script src="{% static 'js/htmx.min.js' %}"></script>
     <script src="{% static 'js/theme.js' %}"></script>
+    {% comment %} Story 22.20: animates the running-task dots on the job progress list. A no-op
+      on every page that has no such list, and it must live OUTSIDE the htmx-swapped fragment
+      or the 5s swap would reload the script and restart the animation. {% endcomment %}
+    <script src="{% static 'js/task-dots.js' %}"></script>
     {% block extra_js %}{% endblock %}
   </body>
 </html>

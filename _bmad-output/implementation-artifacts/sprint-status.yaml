@@ -582,3 +582,11 @@ development_status:
   # race-safe advance: the three phases run concurrently with bands 55/80/93 and phase 8
   # reports 95. Also fixed a failed phase reporting "complete" -> now "unavailable".
   22-19-live-phase-name-on-the-progress-bar: review
+  # ADDED 2026-08-19 — PRODUCT-OWNER DESIGN, after Story 22.19's two attempts at a single
+  # status line both failed for the same reason: the three analysis tasks run concurrently, so
+  # one `current_step` string can never name more than one of them, and the hand-picked
+  # percentage bands had drifted until two tasks both reported 93%. A row per task (new
+  # JobTask model, migration 0004) makes concurrency a non-problem and lets the bar be DERIVED
+  # from finished tasks. Supersedes 22.19's `advance_job_progress` mechanism entirely.
+  # Also fixed the browser tab still reading "History" (22.17 missed the title block).
+  22-20-job-task-list-progress: review

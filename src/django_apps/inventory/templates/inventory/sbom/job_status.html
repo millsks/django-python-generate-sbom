@@ -14,13 +14,13 @@
   copy says so rather than implying it spans the filter.
 {% endcomment %}
 
-{% block title %}History · {{ product_name_short }}{% endblock %}
+{% block title %}Job status · {{ product_name_short }}{% endblock %}
 
 {% block content %}
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
     <div>
       <h1 class="h3 mb-0">Job status</h1>
-      {% comment %} Story 22.16: History spans every organization now that the switcher is
+      {% comment %} Story 22.16: this page spans every organization now that the switcher is
         gone, so the subtitle no longer names one — the Organization column and its filter say
         which tenant each job belongs to. {% endcomment %}
       <p class="text-body-secondary mb-0">Every organization</p>
@@ -30,7 +30,7 @@
         guard against an accidental click.
 
         Story 22.16: the current filters ride along as hidden fields, so this deletes exactly
-        what the table is showing. Without them, making History cross-org would have turned
+        what the table is showing. Without them, making the page cross-org would have turned
         this button into a deployment-wide wipe behind a confirmation naming one org. {% endcomment %}
       <form method="post" action="{% url 'ui-jobs-delete-all-artifacts' %}"
             onsubmit="return confirm('Delete the SBOM and report files for {{ delete_all_scope|escapejs }}? The job records and their metadata are kept — only the downloadable files are removed. This cannot be undone.');">

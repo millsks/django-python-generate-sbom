@@ -62,6 +62,35 @@ def test_the_child_routes_moved_with_it() -> None:
     assert reverse("ui-job-row", args=["00000000-0000-0000-0000-000000000000"]).startswith("/job-status/")
 
 
+def test_the_browser_tab_says_job_status(default_org: Org) -> None:
+    """The `{% block title %}` was missed by the original rename and shipped saying "History".
+
+    Nothing caught it because the other guards check `reverse()` names, nav labels and template
+    `{% url %}` calls — none of which the title block touches. The tab is the one piece of a
+    page a user reads without scrolling, so it gets its own assertion.
+    """
+    import re
+
+    body = Client().get("/job-status").content.decode()
+    title = re.search(r"<title>(.*?)</title>", body, re.DOTALL)
+
+    assert title is not None
+    assert "History" not in title.group(1)
+    assert "Job status" in title.group(1)
+
+
+def test_no_template_still_renders_history_as_a_page_title() -> None:
+    """Asserted across every template, since only one page's title was wrong and by inspection."""
+    offenders = [
+        str(path.relative_to(SRC))
+        for path in SRC.rglob("*.html")
+        if "block title" in path.read_text(encoding="utf-8")
+        and "History" in path.read_text(encoding="utf-8").split("block title")[1].split("endblock")[0]
+    ]
+
+    assert not offenders, f"these still title themselves History: {offenders}"
+
+
 def test_the_page_and_the_nav_both_say_job_status(default_org: Org) -> None:
     body = Client().get("/job-status").content.decode()
 

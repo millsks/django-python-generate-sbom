@@ -19,6 +19,7 @@ DISSOLVED_LABELS = ["manifests", "sbom", "analysis"]
 # Every model the single app must own (AC #3: none of these class names changed).
 EXPECTED_INVENTORY_MODELS = {
     "AnalysisReport",
+    "JobTask",
     "ManifestUpload",
     "Org",
     "OrgApiKey",

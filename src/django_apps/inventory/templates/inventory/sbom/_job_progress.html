@@ -1,12 +1,18 @@
-{% load static %}
-{% comment %} The results page's live progress fragment (Story 21.11).
+{% comment %} The results page's live progress fragment (Stories 21.11, 22.20).
+
+  A LIST of the pipeline's tasks rather than a single "current step" line. The three analysis
+  tasks run concurrently in a chord (AD-4), so at times two of them really are running — a
+  sentence can only name one, which is what made the old display disagree with its own
+  percentage. A list says what is true.
 
   Polls on the same 5s convention as the Job Status rows. A terminal job's response carries an
   HX-Refresh header from the view, so the page reloads into the full results view without the
-  user touching anything — the server decides when the gate opens.
+  user touching anything — the server decides when the gate opens. The attributes are absent
+  once the job is finished, so this fragment cannot keep polling after the work is done.
 
-  Like the row trigger, the attributes are absent once the job is finished, so this fragment
-  cannot keep polling after the work is done.
+  The animated dots are counted by static/js/task-dots.js, which is loaded from base.html and
+  therefore survives the 5-second swap of this fragment. `data-task-key` is how it keeps each
+  task's count separate — a counter stored in here would restart on every swap.
 {% endcomment %}
 <div id="job-progress"
      {% if not job_is_terminal %}hx-get="{% url 'ui-job-progress' task_id=job.task_id %}"
@@ -15,16 +21,26 @@
   {% if job_is_terminal %}
     <p class="text-body-secondary">Finished.</p>
   {% else %}
-    {% comment %} `capfirst`, not `title`: the phase names contain "SBOM", which title-casing
-      would mangle to "Sbom". Only the first letter is touched. {% endcomment %}
-    <h2 class="h6">{{ job.current_step|default:"Queued"|capfirst }}</h2>
+    <ul class="list-unstyled font-monospace small mb-3">
+      {% for task in job_tasks %}
+        <li class="d-flex align-items-baseline gap-2 py-1
+                   {% if task.state == 'PENDING' %}text-body-tertiary{% endif %}">
+          <span>Task: {{ task.label }}</span>
+          {% if task.is_running %}
+            <span class="text-body-secondary" data-task-dots data-task-key="{{ task.key }}"></span>
+          {% elif task.state == 'COMPLETE' %}
+            <span class="text-success">[COMPLETE]</span>
+          {% elif task.state == 'ERROR' %}
+            <span class="text-danger">[ERROR]{% if task.detail %} <span class="text-body-secondary">{{ task.detail }}</span>{% endif %}</span>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+
     <div class="progress" role="progressbar" aria-valuenow="{{ job.progress }}"
          aria-valuemin="0" aria-valuemax="100" style="height: 8px;">
       <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: {{ job.progress }}%"></div>
     </div>
-    {% comment %} Story 22.19: "— this page updates itself" was removed. The striped, animated
-      bar and a phase name that visibly changes already say the page is live; the sentence was
-      re-read on every poll and told the reader nothing the movement did not. {% endcomment %}
     <p class="small text-body-secondary mt-2">{{ job.progress }}%</p>
   {% endif %}
 </div>

@@ -15,8 +15,7 @@ import structlog
 from django.conf import settings
 from django.core.files.storage import default_storage
 from django.db import transaction
-from django.db.models import QuerySet, Value
-from django.db.models.functions import Greatest
+from django.db.models import QuerySet
 from django.utils import timezone
 
 from inventory.common.users import UserT, user_ref
@@ -30,8 +29,9 @@ from .generation import (
     generate_sbom_document,
     sbom_extension,
 )
-from .models import SBOMJob
+from .models import JobTask, SBOMJob
 from .parsers import PackageSpec, resolve_packages
+from .pipeline_tasks import PIPELINE_TASKS, TASKS_BY_KEY, progress_for, task_label
 from .selectors import get_job_by_task_id
 
 __all__ = [
@@ -184,14 +184,16 @@ def submit_job(
 
 
 def create_job(org: Org, manifest: ManifestUpload, user: UserT | None, output_format: str) -> SBOMJob:
-    """Create a PENDING job (the view's initial status write; AD-12)."""
-    return SBOMJob.objects.create(
+    """Create a PENDING job with its full task list (AD-12, Story 22.20)."""
+    job = SBOMJob.objects.create(
         org=org,
         manifest=manifest,
         user=user_ref(user),
         output_format=output_format,
         status=SBOMJob.Status.PENDING,
     )
+    seed_job_tasks(job)
+    return job
 
 
 def update_job_status(
@@ -208,40 +210,91 @@ def update_job_status(
     )
 
 
-def advance_job_progress(task_id: str, progress: int, current_step: str) -> None:
-    """Name the phase doing the work, and move the bar forward only (Story 22.19).
+def seed_job_tasks(job: SBOMJob) -> None:
+    """Create the job's task rows, all pending (Story 22.20).
 
-    The two halves have **different rules**, which is the whole point of this function:
-
-    * ``progress`` may only increase. The three analysis phases run concurrently in a chord
-      whose order is undefined, and their bands are 55, 80 and 93, so a plain write can move
-      the bar backwards — which reads as a broken job. ``Greatest`` keeps it monotonic inside
-      the UPDATE itself, so two workers writing at the same instant cannot interleave into a
-      regression.
-    * ``current_step`` is always taken from the latest write. Guarding it by progress as well
-      looked tidier and was wrong: version currency (93) wins the race against vulnerability
-      scan (55) and licence compliance (80) within milliseconds, so those two phases never got
-      to name themselves at all. A real job went ``45% → 93%`` and the label appeared frozen on
-      "generate SBOM document" — the exact complaint this story exists to fix, reintroduced by
-      the guard meant to fix it.
-
-    The label therefore says what happened most recently, which is the honest answer while
-    several phases are in flight, and changes visibly throughout the run. Under the Windows
-    ``--pool=solo`` worker the phases are serial, so it is exact there.
-
-    Only a pending or running job is eligible — a whitelist rather than "not terminal" so a
-    status added later has to be considered. The chord callback can finalize while a group
-    member is still unwinding, and a job that flips back to "In progress" after showing Success
-    is worse than a stale percentage.
+    Seeded up front rather than on first touch so the results page can show the **whole**
+    pipeline from the moment a job is submitted — what is coming, not only what has happened.
+    A watcher can see there are eight steps before any of them start.
     """
+    JobTask.objects.bulk_create(
+        [JobTask(job=job, key=task.key, ordinal=task.ordinal) for task in PIPELINE_TASKS],
+        ignore_conflicts=True,
+    )
+
+
+def _upsert_task(task_id: str, key: str, **fields: object) -> None:
+    """Write one task's row, creating it if the job was never seeded.
+
+    Seeding happens in :func:`create_job`, but a row that is merely *expected* to exist is a
+    silent failure waiting to happen: the progress list renders empty and nothing says why.
+    Creating on demand means a job submitted through any path still reports, and the unique
+    constraint keeps a race between the start and finish writes from doubling the row.
+
+    An unknown key is ignored rather than invented — it would have no place in the ordered
+    list, and a task the pipeline does not declare should not be able to appear on screen.
+    """
+    task = TASKS_BY_KEY.get(key)
+    if task is None:
+        return
+    job = SBOMJob.objects.filter(task_id=task_id).first()
+    if job is None:
+        return
+    JobTask.objects.update_or_create(job=job, key=key, defaults={"ordinal": task.ordinal, **fields})
+
+
+def _sync_job_progress(task_id: str, current_step: str | None = None) -> None:
+    """Recompute the job's percentage from how many of its tasks have finished.
+
+    Derived rather than reported, which is the point of Story 22.20: the old hand-picked bands
+    (5, 20, 45, 55, 80, 93, 95, 97) drifted and collided — two different tasks both claimed 93%
+    — so the bar and the label could disagree. Counting terminal rows cannot.
+
+    ``SBOMJob.progress`` is kept up to date because the API exposes it (Story 21.24 AC #9) and
+    the Job Status table shows a compact percentage beside each row.
+    """
+    finished = JobTask.objects.filter(job__task_id=task_id, state__in=JobTask.TERMINAL).count()
+    fields: dict[str, object] = {"status": SBOMJob.Status.PROGRESS, "progress": progress_for(finished)}
+    if current_step is not None:
+        # Kept in step for the two surfaces that still want one line rather than a list: the
+        # Job Status table's compact cell, and `current_phase` in the API's status payload,
+        # which Story 21.24 AC #9 froze. With several tasks running, the most recently started
+        # one is the summary — the results page's list is where the full truth lives.
+        fields["current_step"] = current_step
     SBOMJob.objects.filter(
         task_id=task_id,
         status__in=(SBOMJob.Status.PENDING, SBOMJob.Status.PROGRESS),
-    ).update(
-        status=SBOMJob.Status.PROGRESS,
-        progress=Greatest("progress", Value(progress)),
-        current_step=current_step,
+    ).update(**fields)
+
+
+def start_job_task(task_id: str, key: str) -> None:
+    """Mark one task running, and stamp when it started.
+
+    Each task writes only its **own** row, so the three concurrent analysis tasks cannot race
+    each other — the reason this is a table rather than a field on the job.
+
+    ``started_at`` is what the animated dots are computed from in the browser: the client
+    derives the count from elapsed seconds rather than keeping a counter, so an htmx swap every
+    five seconds cannot reset the animation.
+    """
+    _upsert_task(task_id, key, state=JobTask.State.RUNNING, started_at=timezone.now(), finished_at=None, detail="")
+    _sync_job_progress(task_id, current_step=task_label(key))
+
+
+def finish_job_task(task_id: str, key: str, *, failed: bool = False, detail: str = "") -> None:
+    """Mark one task finished, successfully or not, and advance the bar.
+
+    An errored task still counts as finished: FR-4.5 keeps the job running when an analysis
+    task fails, so a bar that stalled on it would misreport a job that is still working.
+    """
+    _upsert_task(
+        task_id,
+        key,
+        state=JobTask.State.ERROR if failed else JobTask.State.COMPLETE,
+        finished_at=timezone.now(),
+        detail=detail[:200],
     )
+    _sync_job_progress(task_id)
 
 
 def record_generation(task_id: str, result_key: str, package_count: int) -> None:

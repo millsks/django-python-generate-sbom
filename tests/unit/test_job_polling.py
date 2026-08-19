@@ -184,13 +184,23 @@ def test_elapsed_advances_while_running_and_freezes_when_finished(org_client) ->
 
 @pytest.mark.django_db
 def test_the_results_page_shows_progress_and_polls_while_running(org_client) -> None:  # type: ignore[no-untyped-def]
+    """Story 22.20 replaced the single status line with the pipeline's task list.
+
+    The page used to echo whatever string `current_step` held; it now shows every task and
+    marks the running one, so the assertion is about a *declared* task rather than free text.
+    """
+    from inventory.sbom.services import finish_job_task, start_job_task
+
     client, org = org_client
-    job = _job(org, status=SBOMJob.Status.PROGRESS, progress=55, step="Resolving")
+    job = _job(org, status=SBOMJob.Status.PROGRESS, progress=0, step="")
+    finish_job_task(str(job.task_id), "detect")
+    start_job_task(str(job.task_id), "resolve")
 
     html = client.get(f"/results/{job.task_id}").content.decode()
 
-    assert "Resolving" in html
-    assert "55" in html
+    assert "Task: Resolve dependencies" in html
+    assert "data-task-dots" in html, "the running task should animate"
+    assert "[COMPLETE]" in html, "the finished one should say so"
     assert EXPECTED_TRIGGER in html
 
 

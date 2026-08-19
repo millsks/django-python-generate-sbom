@@ -226,8 +226,8 @@ def test_an_oversized_document_offers_a_download_instead_of_inlining_it(org_clie
     body = client.get(f"/results/{job.task_id}/sbom/raw").content.decode()
 
     assert "too large to display" in body
-    # The presigned download endpoint (AD-11), not a proxied stream.
-    assert f"/api/v1/sbom/result/{job.task_id}/" in body
+    # Still a redirect to storage (AD-11), not a proxied stream — through the page's own route.
+    assert f"/results/{job.task_id}/sbom/download" in body
     assert "bomFormat" not in body
 
 

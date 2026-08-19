@@ -47,10 +47,13 @@ __all__ = [
     "build_provenance",
     "create_job",
     "delete_job_artifacts",
+    "delete_job_record",
+    "delete_job_records",
     "estimate_seconds",
     "finalize_job",
     "generate_sbom_document",
     "mark_stale_job_timed_out",
+    "presigned_artifact_url",
     "purge_expired_artifacts",
     "record_analysis_summaries",
     "record_generation",
@@ -422,6 +425,24 @@ def delete_job_artifacts(job: SBOMJob) -> bool:
     return True
 
 
+#: Presigned artifact URLs live for 24 hours (AD-11).
+PRESIGN_TTL_SECONDS = 24 * 60 * 60
+
+
+def presigned_artifact_url(key: str) -> str:
+    """Return a presigned download URL for a stored artifact.
+
+    Django never streams artifact bytes; callers redirect to this URL instead (AD-11). One
+    implementation for both the API's 303 and the results page's download button, so the TTL
+    cannot drift between them.
+    """
+    try:
+        return default_storage.url(key, expire=PRESIGN_TTL_SECONDS)  # type: ignore[call-arg]
+    except TypeError:
+        # FileSystemStorage (dev/tests) has no presigning; url() takes only the name.
+        return default_storage.url(key)
+
+
 def delete_artifacts_for_jobs(jobs: Iterable[SBOMJob]) -> int:
     """Delete artifacts for each job via ``delete_job_artifacts``; return how many were purged.
 
@@ -429,6 +450,54 @@ def delete_artifacts_for_jobs(jobs: Iterable[SBOMJob]) -> int:
     duplicated deletion logic (AD-3). Jobs already cleaned are skipped and not counted.
     """
     return sum(1 for job in jobs if delete_job_artifacts(job))
+
+
+def delete_job_record(job: SBOMJob) -> None:
+    """Delete a job outright: every blob it owns, then the row and everything hanging off it.
+
+    Distinct from :func:`delete_job_artifacts`, which frees storage and keeps the record
+    (FR-8.1). This is the record-level delete Job Status offers: the SBOM blob, the analysis
+    report blobs, the uploaded manifest file, the ``AnalysisReport`` and ``JobTask`` rows (by
+    cascade), the ``SBOMJob`` row, and the ``ManifestUpload`` row once no other job needs it.
+    Irreversible — the caller is responsible for confirming.
+
+    Blobs go first and the row last: a job row with a missing blob is a state the app already
+    handles (Story 7.3), whereas a deleted row pointing at surviving blobs would leave storage
+    with nothing left to name it.
+    """
+    keys = [key for key in (job.result_key, *(r.artifact_key for r in job.reports.all())) if key]
+    manifest = job.manifest
+    manifest_file = manifest.file.name if manifest and manifest.file else None
+    # The manifest is shared if it has other jobs, so its file only goes with the last one.
+    last_job_for_manifest = manifest is not None and not manifest.jobs.exclude(pk=job.pk).exists()
+    if last_job_for_manifest and manifest_file:
+        keys.append(manifest_file)
+
+    for key in keys:
+        if default_storage.exists(key):
+            default_storage.delete(key)
+
+    org_id = job.org_id
+    task_id = str(job.task_id)
+    with transaction.atomic():
+        # Cascades to JobTask and AnalysisReport rows.
+        SBOMJob.objects.filter(task_id=job.task_id).delete()
+        if last_job_for_manifest and manifest is not None:
+            ManifestUpload.objects.filter(pk=manifest.pk).delete()
+    logger.info("job_record_deleted", task_id=task_id, org_id=org_id, blobs=len(keys))
+
+
+def delete_job_records(jobs: Iterable[SBOMJob]) -> int:
+    """Delete each job record via :func:`delete_job_record`; return how many were removed.
+
+    Bulk primitive behind Job Status's delete actions, reusing the single-job path so there is
+    one implementation of what "delete the record" means (AD-3).
+    """
+    deleted = 0
+    for job in jobs:
+        delete_job_record(job)
+        deleted += 1
+    return deleted
 
 
 def purge_expired_artifacts(now: datetime | None = None) -> int:

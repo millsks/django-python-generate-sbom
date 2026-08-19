@@ -18,15 +18,16 @@ from django.urls import path
 
 from inventory.sbom.pages import (
     CombinedExportView,
-    JobArtifactsDeleteAllView,
-    JobArtifactsDeleteView,
     JobManifestView,
     JobProgressPartialView,
+    JobRecordsDeleteAllView,
+    JobRecordsDeleteView,
     JobResultsView,
     JobRowPartialView,
     JobStatusView,
     JobTabPartialView,
     ReportExportView,
+    SbomDownloadView,
     SbomRawView,
     UploadPageView,
 )
@@ -50,8 +51,11 @@ urlpatterns = [
     # are separate so the org-wide one can carry its own admin gate rather than branching
     # inside a single view.
     path("job-status", JobStatusView.as_view(), name="ui-job-status"),
-    path("job-status/artifacts/delete", JobArtifactsDeleteView.as_view(), name="ui-jobs-delete-artifacts"),
-    path("job-status/artifacts/delete-all", JobArtifactsDeleteAllView.as_view(), name="ui-jobs-delete-all-artifacts"),
+    # Whole-record deletes: the job, its reports and tasks, and every file it owns. The paths
+    # and names say "records" because that is the blast radius; they deleted artifacts only
+    # until the buttons were widened.
+    path("job-status/records/delete", JobRecordsDeleteView.as_view(), name="ui-jobs-delete-records"),
+    path("job-status/records/delete-all", JobRecordsDeleteAllView.as_view(), name="ui-jobs-delete-all-records"),
     # Story 21.11 — live progress. ONE partial per surface and one trigger convention; a later
     # tab story must reuse these rather than adding a poller of its own.
     path("job-status/row/<uuid:task_id>", JobRowPartialView.as_view(), name="ui-job-row"),
@@ -64,6 +68,9 @@ urlpatterns = [
     # Story 21.13 — the raw document has its own endpoint so it never rides along in the
     # SBOM tab's payload.
     path("results/<uuid:task_id>/sbom/raw", SbomRawView.as_view(), name="ui-job-sbom-raw"),
+    # The results page's Download SBOM button. Its own route rather than a link at the
+    # org-scoped API, which 404s on the cross-org jobs this page opens (Story 22.16).
+    path("results/<uuid:task_id>/sbom/download", SbomDownloadView.as_view(), name="ui-job-sbom-download"),
     # Story 21.17 — Excel exports. Generated on demand and streamed; never stored, so AD-6 is
     # unaffected.
     path("results/<uuid:task_id>/export/<str:kind>.xlsx", ReportExportView.as_view(), name="ui-job-export"),

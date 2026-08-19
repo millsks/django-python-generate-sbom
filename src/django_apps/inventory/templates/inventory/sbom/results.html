@@ -16,8 +16,11 @@
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
     <div>
       <h1 class="h3 mb-0">{{ job.manifest.original_filename }}</h1>
+      {% comment %} job.org, not the acting org: since Story 22.16 a row from any org opens
+        here, so the acting org would name the wrong owner on a cross-org job. Both org and
+        manifest are select_related in get_any_job, so this costs no extra query. {% endcomment %}
       <p class="text-body-secondary mb-0">
-        {{ job.manifest.application_id }} &middot; {{ job.manifest.component_name }}
+        {{ job.org.name }} &middot; {{ job.manifest.application_id }} &middot; {{ job.manifest.component_name }}
       </p>
     </div>
     <a class="btn btn-sm btn-outline-secondary" href="{% url 'ui-job-status' %}">Back to job status</a>

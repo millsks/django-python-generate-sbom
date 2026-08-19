@@ -250,14 +250,16 @@ def test_each_metric_deep_links_to_its_tab(org_client) -> None:  # type: ignore[
 
 @pytest.mark.django_db
 def test_the_sbom_download_points_at_the_presigned_endpoint(org_client) -> None:  # type: ignore[no-untyped-def]
-    # AD-11: Django 303s to storage and never streams artifact bytes, so the page links at the
-    # existing endpoint rather than proxying the download through a new view.
+    # AD-11 still holds — the route redirects to storage rather than proxying bytes — but the
+    # button goes through the page's own route, not the org-scoped API it used to link at,
+    # which 404'd on the cross-org jobs Story 22.16 lets this page open.
     client, org = org_client
     job = _job(org)
 
     html = client.get(f"/results/{job.task_id}").content.decode()
 
-    assert f"/api/v1/sbom/result/{job.task_id}/" in html
+    assert f"/results/{job.task_id}/sbom/download" in html
+    assert "/api/v1/sbom/result/" not in html
 
 
 # --- AC #4: a failed phase is "Unavailable", never 0 ---------------------------------------
@@ -473,11 +475,24 @@ def test_following_a_sort_link_from_a_fragment_stays_on_that_tab(org_client) -> 
 
 
 @pytest.mark.django_db
-def test_the_subheading_leads_with_the_application_id(org_client) -> None:  # type: ignore[no-untyped-def]
-    """The App ID identifies the application; the component only qualifies it, so it reads second."""
+def test_the_subheading_reads_org_then_app_id_then_component(org_client) -> None:  # type: ignore[no-untyped-def]
+    """Widest scope first: the org owns the App ID, which the component only qualifies."""
     client, org = org_client
     job = _job(org)
 
     html = client.get(f"/results/{job.task_id}").content.decode()
 
-    assert "APP-1 &middot; billing" in html
+    assert "Acme &middot; APP-1 &middot; billing" in html
+
+
+@pytest.mark.django_db
+def test_the_subheading_names_the_jobs_org_not_the_acting_one(org_client) -> None:  # type: ignore[no-untyped-def]
+    """Story 22.16 lets any org's row open here, so the acting org would name the wrong owner."""
+    client, _ = org_client
+    outsider = register_user(email="outsider@example.com", password=PASSWORD)
+    other_org = create_org(name="Other", admin_user=outsider)
+    theirs = _job(other_org)
+
+    html = client.get(f"/results/{theirs.task_id}").content.decode()
+
+    assert "Other &middot; APP-1 &middot; billing" in html

@@ -1,7 +1,10 @@
 """Story 21.10: the job history table.
 
-Proves django-tables2 + django-filter can carry the four report tables that follow, and that
-the artifact-delete actions keep the invariant that matters: **job records always survive**.
+Proves django-tables2 + django-filter can carry the four report tables that follow, and pins
+the blast radius of the delete actions. That radius changed: the buttons used to purge
+artifacts and keep the record forever (FR-8.1); they now delete the **whole record** — job,
+tasks, reports, manifest and every stored file. The API's artifact-only delete is untouched,
+so these tests are the record of a UI decision, not of FR-8.1 being dropped everywhere.
 """
 
 from __future__ import annotations
@@ -21,8 +24,8 @@ from inventory.users.services import create_member, create_org, register_user
 PASSWORD = "pw12345678"
 
 HISTORY = "/job-status"
-DELETE = "/job-status/artifacts/delete"
-DELETE_ALL = "/job-status/artifacts/delete-all"
+DELETE = "/job-status/records/delete"
+DELETE_ALL = "/job-status/records/delete-all"
 
 
 def _client(email: str) -> Client:
@@ -221,30 +224,40 @@ def test_a_purged_job_is_indicated_and_its_delete_control_is_absent(admin_org) -
 
 
 @pytest.mark.django_db
-def test_deleting_a_purged_job_is_a_no_op(admin_org) -> None:  # type: ignore[no-untyped-def]
+def test_a_job_whose_artifacts_are_already_purged_still_deletes(admin_org) -> None:  # type: ignore[no-untyped-def]
+    """No blobs left to remove is not a reason to keep the record — the row is the point."""
     client, org = admin_org
     job = _job(org, result_key=None)
 
-    response = client.post(DELETE, {"task_ids": [str(job.task_id)]}, follow=True)
+    client.post(DELETE, {"task_ids": [str(job.task_id)]})
 
-    assert "Nothing to delete" in response.content.decode()
-    assert SBOMJob.objects.filter(pk=job.pk).exists()
-
-
-# --- AC #4: the three delete scopes -------------------------------------------------------
+    assert not SBOMJob.objects.filter(pk=job.pk).exists()
 
 
 @pytest.mark.django_db
-def test_deleting_one_job_keeps_the_job_row(admin_org) -> None:  # type: ignore[no-untyped-def]
+def test_deleting_nothing_selected_says_so(admin_org) -> None:  # type: ignore[no-untyped-def]
     client, org = admin_org
     job = _job(org)
 
+    response = client.post(DELETE, {}, follow=True)
+
+    assert "Select at least one job" in response.content.decode()
+    assert SBOMJob.objects.filter(pk=job.pk).exists()
+
+
+# --- AC #4: the delete scopes -------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_deleting_one_job_removes_the_record_and_its_manifest(admin_org) -> None:  # type: ignore[no-untyped-def]
+    client, org = admin_org
+    job = _job(org)
+    manifest_pk = job.manifest_id
+
     client.post(DELETE, {"task_ids": [str(job.task_id)]})
 
-    job.refresh_from_db()
-    # FR-8.1: only the blobs and their keys go; the record and its metadata are forever.
-    assert job.result_key is None
-    assert SBOMJob.objects.filter(pk=job.pk).exists()
+    assert not SBOMJob.objects.filter(pk=job.pk).exists()
+    assert not ManifestUpload.objects.filter(pk=manifest_pk).exists()
 
 
 @pytest.mark.django_db
@@ -256,44 +269,45 @@ def test_deleting_a_selection_covers_exactly_the_named_jobs(admin_org) -> None: 
     client.post(DELETE, {"task_ids": [str(job.task_id) for job in chosen]})
 
     for job in chosen:
-        job.refresh_from_db()
-        assert job.result_key is None
-    untouched.refresh_from_db()
-    assert untouched.result_key is not None
+        assert not SBOMJob.objects.filter(pk=job.pk).exists()
+    assert SBOMJob.objects.filter(pk=untouched.pk).exists()
 
 
 @pytest.mark.django_db
-def test_the_org_wide_delete_keeps_every_job_row(admin_org) -> None:  # type: ignore[no-untyped-def]
+def test_the_page_wide_delete_removes_every_listed_record(admin_org) -> None:  # type: ignore[no-untyped-def]
     client, org = admin_org
     for index in range(3):
         _job(org, filename=f"m{index}.txt")
-    before = SBOMJob.objects.count()
 
     client.post(DELETE_ALL)
 
-    assert SBOMJob.objects.count() == before
-    assert not SBOMJob.objects.filter(org=org, result_key__isnull=False).exists()
+    assert not SBOMJob.objects.exists()
+    assert not ManifestUpload.objects.exists()
 
 
 @pytest.mark.django_db
-def test_a_member_can_still_delete_selected_artifacts(member_client: Client, admin_org) -> None:  # type: ignore[no-untyped-def]
+def test_a_member_can_still_delete_selected_records(member_client: Client, admin_org) -> None:  # type: ignore[no-untyped-def]
     # Per-job and bulk deletion are member capabilities; only the org-wide sweep is admin-only.
     _, org = admin_org
     job = _job(org)
 
     member_client.post(DELETE, {"task_ids": [str(job.task_id)]})
 
-    job.refresh_from_db()
-    assert job.result_key is None
+    assert not SBOMJob.objects.filter(pk=job.pk).exists()
 
 
 @pytest.mark.django_db
-def test_the_confirmations_say_the_job_records_are_kept(admin_org) -> None:  # type: ignore[no-untyped-def]
-    # The SPA's copy was explicit about this and the meaning must survive the conversion.
+def test_the_confirmations_say_the_whole_record_goes(admin_org) -> None:  # type: ignore[no-untyped-def]
+    """The old copy promised the records were kept, which is now the opposite of the truth."""
     client, org = admin_org
     _job(org)
+
     html = client.get(HISTORY).content.decode()
-    assert html.count("job records") >= 2  # the selection confirm and the org-wide confirm
+
+    assert html.count("This cannot be undone") >= 2  # the selection confirm and the page-wide one
+    assert html.count("the whole record") >= 2
+    assert "records are kept" not in html
+    assert "job records and their metadata are kept" not in html
 
 
 # --- AC #5: org scoping --------------------------------------------------------------------
@@ -328,8 +342,7 @@ def test_another_orgs_job_can_be_deleted_by_task_id(admin_org) -> None:  # type:
 
     client.post(DELETE, {"task_ids": [str(theirs.task_id)]})
 
-    theirs.refresh_from_db()
-    assert theirs.result_key is None
+    assert not SBOMJob.objects.filter(pk=theirs.pk).exists()
 
 
 @pytest.mark.django_db
@@ -348,10 +361,8 @@ def test_the_delete_all_follows_the_org_filter(admin_org) -> None:  # type: igno
 
     client.post(DELETE_ALL, {"org": str(other_org.pk)})
 
-    theirs.refresh_from_db()
-    ours.refresh_from_db()
-    assert theirs.result_key is None, "the filtered org's artifacts should go"
-    assert ours.result_key is not None, "an org outside the filter must be untouched"
+    assert not SBOMJob.objects.filter(pk=theirs.pk).exists(), "the filtered org's records should go"
+    assert SBOMJob.objects.filter(pk=ours.pk).exists(), "an org outside the filter must be untouched"
 
 
 @pytest.mark.django_db
@@ -368,10 +379,7 @@ def test_the_delete_all_without_a_filter_really_does_mean_all(admin_org) -> None
 
     client.post(DELETE_ALL)
 
-    theirs.refresh_from_db()
-    ours.refresh_from_db()
-    assert theirs.result_key is None
-    assert ours.result_key is None
+    assert not SBOMJob.objects.filter(pk__in=[theirs.pk, ours.pk]).exists()
 
 
 # --- Hardening -----------------------------------------------------------------------------

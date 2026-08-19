@@ -46,7 +46,13 @@ from .forms import ManifestUploadForm
 from .models import SBOMJob
 from .overview import build_metrics
 from .selectors import get_all_jobs, get_any_job, read_inline_document
-from .services import TERMINAL_STATUSES, ConcurrencyLimitError, delete_artifacts_for_jobs, submit_job
+from .services import (
+    TERMINAL_STATUSES,
+    ConcurrencyLimitError,
+    delete_job_records,
+    presigned_artifact_url,
+    submit_job,
+)
 from .tables import JobTable, SbomComponentTable
 
 
@@ -165,22 +171,27 @@ class JobStatusView(OrgContextMixin, SingleTableMixin, FilterView):
         return f"{where} matching the current filters ({', '.join(parts)})" if parts else where
 
 
-class _ArtifactDeleteMixin(OrgContextMixin):
+class _RecordDeleteMixin(OrgContextMixin):
     """Shared redirect target for the delete actions."""
 
     def _back(self) -> HttpResponse:
         return HttpResponseRedirect(reverse("ui-job-status"))
 
 
-class JobArtifactsDeleteView(_ArtifactDeleteMixin, View):
-    """Delete artifacts for one job or for a page selection (Story 7.2, FR-8.2).
+class JobRecordsDeleteView(_RecordDeleteMixin, View):
+    """Delete whole job records for one job or for a page selection.
+
+    Deletes the record, not just its files: the job row, its tasks and analysis reports, every
+    blob it owns, and the uploaded manifest once no other job needs it. This deliberately goes
+    further than the artifact-only delete these buttons used to perform — the API keeps that
+    narrower operation, where FR-8.1's "records are retained" still holds.
 
     Single and bulk are the same operation with a different number of ids, so they share an
-    endpoint rather than duplicating the org scoping.
+    endpoint rather than duplicating the scoping.
     """
 
     def post(self, request: HttpRequest) -> HttpResponse:
-        """Purge the named jobs' artifacts, keeping every job record."""
+        """Delete the named jobs outright."""
         task_ids = request.POST.getlist("task_ids")
         if not task_ids:
             messages.error(request, "Select at least one job.")
@@ -189,37 +200,36 @@ class JobArtifactsDeleteView(_ArtifactDeleteMixin, View):
         # Cross-org since Story 22.16, because the page is: the ids come from checkboxes on
         # rows the caller can see, so scoping the delete to one org would silently skip rows
         # they explicitly ticked. Deletion is still confined to the ids actually submitted.
-        jobs = get_all_jobs().filter(task_id__in=task_ids, result_key__isnull=False)
-        deleted = delete_artifacts_for_jobs(jobs)
+        jobs = get_all_jobs().filter(task_id__in=task_ids)
+        deleted = delete_job_records(jobs)
 
         if deleted:
-            messages.success(request, f"Deleted artifacts for {deleted} job(s). The job records were kept.")
+            messages.success(request, f"Deleted {deleted} job record(s) and all of their files.")
         else:
-            messages.info(request, "Nothing to delete — those jobs have no artifacts.")
+            messages.info(request, "Nothing to delete — those jobs no longer exist.")
         return self._back()
 
 
-class JobArtifactsDeleteAllView(OrgContextMixin, View):
-    """Delete the artifacts of every job **currently listed** on Job Status (FR-8.5).
+class JobRecordsDeleteAllView(OrgContextMixin, View):
+    """Delete every job **currently listed** on Job Status, records and all.
 
     Story 22.16 made the page cross-org, which would have quietly turned this from "every job
     in my org" into "every job in the deployment" — the same button, the same confirmation
-    naming a single org, and a far larger blast radius. So it now deletes exactly what the
-    page is showing: the page's filters are re-applied here from the submitted form.
+    naming a single org, and a far larger blast radius. So it deletes exactly what the page is
+    showing: the page's filters are re-applied here from the submitted form.
 
     That keeps the button honest in both directions. Filter to one organization and it deletes
-    that organization's artifacts; clear the filters and it really does mean all, which is what
-    the confirmation then says.
+    that organization's jobs; clear the filters and it really does mean all, which is what the
+    confirmation then says.
     """
 
     def post(self, request: HttpRequest) -> HttpResponse:
-        """Purge artifacts for the filtered set, keeping every job record."""
+        """Delete the filtered set outright."""
         # Bound against POST: the page's form posts its current filter values as hidden
         # fields, so what is deleted is what was on screen when the button was pressed.
-        filtered = JobFilterSet(request.POST, queryset=get_all_jobs()).qs
-        jobs = filtered.filter(result_key__isnull=False)
-        deleted = delete_artifacts_for_jobs(jobs)
-        messages.success(request, f"Deleted artifacts for {deleted} job(s). The job records were kept.")
+        jobs = JobFilterSet(request.POST, queryset=get_all_jobs()).qs
+        deleted = delete_job_records(jobs)
+        messages.success(request, f"Deleted {deleted} job record(s) and all of their files.")
         return HttpResponseRedirect(reverse("ui-job-status"))
 
 
@@ -659,3 +669,22 @@ class CombinedExportView(_JobScopedView):
         if not sheets:
             raise Http404
         return _xlsx_response(sheets, f"report-{job.task_id}.xlsx")
+
+
+class SbomDownloadView(_JobScopedView):
+    """Download the SBOM blob for the results page's "Download SBOM" button.
+
+    The button used to link straight at ``/api/v1/sbom/result/{id}/``, which is **org-scoped**
+    (AD-8, and rightly so — an API key pins one tenant). Since Story 22.16 the results page
+    opens any org's job, so on a cross-org job the page rendered fine and the button answered
+    ``{"error": "Job not found."}``. This is the same 303-to-presigned-URL redirect (AD-11)
+    reached through the page's own scoping, so the button works wherever the page does.
+    """
+
+    def get(self, request: HttpRequest, task_id: str) -> HttpResponse:
+        """Redirect to a presigned URL for the SBOM, or 404 when there is nothing to serve."""
+        job = self.get_job_or_404(task_id)
+        if job.status != SBOMJob.Status.SUCCESS or not job.result_key:
+            # Never produced, still running, or purged (Story 7.3) — the page already says so.
+            raise Http404
+        return HttpResponseRedirect(presigned_artifact_url(job.result_key))

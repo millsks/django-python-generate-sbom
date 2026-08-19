@@ -13,7 +13,7 @@
     <p class="mb-2">
       This document is {{ size_bytes|filesizeformat }}, too large to display in the browser.
     </p>
-    <a class="btn btn-sm btn-primary" href="/api/v1/sbom/result/{{ job.task_id }}/">Download SBOM</a>
+    <a class="btn btn-sm btn-primary" href="{% url 'ui-job-sbom-download' job.task_id %}">Download SBOM</a>
   </div>
 {% else %}
   <pre class="border rounded p-3 small mb-0" style="max-height: 600px; overflow: auto;"><code>{{ raw }}</code></pre>

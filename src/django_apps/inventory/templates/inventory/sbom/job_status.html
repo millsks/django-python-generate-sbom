@@ -12,6 +12,9 @@
 
   Selection covers the CURRENT PAGE only, matching the SPA's toggleAll, and the confirmation
   copy says so rather than implying it spans the filter.
+
+  Both delete buttons remove whole RECORDS, not just artifacts: job, tasks, reports, manifest
+  and every stored file. The confirmations are the only guard, so they name what goes.
 {% endcomment %}
 
 {% block title %}Job status · {{ product_name_short }}{% endblock %}
@@ -32,13 +35,13 @@
         Story 22.16: the current filters ride along as hidden fields, so this deletes exactly
         what the table is showing. Without them, making the page cross-org would have turned
         this button into a deployment-wide wipe behind a confirmation naming one org. {% endcomment %}
-      <form method="post" action="{% url 'ui-jobs-delete-all-artifacts' %}"
-            onsubmit="return confirm('Delete the SBOM and report files for {{ delete_all_scope|escapejs }}? The job records and their metadata are kept — only the downloadable files are removed. This cannot be undone.');">
+      <form method="post" action="{% url 'ui-jobs-delete-all-records' %}"
+            onsubmit="return confirm('Permanently delete {{ delete_all_scope|escapejs }}? This removes the whole record — the job and its history, the uploaded manifest, the SBOM, and every report file. This cannot be undone.');">
         {% csrf_token %}
         {% for name, value in active_filters %}
           <input type="hidden" name="{{ name }}" value="{{ value }}">
         {% endfor %}
-        <button type="submit" class="btn btn-sm btn-outline-danger">Delete all artifacts</button>
+        <button type="submit" class="btn btn-sm btn-outline-danger">Delete all records</button>
       </form>
 
   </div>
@@ -60,8 +63,8 @@
     </div>
   </form>
 
-  <form method="post" action="{% url 'ui-jobs-delete-artifacts' %}" id="bulk-delete"
-        onsubmit="return confirm('Delete the SBOM and report files for the selected jobs on this page? The job records and their metadata are kept — only the downloadable files are removed.');">
+  <form method="post" action="{% url 'ui-jobs-delete-records' %}" id="bulk-delete"
+        onsubmit="return confirm('Permanently delete the selected jobs on this page? This removes the whole record — the job and its history, the uploaded manifest, the SBOM, and every report file. This cannot be undone.');">
     {% csrf_token %}
 
     {% comment %} `table-responsive` so a narrow viewport scrolls the TABLE rather than the
@@ -71,7 +74,7 @@
     </div>
 
     <button type="submit" class="btn btn-sm btn-outline-danger" id="delete-selected">
-      Delete selected artifacts
+      Delete selected records
     </button>
     <span class="small text-body-secondary ms-2">Applies to the rows selected on this page.</span>
   </form>

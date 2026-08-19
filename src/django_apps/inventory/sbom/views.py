@@ -12,7 +12,6 @@ import uuid
 from collections.abc import Iterable
 from typing import cast
 
-from django.core.files.storage import default_storage
 from django.db.models import QuerySet
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema, extend_schema_view
@@ -49,12 +48,12 @@ from .services import (
     delete_job_artifacts,
     estimate_seconds,
     mark_stale_job_timed_out,
+    presigned_artifact_url,
     submit_job,
 )
 
 _NO_ACTIVE_ORG = {"error": "No active org.", "code": "no_active_org"}
 _ACTIVE_STATUSES = [SBOMJob.Status.PENDING, SBOMJob.Status.PROGRESS]
-_PRESIGN_TTL_SECONDS = 24 * 60 * 60  # 24-hour presigned URL TTL (AD-11)
 
 
 class GenerateJobView(APIView):
@@ -283,11 +282,7 @@ class ResultJobView(APIView):
                 {"error": "Result not ready.", "code": "not_ready"},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        try:
-            url = default_storage.url(job.result_key, expire=_PRESIGN_TTL_SECONDS)  # type: ignore[call-arg]
-        except TypeError:
-            # FileSystemStorage (dev/tests) has no presigning; url() takes only the name.
-            url = default_storage.url(job.result_key)
+        url = presigned_artifact_url(job.result_key)
         return Response(status=status.HTTP_303_SEE_OTHER, headers={"Location": url})
 
 

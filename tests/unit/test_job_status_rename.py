@@ -57,7 +57,7 @@ def test_the_new_route_name_resolves_to_the_new_path() -> None:
 
 def test_the_child_routes_moved_with_it() -> None:
     """The delete and polling endpoints sat under `/history/`; a half-move would strand them."""
-    for name in ("ui-jobs-delete-artifacts", "ui-jobs-delete-all-artifacts"):
+    for name in ("ui-jobs-delete-records", "ui-jobs-delete-all-records"):
         assert reverse(name).startswith("/job-status/"), name
     assert reverse("ui-job-row", args=["00000000-0000-0000-0000-000000000000"]).startswith("/job-status/")
 

@@ -1,7 +1,16 @@
 # Why there is no SPEC.md in this project
 
 **Date:** 2026-07-04
-**Status:** Intentional — not a gap in the BMAD flow.
+**Status:** SUPERSEDED 2026-08-19 — a SPEC.md now exists at
+`_bmad-output/specs/spec-django-python-generate-sbom/SPEC.md`, created with `bmad-spec` at the
+product owner's request. The reasoning below still stands as the record of why one was not
+created originally, and the last section of this page is exactly what was done.
+
+The one thing that changed the calculus: after Epics 21 and 22 the PRD is **stale** — it
+describes registration, login, org roles, a React SPA and a Compose-first distribution, none of
+which the system still has. The spec is therefore not a redundant condensation of the PRD but
+the first artifact that describes the system as it stands, with `divergences.md` reconciling the
+two and `traceability.md` showing where all 71 PRD requirements went.
 
 ## Short answer
 

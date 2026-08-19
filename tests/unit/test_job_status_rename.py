@@ -82,7 +82,7 @@ def test_the_browser_tab_says_job_status(default_org: Org) -> None:
 def test_no_template_still_renders_history_as_a_page_title() -> None:
     """Asserted across every template, since only one page's title was wrong and by inspection."""
     offenders = [
-        str(path.relative_to(SRC))
+        path.relative_to(SRC).as_posix()
         for path in SRC.rglob("*.html")
         if "block title" in path.read_text(encoding="utf-8")
         and "History" in path.read_text(encoding="utf-8").split("block title")[1].split("endblock")[0]
@@ -112,7 +112,9 @@ def test_no_template_still_reverses_the_old_route_name() -> None:
     branch — so it is asserted across every template rather than by visiting each page.
     """
     offenders = [
-        str(path.relative_to(SRC)) for path in SRC.rglob("*.html") if "ui-history" in path.read_text(encoding="utf-8")
+        path.relative_to(SRC).as_posix()
+        for path in SRC.rglob("*.html")
+        if "ui-history" in path.read_text(encoding="utf-8")
     ]
 
     assert not offenders, f"still reversing the removed route name: {offenders}"

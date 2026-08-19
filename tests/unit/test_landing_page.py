@@ -12,6 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from django.conf import settings
 from django.test import Client
 from django.utils.html import escape
 
@@ -111,9 +112,9 @@ def test_the_landing_title_uses_the_full_name_and_the_brand_uses_the_short_form(
     """Story 21.3's two-form rule, applied where it is most visible."""
     html = Client().get(HOME).content.decode()
 
-    assert "<title>Framework for Automated Bill of Materials &amp; Risk Inventory in Code</title>" in html
+    assert f"<title>{escape(settings.PRODUCT_NAME)}</title>" in html
     # The header brand stays short.
-    assert ">FABRIC</span>" in html
+    assert f">{escape(settings.PRODUCT_NAME_SHORT)}</span>" in html
 
 
 @pytest.mark.django_db
@@ -212,7 +213,7 @@ def test_inner_pages_keep_the_spa_title_form() -> None:
 
     for path, leading in (("/upload", "Upload"), ("/job-status", "Job status"), ("/keys", "API keys")):
         html = client.get(path).content.decode()
-        assert f"<title>{leading} · FABRIC</title>" in html, path
+        assert f"<title>{leading} · {escape(settings.PRODUCT_NAME_SHORT)}</title>" in html, path
 
 
 @pytest.mark.django_db
@@ -237,13 +238,11 @@ def test_the_external_links_are_settings_driven_with_the_spa_defaults() -> None:
 
 
 @pytest.mark.django_db
-def test_the_heading_breaks_after_the_ampersand() -> None:
-    """The name reads as two halves — the framework, and what it inventories.
+def test_the_heading_carries_the_full_product_name() -> None:
+    """The landing page is where the name is spelled out — the top bar shows only the short form.
 
-    Split by the view rather than by putting a `<br>` in the setting, because that one string
-    is also the `<title>` and the footer, where markup would be escaped and shown literally.
-    And rather than left to the browser, because the natural wrap point moves with the
-    viewport.
+    Read from settings rather than pinned to a literal: hardcoding it made a product rename
+    fail the suite, which defeats Story 21.3's rule that the name is configuration.
     """
     import re
 
@@ -251,16 +250,7 @@ def test_the_heading_breaks_after_the_ampersand() -> None:
     heading = re.search(r"<h1[^>]*>(.*?)</h1>", html, re.DOTALL)
 
     assert heading is not None
-    assert "Framework for Automated Bill of Materials &amp;<br>" in re.sub(r"\s*<br>\s*", "<br>", heading.group(1))
-    assert "Risk Inventory in Code" in heading.group(1)
-
-
-def test_a_name_without_an_ampersand_yields_one_line() -> None:
-    """A future rename must not be able to produce an empty second line."""
-    from django_service.views import _heading_lines
-
-    assert _heading_lines("Something Plain") == ["Something Plain"]
-    assert _heading_lines("Trailing &") == ["Trailing &"]
+    assert escape(settings.PRODUCT_NAME) in " ".join(heading.group(1).split())
 
 
 @pytest.mark.django_db

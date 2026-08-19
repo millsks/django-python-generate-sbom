@@ -638,3 +638,11 @@ development_status:
   # <pre> on a normal page rather than served as a file: a manifest is whatever someone
   # uploaded, and a raw response would let it choose how the browser treats it.
   22-26-application-component-and-manifest-review: review
+  # ADDED 2026-08-19 after the product owner renamed the product to PyFABRIC (commit a2c627e)
+  # and the suite failed. BOTH defects were in the TESTS, not the product: five of them pinned
+  # the product name's literal value — undoing Story 21.3's "the name is configuration" rule —
+  # and the docs nav check compared str(path.relative_to(...)) against mkdocs.yml's forward
+  # slashes, which fails on Windows only. A new guard bans that path pattern across the suite
+  # and found five more instances on its first run. NOTE: a2c627e also removed the landing
+  # heading's line break requested in 22.23; left removed, flagged to the product owner.
+  22-27-tests-must-not-pin-configuration: review

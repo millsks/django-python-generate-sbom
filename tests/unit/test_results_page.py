@@ -470,3 +470,14 @@ def test_following_a_sort_link_from_a_fragment_stays_on_that_tab(org_client) -> 
     active = re.findall(r'<a class="nav-link active"[^>]*hx-push-url="\?tab=([a-z]+)"', page)
 
     assert active == ["versions"], f"following {link} landed on {active}"
+
+
+@pytest.mark.django_db
+def test_the_subheading_leads_with_the_application_id(org_client) -> None:  # type: ignore[no-untyped-def]
+    """The App ID identifies the application; the component only qualifies it, so it reads second."""
+    client, org = org_client
+    job = _job(org)
+
+    html = client.get(f"/results/{job.task_id}").content.decode()
+
+    assert "APP-1 &middot; billing" in html

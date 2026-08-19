@@ -127,3 +127,25 @@ def test_pywin32_is_not_installed_on_every_platform() -> None:
     manifest = tomllib.loads((REPO / "pixi.toml").read_text(encoding="utf-8"))
 
     assert "pywin32" not in manifest["dependencies"]
+
+
+def test_no_test_compares_a_relative_path_as_a_platform_string() -> None:
+    """Rendering a relative path with the built-in string constructor gives backslashes on Windows.
+
+    That is fine in a failure message and wrong in a comparison: a test that matched
+    `docs/api/jobs.md` against `docs\\api\\jobs.md` passed everywhere the author looked and
+    failed the entire Windows job. `as_posix()` is the separator-independent form.
+
+    Only *comparisons* are flagged. Building a message with an f-string is allowed, since the
+    slashes there are cosmetic — which is why this checks assignment and set/comprehension
+    contexts rather than banning the call outright.
+    """
+    import re
+
+    offenders = []
+    for path in (REPO / "tests").rglob("*.py"):
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if re.search("str" + r"\(\s*\w+\.relative_to\(", line):  # split so this line is not a hit
+                offenders.append(f"{path.relative_to(REPO).as_posix()}:{number}")
+
+    assert not offenders, f"compare paths with .as_posix(), not str(): {offenders}"

@@ -10,7 +10,9 @@ import re
 from pathlib import Path
 
 import pytest
+from django.conf import settings
 from django.test import Client
+from django.utils.html import escape
 
 from inventory.users.models import OrgMembership
 from inventory.users.services import create_org, grant_global_admin, register_user
@@ -105,8 +107,8 @@ def test_nav_is_rendered_twice_so_desktop_and_mobile_cannot_drift() -> None:
 def test_both_product_name_forms_come_from_the_single_definition() -> None:
     html = _nav_html(Client())
     # The full name contains "&", which the template escapes.
-    assert "Framework for Automated Bill of Materials &amp; Risk Inventory in Code" in html
-    assert "FABRIC" in html  # header brand, short form
+    assert escape(settings.PRODUCT_NAME) in html  # footer, full form
+    assert escape(settings.PRODUCT_NAME_SHORT) in html  # header brand, short form
     # The SPA's old name must not survive anywhere in the shell.
     assert "Generate SBOM" not in html
 
@@ -125,7 +127,7 @@ def test_no_template_hardcodes_the_product_name() -> None:
     offenders = []
     for path in TEMPLATE_ROOT.rglob("*.html"):
         markup = re.sub(r"{%\s*comment\s*%}.*?{%\s*endcomment\s*%}", "", path.read_text(encoding="utf-8"), flags=re.S)
-        if "Framework for Automated Bill of Materials" in markup or "FABRIC" in markup:
+        if settings.PRODUCT_NAME in markup or settings.PRODUCT_NAME_SHORT in markup:
             offenders.append(path.name)
 
     assert not offenders, f"templates hardcoding the product name: {offenders}"
@@ -256,13 +258,16 @@ def test_the_header_shows_the_acronym_alone() -> None:
     brand = re.search(r'<a class="navbar-brand.*?</a>', html, re.DOTALL)
 
     assert brand is not None, "the header brand is missing"
-    assert "FABRIC" in brand.group(0)
-    assert "Framework for Automated" not in brand.group(0), "the bar should not carry the expansion"
+    assert escape(settings.PRODUCT_NAME_SHORT) in brand.group(0)
+    assert escape(settings.PRODUCT_NAME) not in brand.group(0), "the bar should not carry the expansion"
 
 
 def test_the_acronym_is_written_without_dots() -> None:
-    """A deliberate choice, and the kind that gets "corrected" by someone tidying up."""
-    from django.conf import settings
+    """A deliberate choice, and the kind that gets "corrected" by someone tidying up.
 
-    assert settings.PRODUCT_NAME_SHORT == "FABRIC"
+    Asserted as a property rather than against a literal: pinning the value made a product
+    rename fail the suite, which is exactly what Story 21.3's "the name is configuration" rule
+    exists to avoid.
+    """
     assert "." not in settings.PRODUCT_NAME_SHORT
+    assert settings.PRODUCT_NAME_SHORT == settings.PRODUCT_NAME_SHORT.strip()

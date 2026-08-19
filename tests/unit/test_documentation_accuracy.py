@@ -77,7 +77,7 @@ def test_no_doc_links_to_a_page_that_was_deleted(path: Path) -> None:
     """
     for target in re.findall(r"\]\((?!https?:|#|/)([^)#]+\.md)", _text(path)):
         resolved = (path.parent / target).resolve()
-        assert resolved.exists(), f"{path.relative_to(REPO)} links to missing {target}"
+        assert resolved.exists(), f"{path.relative_to(REPO).as_posix()} links to missing {target}"
 
 
 @pytest.mark.parametrize("path", sorted(DOCS.rglob("*.md")), ids=lambda p: p.name)
@@ -111,7 +111,10 @@ def test_every_doc_in_the_nav_exists_and_every_page_is_in_the_nav() -> None:
     nav = (REPO / "mkdocs.yml").read_text(encoding="utf-8")
     listed = set(re.findall(r"([a-z0-9\-]+/[a-z0-9\-/]+\.md)", nav)) | set(re.findall(r"\s([a-z\-]+\.md)", nav))
 
-    on_disk = {str(path.relative_to(DOCS)) for path in DOCS.rglob("*.md")}
+    # `as_posix()`, not `str()`: on Windows `relative_to` yields `api\\analysis.md` while
+    # mkdocs.yml uses forward slashes, so every page looked unlisted and this failed the whole
+    # Windows job. Comparing rendered paths as strings is only safe once the separator is one.
+    on_disk = {path.relative_to(DOCS).as_posix() for path in DOCS.rglob("*.md")}
     unlisted = sorted(on_disk - listed - {"index.md"})
 
     assert not unlisted, f"these pages are not reachable from the nav: {unlisted}"

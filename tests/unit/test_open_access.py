@@ -129,7 +129,7 @@ def test_the_access_control_names_no_longer_exist(name: str) -> None:
 def test_no_source_file_imports_djangos_auth_mixins() -> None:
     """`LoginRequiredMixin` and friends are how the gate would most easily reappear."""
     offenders = [
-        str(path.relative_to(SRC))
+        path.relative_to(SRC).as_posix()
         for path in SRC.rglob("*.py")
         if "django.contrib.auth.mixins" in path.read_text(encoding="utf-8")
     ]

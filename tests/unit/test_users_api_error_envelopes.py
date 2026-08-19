@@ -232,7 +232,9 @@ def test_a_retired_error_code_appears_nowhere_in_the_source(code: str) -> None:
     from pathlib import Path
 
     src = Path(__file__).resolve().parents[2] / "src"
-    offenders = [str(path.relative_to(src)) for path in src.rglob("*.py") if code in path.read_text(encoding="utf-8")]
+    offenders = [
+        path.relative_to(src).as_posix() for path in src.rglob("*.py") if code in path.read_text(encoding="utf-8")
+    ]
 
     assert not offenders, f"'{code}' is no longer returned by anything but still appears in {offenders}"
 

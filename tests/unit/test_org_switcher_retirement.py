@@ -70,7 +70,7 @@ def test_the_switcher_template_is_deleted() -> None:
 def test_no_template_still_includes_the_switcher() -> None:
     """Deleting the partial without removing its `{% include %}` would 500 every page."""
     offenders = [
-        str(path.relative_to(SRC))
+        path.relative_to(SRC).as_posix()
         for path in SRC.rglob("*.html")
         if "_org_switcher" in path.read_text(encoding="utf-8")
     ]

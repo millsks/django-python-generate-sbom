@@ -5,7 +5,7 @@ Lens**, grouped by layer. This is not an exhaustive dependency list — the floo
 are those declared in `pixi.toml`, and exact resolved versions live in `pixi.lock`.
 
 For how these pieces fit together, see [Architecture](architecture.md); for getting them
-running locally, see [Local Development](setup.md).
+running locally, see [Local Development](../developer/setup.md).
 
 ---
 

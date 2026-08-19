@@ -114,6 +114,10 @@ flower = ">=2,<3"
 honcho = ">=2,<3"
 mkdocs-material = ">=9.5,<10"
 mkdocstrings-python = ">=1.11,<2"
+# Serves the pre-move URLs of the five design pages that moved from developer/ to
+# architecture/. The docs site is published to GitHub Pages, so without this a moved
+# page silently 404s every existing bookmark and inbound link to it.
+mkdocs-redirects = ">=1.2,<2"
 
 [environments]
 default = { features = ["dev"], solve-group = "default" }

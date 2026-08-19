@@ -3,8 +3,8 @@
 A file-by-file tour of **`src/django_apps/inventory/`** — the single reusable Django app
 that holds all of this project's domain behaviour.
 
-Where [Architecture](architecture.md) explains *why* the system is shaped as it is and
-[Project Layout](project-layout.md) says *where* things live, this page says **what each
+Where [Architecture](../architecture/architecture.md) explains *why* the system is shaped as it is and
+[Project Layout](../architecture/project-layout.md) says *where* things live, this page says **what each
 file does**, what invariant it carries, and which of its neighbours it may talk to. It is
 written for someone about to change one of these files.
 
@@ -1189,8 +1189,8 @@ depends on neither of them by name.
 
 ## See also
 
-- [Architecture](architecture.md) — the layered design and its invariants
-- [SBOM Pipeline](pipeline.md) — the eight phases in narrative form
-- [Data Model](data-model.md) — the models and their relationships
+- [Architecture](../architecture/architecture.md) — the layered design and its invariants
+- [SBOM Pipeline](../architecture/pipeline.md) — the eight phases in narrative form
+- [Data Model](../architecture/data-model.md) — the models and their relationships
 - [Code Reference](code-reference.md) — API docs generated from the docstrings
 - [Testing](testing.md) — how the unit/integration split mirrors this tree

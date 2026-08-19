@@ -5,8 +5,8 @@ choice, the alternatives weighed against them, and the conditions under which a 
 should be reopened.
 
 This is the **why** document. For *what* is in the stack and at which version floor, see
-[Tech Stack](../developer/tech-stack.md); for *how* the pieces fit together, see
-[Architecture](../developer/architecture.md).
+[Tech Stack](tech-stack.md); for *how* the pieces fit together, see
+[Architecture](architecture.md).
 
 ---
 
@@ -504,7 +504,7 @@ the project made, shipped, and then deliberately undid.
 
 ## See also
 
-- [Architecture](../developer/architecture.md) — the layered design and its invariants
-- [Tech Stack](../developer/tech-stack.md) — the libraries and their version floors
+- [Architecture](architecture.md) — the layered design and its invariants
+- [Tech Stack](tech-stack.md) — the libraries and their version floors
 - [Inventory App Reference](../developer/inventory-app-reference.md) — where each decision lands in the code
-- [SBOM Pipeline](../developer/pipeline.md) — the eight phases in detail
+- [SBOM Pipeline](pipeline.md) — the eight phases in detail

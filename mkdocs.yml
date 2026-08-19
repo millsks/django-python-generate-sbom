@@ -46,6 +46,17 @@ theme:
 
 plugins:
   - search
+  # Keeps the pre-move URLs alive for the five design pages that moved from developer/
+  # to architecture/. The site is published to GitHub Pages, so dropping these would
+  # 404 every existing bookmark and inbound link. Remove an entry only when you are
+  # willing to break its old URL.
+  - redirects:
+      redirect_maps:
+        developer/architecture.md: architecture/architecture.md
+        developer/tech-stack.md: architecture/tech-stack.md
+        developer/data-model.md: architecture/data-model.md
+        developer/pipeline.md: architecture/pipeline.md
+        developer/project-layout.md: architecture/project-layout.md
   - mkdocstrings:
       # Static (griffe) rendering of the backend docstrings — no Django runtime import.
       # Story 21.1: `paths` lists BOTH import roots so `config`/`django_service` resolve
@@ -121,16 +132,16 @@ nav:
       - Create and use an API key: how-to/manage-api-keys.md
   - Architecture:
       - architecture/index.md
+      - Overview: architecture/architecture.md
       - Technology Stack Rationale: architecture/technology-stack-rationale.md
+      - Tech Stack: architecture/tech-stack.md
+      - Project Layout: architecture/project-layout.md
+      - SBOM Pipeline: architecture/pipeline.md
+      - Data Model: architecture/data-model.md
   - Developer:
       - developer/index.md
-      - Architecture: developer/architecture.md
-      - Tech Stack: developer/tech-stack.md
       - Local Development: developer/setup.md
-      - Project Layout: developer/project-layout.md
       - Inventory App Reference: developer/inventory-app-reference.md
-      - SBOM Pipeline: developer/pipeline.md
-      - Data Model: developer/data-model.md
       - Testing: developer/testing.md
       - Code Reference: developer/code-reference.md
       - Rename Audit: developer/rename-audit.md

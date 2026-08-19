@@ -45,6 +45,38 @@ was happening.
 
 ## Dev Notes
 
+### The first fix reintroduced the bug it was meant to fix
+
+Guarding `current_step` by progress — "the furthest-along phase keeps the label" — looked tidy and was
+wrong. All three analysis phases start within milliseconds, version currency (93) wins immediately, and
+vulnerability scan (55) and licence compliance (80) were then rejected outright. Traced against a real
+worker, the job went:
+
+```
+ 45%  generate SBOM document
+ 93%  version currency
+ 97%  version currency complete
+100%  persist artifacts
+```
+
+Two of the three phases never named themselves, and the label sat on "generate SBOM document" for the whole
+fan-out — **exactly the complaint the story exists to fix**. The product owner reported it still looking
+frozen, which is what prompted the trace.
+
+The halves have different rules: `progress` is monotonic (`Greatest` inside the UPDATE), `current_step`
+always takes the latest write. After the change the same trace reads:
+
+```
+ 45%  generate SBOM document
+ 55%  vulnerability scan
+ 93%  version currency
+ 93%  license compliance complete
+ 93%  vulnerability scan complete
+ 97%  version currency complete
+ 97%  aggregate analysis
+100%  persist artifacts
+```
+
 ### Why a new service function rather than `update_job_status`
 
 Progress reporting has a constraint status writing does not: it must never go backwards. The guard lives in
@@ -55,9 +87,13 @@ so rejecting equal values would freeze the label on the analysis phase through t
 
 ### What the concurrency means for the label
 
-With three phases in flight there is no single "current" phase. The furthest-along one wins, which is
-truthful (it *is* being processed) and keeps the bar monotonic. On Windows the worker is `--pool=solo`, so
-they run serially and the label simply follows.
+With three phases in flight there is no single "current" phase, so the label says what happened most
+recently. That is the honest answer while several are running, and it visibly changes throughout. Under the
+Windows `--pool=solo` worker they are serial, so it is exact there.
+
+**A caveat worth knowing:** on a small manifest the whole analysis stage finishes in well under the
+five-second poll interval, so a watcher can still miss individual phases. The page is not wrong; the work is
+simply faster than the refresh. Shortening the interval during analysis would be a separate change.
 
 ### Traps
 
@@ -76,11 +112,13 @@ claude-opus-5[1m] (Claude Opus 5, 1M context)
 
 ### Debug Log References
 
-- 15 new tests in `tests/unit/test_job_progress_phase_text.py`.
+- 16 new tests in `tests/unit/test_job_progress_phase_text.py`.
+- **Traced against a real worker twice** (`scratchpad/trace_phases.py`, sampling the row every 50 ms):
+  before, 4 distinct states with two phases missing; after, 8 with all three present.
 - **First ablation: the tests did NOT bite.** With the entry write removed, all 9 still passed — the
   phase ran to completion synchronously, so the completion write set the same label a moment later.
   Rewritten to assert the **sequence** of writes; the second ablation fails 3 of them, as it should.
-- `pixi run ci` — **exit 0**, 942 tests, 97.24%.
+- `pixi run ci` — **exit 0**, 943 tests, 97.24%.
 
 ### Completion Notes List
 
@@ -92,6 +130,15 @@ is the entry is what actually pins the behaviour the story is about.
 **A failed phase used to say "complete".** Not part of the request, but visible the moment the analysis
 phases started writing labels at all: the completion write is outside the try/except, so it ran regardless
 of outcome. It now says "unavailable", which is the word the report tabs already use for the same state.
+
+**The unit tests passed while the feature was broken**, because they exercised the helper directly and never
+asked what a *sequence* of concurrent writes leaves on screen. Only running a real job showed it. That is the
+lesson worth carrying: for anything whose subject is "what does a person see over time", a passing unit test
+is not evidence.
+
+**"— this page updates itself" was removed** from the results-page panel. The striped animated bar and a
+label that now visibly changes already say the page is live; the sentence was re-read on every poll and added
+nothing.
 
 **Two latent regressions were fixed by moving everything onto one helper.** Phase 8 reports 95, below
 version currency's 97 — harmless while the analysis phases wrote nothing, and a visible backwards jump the

@@ -15,7 +15,8 @@ import structlog
 from django.conf import settings
 from django.core.files.storage import default_storage
 from django.db import transaction
-from django.db.models import QuerySet
+from django.db.models import QuerySet, Value
+from django.db.models.functions import Greatest
 from django.utils import timezone
 
 from inventory.common.users import UserT, user_ref
@@ -208,31 +209,39 @@ def update_job_status(
 
 
 def advance_job_progress(task_id: str, progress: int, current_step: str) -> None:
-    """Move a running job's progress forward and name the phase doing the work (Story 22.19).
+    """Name the phase doing the work, and move the bar forward only (Story 22.19).
 
-    Separate from :func:`update_job_status` because progress reporting has a constraint status
-    writing does not: it must never go **backwards**. The three analysis phases run
-    concurrently in a chord group whose order is not defined, and their bands are 55, 80 and
-    93 — so the low band can be written after the high one. A bar that jumps from 93% back to
-    55% reads as a broken job to anyone watching it.
+    The two halves have **different rules**, which is the whole point of this function:
 
-    The guard lives in the UPDATE's own ``WHERE`` clause rather than in a read-then-write, so
-    two workers reporting at the same moment cannot interleave into a regression. ``__lte``
-    rather than ``__lt`` on purpose: phase 8 persists at 97 and version currency also *ends* at
-    97, and rejecting equal values would leave the text stuck on the analysis phase through the
-    final write. Only a genuine regression is refused.
+    * ``progress`` may only increase. The three analysis phases run concurrently in a chord
+      whose order is undefined, and their bands are 55, 80 and 93, so a plain write can move
+      the bar backwards — which reads as a broken job. ``Greatest`` keeps it monotonic inside
+      the UPDATE itself, so two workers writing at the same instant cannot interleave into a
+      regression.
+    * ``current_step`` is always taken from the latest write. Guarding it by progress as well
+      looked tidier and was wrong: version currency (93) wins the race against vulnerability
+      scan (55) and licence compliance (80) within milliseconds, so those two phases never got
+      to name themselves at all. A real job went ``45% → 93%`` and the label appeared frozen on
+      "generate SBOM document" — the exact complaint this story exists to fix, reintroduced by
+      the guard meant to fix it.
 
-    Only a job that is still pending or running is eligible — stated as a whitelist rather than
-    as "not terminal" so a status added later has to be considered rather than silently
-    accepted. The chord callback can finalize while a group member is still unwinding, and a
-    job that flips back to "In progress" after showing Success is worse than a stale
-    percentage.
+    The label therefore says what happened most recently, which is the honest answer while
+    several phases are in flight, and changes visibly throughout the run. Under the Windows
+    ``--pool=solo`` worker the phases are serial, so it is exact there.
+
+    Only a pending or running job is eligible — a whitelist rather than "not terminal" so a
+    status added later has to be considered. The chord callback can finalize while a group
+    member is still unwinding, and a job that flips back to "In progress" after showing Success
+    is worse than a stale percentage.
     """
     SBOMJob.objects.filter(
         task_id=task_id,
-        progress__lte=progress,
         status__in=(SBOMJob.Status.PENDING, SBOMJob.Status.PROGRESS),
-    ).update(status=SBOMJob.Status.PROGRESS, progress=progress, current_step=current_step)
+    ).update(
+        status=SBOMJob.Status.PROGRESS,
+        progress=Greatest("progress", Value(progress)),
+        current_step=current_step,
+    )
 
 
 def record_generation(task_id: str, result_key: str, package_count: int) -> None:

@@ -65,19 +65,40 @@ def test_it_records_the_phase_and_the_percentage(job: SBOMJob) -> None:
     assert updated.current_step == "vulnerability scan"
 
 
-def test_progress_never_moves_backwards(job: SBOMJob) -> None:
-    """The concurrency hazard, stated directly.
+def test_the_bar_never_moves_backwards_but_the_label_still_follows(job: SBOMJob) -> None:
+    """The two halves have different rules, and this is why.
 
     Version currency starts at 93 and vulnerability scan at 55. The chord does not order its
-    group, so the low band can be written after the high one — and a bar that jumps back to
-    55% reads as a bug to anyone watching it.
+    group, so the low band can be written after the high one — a bar that jumps back to 55%
+    reads as a bug.
+
+    The **label** must not be guarded the same way, and the first version of this code guarded
+    it anyway. Version currency wins that race within milliseconds, so vulnerability scan and
+    licence compliance never named themselves at all: a real job traced `45% → 93%` with the
+    text frozen on "generate SBOM document", which is the exact complaint this story exists to
+    fix. Confirmed against a real worker before and after.
     """
     advance_job_progress(str(job.task_id), 93, "version currency")
     advance_job_progress(str(job.task_id), 55, "vulnerability scan")
 
     updated = _reload(job)
-    assert updated.progress == 93
-    assert updated.current_step == "version currency", "the further-along phase keeps the label"
+    assert updated.progress == 93, "the bar holds at the furthest point reached"
+    assert updated.current_step == "vulnerability scan", "the label names the most recent phase"
+
+
+def test_every_analysis_phase_gets_to_name_itself(job: SBOMJob) -> None:
+    """The regression that made the fix invisible, pinned as a sequence.
+
+    All three phases start within milliseconds of each other. What a watcher must see is each
+    one appear — not only whichever happened to hold the highest percentage.
+    """
+    labels = []
+    for progress, step in [(55, "vulnerability scan"), (93, "version currency"), (80, "license compliance")]:
+        advance_job_progress(str(job.task_id), progress, step)
+        labels.append(_reload(job).current_step)
+
+    assert labels == ["vulnerability scan", "version currency", "license compliance"]
+    assert _reload(job).progress == 93
 
 
 def test_the_same_percentage_may_still_change_the_label(job: SBOMJob) -> None:

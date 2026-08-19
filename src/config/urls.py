@@ -5,8 +5,9 @@
 # fallback now: an unmatched path 404s, which is the point — a mistyped URL used to
 # answer 200 with the landing page, hiding broken links.
 from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import URLPattern, include, path
 
 from django_service.views import LandingPageView, ShellPreviewView
 from inventory.common.views import health
@@ -41,3 +42,29 @@ if settings.API_DOCS_ENABLED:
         path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
         path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
     ]
+
+
+def media_urlpatterns() -> list[URLPattern]:
+    """Serve ``MEDIA_ROOT`` from the development server, and only there (Story 22.28).
+
+    Containerless local development stores artifacts with ``FileSystemStorage``, whose
+    ``url()`` returns ``/media/…``. The SBOM download redirects to exactly that (AD-11), so
+    without this route the dev server had no pattern for its own storage URLs and every
+    download 404'd. In containers the same code works untouched, because MinIO serves the blob
+    rather than Django — which is why this only ever broke on the path this epic protects.
+
+    Guarded on ``DEBUG`` rather than on the storage backend. Django serving user uploads in
+    production would bypass the storage backend entirely and hand out every stored manifest
+    over an unauthenticated path — and this application has no authentication (Story 21.24), so
+    the absence of the route is the only thing standing between the two.
+
+    A function rather than an inline ``if`` so the rule can be tested without reimporting the
+    URLconf: module-level ``DEBUG`` branches are evaluated once at import and are effectively
+    untestable afterwards.
+    """
+    if not settings.DEBUG:
+        return []
+    return static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+
+urlpatterns += media_urlpatterns()

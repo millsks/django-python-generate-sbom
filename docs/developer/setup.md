@@ -29,17 +29,20 @@ pixi install          # resolve and install the environment
 pixi run bootstrap    # install the pre-commit + commit-msg git hooks
 ```
 
-Then create your local environment file from the containerless template:
+Then create your local environment file:
 
 ```sh
-cp .env.local.example .env    # copy on macOS/Linux; use `copy` on Windows cmd
+cp .env.example .env    # copy on macOS/Linux; use `copy` on Windows cmd
 ```
 
-`.env.local.example` is pre-wired for containerless dev: it sets
-`DJANGO_SETTINGS_MODULE=config.settings.local` and deliberately leaves
-`DATABASE_URL`, `AWS_*`, and `REDIS_URL` **unset** so the base defaults apply —
-SQLite at `db.sqlite3` and `FileSystemStorage` at `media/`, both at the repository
-root. `.env` is git-ignored; never commit secrets.
+`.env.example` **is** the containerless template — that is why it carries the plain name
+(Story 22.1). It sets `DJANGO_SETTINGS_MODULE=config.settings.local` and deliberately leaves
+`DATABASE_URL`, `AWS_*`, and `REDIS_URL` **unset** so the base defaults apply — SQLite at
+`db.sqlite3` and `FileSystemStorage` at `media/`, both at the repository root. Setting any of
+them opts you into infrastructure you then have to run.
+
+`.env.container.example` is the other template, for the optional Docker Compose stack only.
+`.env` itself is git-ignored; never commit secrets.
 
 ## Running the stack — `pixi run dev`
 
@@ -148,7 +151,7 @@ prod topology and the
 | **Settings module** | `config.settings.local` | `config.settings.production` |
 | **Database** | SQLite (`db.sqlite3`) | Enterprise-managed **PostgreSQL** |
 | **Object storage** | `FileSystemStorage` (`media/`) | Enterprise **S3**-compatible object storage |
-| **Celery broker** | Kombu `filesystem://` (`.celery/broker/`) | Enterprise **Redis** |
+| **Celery broker** | Kombu `filesystem://` (`.celery/broker/`) — see its limits above | Enterprise **Redis** |
 | **Celery result backend** | `django-db` (results in SQLite) | Enterprise **Redis** |
 | **Web server** | Django `runserver` | **gunicorn** |
 | **Worker pool** | prefork (`-c 4`) on macOS/Linux, `--pool=solo` on Windows | prefork |
@@ -160,6 +163,28 @@ transport (to the filesystem broker + `django-db` results) on top of them. The
 OCP/prod side is driven by `config.settings.production` and is described in full in
 the [OpenShift guide](../deployment/openshift/index.md).
 
+### The filesystem broker, and what it cannot do
+
+Local dev uses Kombu's `filesystem://` transport: Celery messages are **files** under
+`.celery/broker/`, and the worker polls that directory. It needs no Redis and no container,
+which is the whole point — but it is a development convenience, not a message broker, and it
+behaves differently from the Redis transport used in containers and on OCP:
+
+- **No fanout / no broadcast.** Worker control commands (`celery inspect`, `celery control`,
+  remote shutdown) rely on fanout and do not work. `pixi run flower` will show limited
+  information for the same reason.
+- **Polling latency.** A dispatched task is picked up on the worker's next poll rather than
+  immediately, so expect roughly a second of lag before a job leaves `PENDING`. That is the
+  transport, not a stuck job.
+- **One directory, shared by everything.** Every process pointed at this checkout drains the
+  same `.celery/broker/`. Two workers running at once will compete for the same messages —
+  if a job seems to vanish, check for a stray `pixi run dev` or `pixi run worker`.
+- **Not durable in any meaningful sense.** Messages are files; deleting `.celery/` discards
+  the queue. That is a fine way to clear a wedged state locally, and unthinkable in production.
+
+If a job sits in `PENDING`, the usual cause is **no worker running** — `pixi run dev` starts
+one, and a bare `pixi run runserver` does not.
+
 ## Running the prod-parity stack with Docker Compose
 
 Docker Compose is the optional **prod-parity** path: it runs the app against real
@@ -168,7 +193,15 @@ OCP/prod deployment uses. Reach for it when you need to reproduce a
 storage/database/broker behavior that SQLite and the filesystem broker cannot, or
 before a deployment. Everyday development does not need it — use `pixi run dev`.
 
-This path **does** require Docker + Docker Compose installed locally.
+This path **does** require Docker + Docker Compose installed locally, which makes it
+unavailable to developers whose organization blocks Docker and Podman on Windows.
+
+It also needs the **other** environment template, because it runs `config.settings.production`
+and every service must genuinely be reachable:
+
+```sh
+cp .env.container.example .env    # NOT .env.example, which is the containerless one
+```
 
 ```sh
 pixi run docker-up      # build (if needed) and start all services in the background
@@ -200,10 +233,36 @@ pixi run docker-shell       # open a shell in the web container
 | Org | Seeded by | Purpose |
 |---|---|---|
 | **Enterprise Wells Fargo Technology** (`enterprise-wells-fargo-technology`) | `inventory.0003_seed_default_org` | The org an anonymous caller acts as. Override the slug with `INVENTORY_DEFAULT_ORG_SLUG`. |
-| **Admin** (`admin`) | `inventory.0002_seed_admin_org` | The platform-admin tier. Never a workspace — it is not offered in the org switcher or on the upload form. |
+| **Admin** (`admin`) | `inventory.0002_seed_admin_org` | The platform-admin tier. Never a workspace — it is not offered on the upload form. |
 
-Open [http://localhost:8000](http://localhost:8000) and go straight to **Upload**. Pick the
-organization on the form; create more from the **Organization** page whenever you need them.
+Open [http://localhost:8000](http://localhost:8000) and go straight to **Upload**, picking the
+organization on the form.
+
+### Seeding your organizations
+
+Organizations are lines of business, known up front, so they are seeded from a committed list
+rather than typed into a form:
+
+```sh
+pixi run seed-orgs --dry-run   # review what would be created
+pixi run seed-orgs             # create anything missing
+```
+
+`orgs.yml` at the repo root is the list; point `INVENTORY_ORGS_FILE` elsewhere to override it.
+The command is **idempotent** — an org whose `slug` already exists is skipped, never modified —
+so it belongs in the boot sequence, which is where Compose runs it:
+
+```
+migrate && seed-orgs && seed-superuser && web
+```
+
+Two rules worth knowing before you edit the list:
+
+- **The slug is the identity, and must never change.** `INVENTORY_DEFAULT_ORG_SLUG`, the org
+  upload form's options, and every API key reference it. Names may be corrected freely; a changed name is
+  *reported* on the next run and left alone rather than rewritten.
+- **Removing a line deletes nothing.** Deleting an org would orphan its jobs and artifacts, so
+  it is a deliberate act rather than a side effect of editing a file.
 
 ### Creating a Django superuser (for `/admin/` only)
 

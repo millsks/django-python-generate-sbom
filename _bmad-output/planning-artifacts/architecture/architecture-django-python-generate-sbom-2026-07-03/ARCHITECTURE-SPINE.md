@@ -60,7 +60,7 @@ Server-rendered Django templates are the UI layer (**AD-15**, Epic 21 — supers
 
 - **Binds:** `tasks/sbom_pipeline.py`, `tasks/analysis.py`, Docker Compose worker definitions
 - **Prevents:** long vulnerability scans starving new job submissions from other orgs
-- **Rule:** Phases 1–3 (detect, resolve, generate) and Phase 8 (persist) route to the `pipeline` queue. Phases 4–7 (vulnerability, license, graph, version) route to the `analysis` queue. Celery Beat cleanup tasks (FR-8.2) also route to the `pipeline` queue — low-frequency housekeeping that does not compete with analysis work. Two separate Celery worker processes, one per queue. A task must never be enqueued to the wrong queue.
+- **Rule:** Phases 1–3 (detect, resolve, generate) and Phase 8 (persist) route to the `pipeline` queue. Phases 4–7 (vulnerability, license, graph, version) route to the `analysis` queue. Beat's remaining scheduled task — the weekly conda↔PyPI mapping refresh — routes to `analysis`. *(The nightly artifact purge that this clause was written for was retired by Story 22.6, 2026-08-18: purging is now manual. The `purge_expired_artifacts` task remains registered on the `pipeline` queue for manual dispatch.)* Two separate Celery worker processes, one per queue. A task must never be enqueued to the wrong queue.
 
 ### AD-5 — React SPA: REST API only, no Django template coupling [SUPERSEDED by AD-15, Epic 21]
 
@@ -203,6 +203,41 @@ tests/               # at the repo ROOT, not under src/ — unit/ and integratio
   - `user_ref()` looks like a no-op and is not: it adapts a user to the ORM boundary where a concrete type would otherwise be required. Deleting it as dead code re-introduces exactly the coupling this decision exists to prevent.
   - Migrations that touch a user FK must carry the swappable dependency (`migrations.swappable_dependency(settings.AUTH_USER_MODEL)`), or a host project with a different user model cannot apply them.
 
+### AD-18 — No local workflow and no CI gate may require a container
+
+- **Binds:** every `pixi.toml` task reachable from `pixi run ci`, `pixi run dev` and the inner loop, `.github/workflows/ci.yml`
+- **Prevents:** a contributor on Windows being unable to run the application or validate their own change — the team splitting into people who can pass the gate and people who cannot
+- **Rule:** Docker and Podman are **unavailable on Windows in the destination organization by security policy**, not by choice. Therefore no task on the path from `pixi install` to a green `pixi run ci` may invoke a container runtime. `tests/unit/test_no_container_contract.py` walks the `ci` task graph transitively and fails if one does.
+  - This restricts the **local** path and the **gate**. It does **not** retire containers: Epic 19 ships the same image to OpenShift, and the Compose stack remains the optional prod-parity path locally.
+  - The container tasks stay behind the `docker-` prefix, which is what keeps them visibly opt-in. A step that needs a container belongs there, never in the `ci` chain.
+  - **Decision on the Compose path (Story 22.5): KEPT, de-emphasised, and explicitly qualified.** `docs/developer/setup.md` presents the containerless flow as the supported local path and states that Compose is unavailable to developers whose organization blocks Docker and Podman. Retiring it was rejected because it is the only local way to exercise PostgreSQL, Redis, and S3-compatible storage against the real backing services before a deployment — the people who *can* run it are the ones who need it.
+
+### AD-19 — Org isolation binds the API; the pages are cross-org [AMENDS AD-2 — Story 22.16, 2026-08-19]
+
+- **Binds:** `inventory/sbom/selectors.py`, every page view, `inventory/users/auth.py`
+- **Prevents:** a programmatic caller reading another tenant's jobs, while not pretending the UI enforces a boundary it does not
+- **Rule:** `.for_org()` still scopes every **API** query — an API key genuinely pins one tenant (AD-8), so `get_jobs` / `get_job` stay scoped. The **pages** use `get_all_jobs` / `get_any_job` and list every organization.
+  - This is not a reduction in real isolation. Story 21.24 removed authentication, after which `set_active_org_by_slug` accepted **any** non-ADMIN org from **anyone** — so another org's work was always two clicks away through the switcher. Listing it makes the existing reality visible instead of implying a boundary that was never enforced against a person.
+  - The organization is now **provenance**: chosen on the upload form, shown as a Job Status column with its own filter, and written into the generated SBOM as its `supplier` (Story 22.14). It is not a mode the interface sits in; the header switcher is gone (Story 22.16).
+  - **When OIDC lands (Epics 17-18), this is the decision to revisit first.** Restoring a real principal restores the possibility of a per-person boundary, and the page selectors are the seam.
+
+### AD-20 — Pipeline progress is derived from per-task rows, never reported per phase [Story 22.20, 2026-08-19]
+
+- **Binds:** `inventory/sbom/pipeline_tasks.py`, `JobTask`, `inventory/tasks/sbom_pipeline.py::_phase_guard`
+- **Prevents:** a progress display that disagrees with itself
+- **Rule:** every pipeline task owns a `JobTask` row and writes **only its own**; `SBOMJob.progress` is computed from how many rows are terminal, an equal share each.
+  - Hand-picked per-phase percentages were tried twice and failed twice. They drifted until two different phases both reported 93%, and a single `current_step` string could never name more than one of the three analysis tasks, which run concurrently in a chord (AD-4).
+  - `_phase_guard` owns the start and finish writes so a phase cannot forget one. Reporting is **best-effort**: a failure to write a task row is logged and swallowed, because telemetry must never abort the work it describes.
+  - `SBOMJob.current_step` survives as a one-line summary for the Job Status cell and the API's `current_phase`, which Story 21.24 AC #9 froze.
+
+### AD-21 — Whole-record deletion is a UI action; the API purges artifacts only [AMENDS FR-8.1 — 2026-08-19]
+
+- **Binds:** `inventory/sbom/services.py` (`delete_job_record` vs `delete_job_artifacts`), Job Status's delete buttons
+- **Prevents:** the two very different deletions being confused for each other
+- **Rule:** FR-8.1 said job records are retained forever and only blobs are purged. That still describes the **API** and the manual sweep (Story 22.6). Job Status's buttons now delete the **record** — job, tasks, reports, manifest, and every blob they own.
+  - The two live in separate services and separate test modules on purpose. One is reversible in the sense that history survives; the other is the single place in the application where job history is destroyed.
+  - The delete-all button acts on **whatever the table is currently showing** (Story 22.16), and its confirmation names that scope. Making the pages cross-org without this would have widened it from one organization to the whole deployment behind a confirmation naming a single org.
+
 ---
 
 ## Dependency Direction
@@ -262,7 +297,7 @@ Since Epic 21 collapsed these into one app (**AD-16**), the boxes are **packages
 | Storage paths — manifests | `manifest-uploads/{org_id}/{upload_id}/{filename}` |
 | Storage paths — artifacts | `sbom-results/{org_id}/{task_id}/{filename}.{ext}` |
 | Analysis chord envelope | Each analysis task returns `{"report_type": "vuln|license|graph|version", "artifact_key": "<s3_key>|null", "summary": {...}, "failed": bool, "failure_reason": "<str>|null"}`; chord callback sets `AnalysisReport.failed` and `artifact_key` from these fields |
-| Artifact cleanup | `artifacts_expire_at` set at job creation (`completed_at + 10 days`); cleanup selector: `SBOMJob.objects.filter(artifacts_expire_at__lte=now(), result_key__isnull=False)`; after S3 deletion null `result_key` on `SBOMJob` and `artifact_key` on all related `AnalysisReport` rows; job record is never deleted |
+| Artifact cleanup | `artifacts_expire_at` set at job creation (`completed_at + ARTIFACT_RETENTION_DAYS`, default 30); selector: `SBOMJob.objects.filter(artifacts_expire_at__lte=now(), result_key__isnull=False)`; after storage deletion null `result_key` on `SBOMJob` and `artifact_key` on all related `AnalysisReport` rows; job record is **never** deleted. **Runs only on request** since Story 22.6 — `manage.py purge_expired_artifacts [--dry-run]`; expiry is tracked, not enforced |
 | Pagination | `PageNumberPagination`; default `page_size=25`, max 100 via `?page_size=`; envelope: `{"count": N, "next": "<url>\|null", "previous": "<url>\|null", "results": [...]}` |
 | Health check | `GET /health/` returns `{"status": "ok"}` with `200`; unauthenticated; used for Docker Compose `healthcheck:` directive |
 | Logging | `structlog` with JSON renderer; every log entry binds `org_id`, `task_id` (where applicable), `user_id`; never `print()` or stdlib `logging` |
@@ -479,3 +514,8 @@ django-python-generate-sbom/          ← repo root == BASE_DIR (pixi umbrella, 
 
   Also **not** implemented, and required before contribution: the contribution module, `component.toml`, `src/config/startup/` composition, `django_service.__api_version__`, the navigation registry, and an adoption-gate test that would fail on any of the above.
 - **AD-9 and the dependency-graph stack entries are stale and were left alone** — Story 20.1 retired the dependency graph (`analysis/services/graph.py` is gone; NetworkX, pygraphviz, and the three Cytoscape packages are no longer dependencies) but never reconciled the spine. The Cytoscape rows were removed here because Story 21.20's AC #4 names them; **AD-9 itself still describes a graph API that no longer exists** and needs its own correct-course pass on Epic 20 rather than a silent edit from an Epic 21 story.
+- **Scheduled artifact purging** — **removed on purpose** (Story 22.6, 2026-08-18), amending **FR-8.2**, which
+  specified an unattended nightly sweep. Deleting artifacts is now a deliberate act taken after reviewing what
+  would go (`manage.py purge_expired_artifacts --dry-run`). `artifacts_expire_at` still marks eligibility on
+  every job, so re-adding a schedule is a one-entry change if the decision is ever reversed — but do not add one
+  without the product owner, and see **AD-4**'s note on which queue it belonged to.

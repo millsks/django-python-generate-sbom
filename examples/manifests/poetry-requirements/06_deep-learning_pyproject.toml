@@ -1,0 +1,44 @@
+# 06_deep-learning — PyTorch + Hugging Face training/fine-tuning
+# poetry: `poetry install` to install, `poetry lock` to produce poetry.lock.
+
+[tool.poetry]
+name = "deep-learning"
+version = "0.1.0"
+description = "PyTorch + Hugging Face training/fine-tuning"
+authors = ["Your Name <you@example.com>"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.12"
+torch = "^2.13.0"
+torchvision = "^0.28.0"
+torchaudio = "^2.11.0"
+transformers = "^5.15.0"
+tokenizers = "^0.22.2"
+datasets = "^5.0.1"
+accelerate = "^1.14.0"
+peft = "^0.20.0"
+safetensors = "^0.8.0"
+sentencepiece = "^0.2.2"
+evaluate = "^0.4.6"
+einops = "^0.8.2"
+tensorboard = "^2.21.0"
+wandb = "^0.28.2"
+numpy = "^2.5.2"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3"
+pytest-cov = "^6.0"
+ruff = "^0.8"
+mypy = "^1.14"
+pre-commit = "^4.0"
+
+[build-system]
+requires = ["poetry-core>=2.0"]
+build-backend = "poetry.core.masonry.api"
+
+# GPU builds: uncomment to pull torch from the CUDA-matched index.
+# [[tool.poetry.source]]
+# name = "pytorch-cu124"
+# url = "https://download.pytorch.org/whl/cu124"
+# priority = "explicit"

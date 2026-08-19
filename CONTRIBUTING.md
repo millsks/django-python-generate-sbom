@@ -22,6 +22,24 @@ pixi install        # resolve and install the environment
 pixi run bootstrap  # install the pre-commit and commit-msg hooks (one-time)
 ```
 
+### No container is required
+
+**Local development and `pixi run ci` must never require Docker or Podman.** This is a
+constraint rather than a preference: neither runtime is permitted on Windows in the
+organization this project is developed in, so a task that shells out to one is not
+inconvenient there — it is unrunnable, and it divides the team into contributors who can
+validate a change and contributors who cannot.
+
+Everything you need to develop is containerless. `pixi run dev` runs the whole stack against
+SQLite, local-filesystem storage, and a filesystem Celery broker, identically on **macOS**
+and **Windows**. `tests/unit/test_no_container_contract.py` walks the `pixi run ci` task graph
+and fails if any task it reaches invokes a container runtime, so this holds as the gate grows.
+
+The `Dockerfile`, `docker-compose.yml`, and `docker-*` pixi tasks remain — that is how
+production runs and how the optional prod-parity stack is driven locally. They are opt-in, and
+no local workflow or CI gate depends on them. If you add a step that needs a container, it
+belongs behind a `docker-` prefixed task, never in the `ci` chain.
+
 ## Development workflow
 
 1. **Branch** off `main` using the naming convention below.

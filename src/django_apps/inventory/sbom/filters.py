@@ -6,6 +6,7 @@ import django_filters
 from django.db.models import QuerySet
 
 from inventory.manifests.models import ManifestUpload
+from inventory.users.selectors import get_switchable_orgs
 
 from .models import SBOMJob
 from .selectors import STATUS_FILTERS
@@ -21,12 +22,19 @@ FORMAT_CHOICES = ManifestUpload.Format.choices
 
 
 class JobFilterSet(django_filters.FilterSet):
-    """Status and manifest-format filters for the job history table."""
+    """Organization, status and manifest-format filters for the Job Status table."""
 
     status = django_filters.ChoiceFilter(
         choices=STATUS_CHOICES,
         method="filter_status",
         label="Status",
+        empty_label="All",
+    )
+    # Story 22.16. A ModelChoiceFilter rather than a Choice one so the options come from the
+    # org table itself and cannot drift from what `seed_orgs` created.
+    org = django_filters.ModelChoiceFilter(
+        queryset=get_switchable_orgs,
+        label="Organization",
         empty_label="All",
     )
     format = django_filters.ChoiceFilter(

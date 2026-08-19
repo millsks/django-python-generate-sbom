@@ -5,9 +5,9 @@ manifest.
 
 ## Steps
 
-1. Sign in and make sure the correct organization is active (see
-   [Invite a member / switch organizations](manage-organization.md)).
-2. Go to **Upload** (`/upload`).
+1. Go to **Upload** (`/upload`). There is no sign-in.
+2. Choose the **Organization** the job is filed against. It is recorded on the job and
+   written into the SBOM as its supplier, so it cannot be changed afterwards.
 3. Choose a supported manifest file. Supported formats:
     - `requirements.txt`
     - `pyproject.toml`
@@ -19,8 +19,10 @@ manifest.
     `requirements-dev.txt` or `pixi-prod.lock` still works.
 4. Submit the job. Only one job runs per organization at a time, so a new job may wait
    briefly if another is still running.
-5. Watch the progress indicator. When the job finishes you are taken to the **Results**
-   page (`/results/<task-id>`).
+5. Watch the task list on the **Results** page. Every pipeline task is listed; the ones
+   running animate, and each shows `[COMPLETE]` or `[ERROR]` as it finishes. The bar at the
+   bottom advances as tasks complete. The page moves to the full results by itself when the
+   job is done.
 
 ## Result
 
@@ -33,5 +35,5 @@ can:
 - [Find outdated dependencies](find-outdated-dependencies.md)
 - [Export a report to Excel](export-to-excel.md)
 
-Past jobs are always available under **History** (`/history`). For the full walkthrough,
+Jobs are always available under **Job Status** (`/job-status`). For the full walkthrough,
 see the [User Guide](../user-guide/index.md).

@@ -12,7 +12,6 @@ import uuid
 from collections.abc import Iterable
 from typing import cast
 
-from django.core.files.storage import default_storage
 from django.db.models import QuerySet
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema, extend_schema_view
@@ -49,12 +48,12 @@ from .services import (
     delete_job_artifacts,
     estimate_seconds,
     mark_stale_job_timed_out,
+    presigned_artifact_url,
     submit_job,
 )
 
 _NO_ACTIVE_ORG = {"error": "No active org.", "code": "no_active_org"}
 _ACTIVE_STATUSES = [SBOMJob.Status.PENDING, SBOMJob.Status.PROGRESS]
-_PRESIGN_TTL_SECONDS = 24 * 60 * 60  # 24-hour presigned URL TTL (AD-11)
 
 
 class GenerateJobView(APIView):
@@ -145,7 +144,7 @@ class ManifestFormatFilterNegotiation(DefaultContentNegotiation):
     The jobs list uses ``?format=`` as a *manifest-format filter* (e.g. ``pixi_toml``),
     not a DRF renderer-format suffix. Default negotiation treats such a value as an
     unsatisfiable renderer format and raises ``404`` before the view runs — the true
-    cause of the History-page error banner. The API serves a single (JSON) renderer,
+    cause of the Job Status page's error banner. The API serves a single (JSON) renderer,
     so this always selects it and lets ``format`` reach the queryset filter.
     """
 
@@ -162,6 +161,13 @@ class ManifestFormatFilterNegotiation(DefaultContentNegotiation):
 
 @extend_schema_view(
     get=extend_schema(
+        # Story 22.17 renamed the UI page from History to Job Status. The **path stays**
+        # `/api/v1/sbom/jobs/`: Story 21.24 AC #9 froze the `/api/v1/` contract, and
+        # `/sbom/status/{task_id}/` already owns "status" for a single job, so a
+        # `/sbom/job-status/` list would sit confusingly beside it. Only the documented name
+        # moves, so the reference and the UI agree on what to call this.
+        summary="List job status",
+        tags=["Job Status"],
         parameters=[
             OpenApiParameter(
                 name="status",
@@ -181,7 +187,11 @@ class ManifestFormatFilterNegotiation(DefaultContentNegotiation):
     )
 )
 class JobsListView(ListAPIView[SBOMJob]):
-    """List the active org's jobs, most-recent-first (GET /api/v1/sbom/jobs/)."""
+    """List the caller's job status, most-recent-first (GET /api/v1/sbom/jobs/).
+
+    The UI calls this page **Job Status** (Story 22.17). The path keeps `jobs` because the
+    `/api/v1/` contract is frozen (Story 21.24 AC #9).
+    """
 
     serializer_class = JobListSerializer
     pagination_class = JobsPagination
@@ -272,11 +282,7 @@ class ResultJobView(APIView):
                 {"error": "Result not ready.", "code": "not_ready"},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        try:
-            url = default_storage.url(job.result_key, expire=_PRESIGN_TTL_SECONDS)  # type: ignore[call-arg]
-        except TypeError:
-            # FileSystemStorage (dev/tests) has no presigning; url() takes only the name.
-            url = default_storage.url(job.result_key)
+        url = presigned_artifact_url(job.result_key)
         return Response(status=status.HTTP_303_SEE_OTHER, headers={"Location": url})
 
 

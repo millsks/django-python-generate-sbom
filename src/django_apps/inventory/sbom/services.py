@@ -7,7 +7,8 @@ PENDING via ``create_job``. DRF views never write status otherwise.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from contextlib import AbstractContextManager, contextmanager
 from datetime import datetime, timedelta
 from typing import Any, cast
 
@@ -29,8 +30,9 @@ from .generation import (
     generate_sbom_document,
     sbom_extension,
 )
-from .models import SBOMJob
+from .models import JobTask, SBOMJob
 from .parsers import PackageSpec, resolve_packages
+from .pipeline_tasks import PIPELINE_TASKS, TASKS_BY_KEY, progress_for, task_label
 from .selectors import get_job_by_task_id
 
 __all__ = [
@@ -45,10 +47,13 @@ __all__ = [
     "build_provenance",
     "create_job",
     "delete_job_artifacts",
+    "delete_job_record",
+    "delete_job_records",
     "estimate_seconds",
     "finalize_job",
     "generate_sbom_document",
     "mark_stale_job_timed_out",
+    "presigned_artifact_url",
     "purge_expired_artifacts",
     "record_analysis_summaries",
     "record_generation",
@@ -183,28 +188,154 @@ def submit_job(
 
 
 def create_job(org: Org, manifest: ManifestUpload, user: UserT | None, output_format: str) -> SBOMJob:
-    """Create a PENDING job (the view's initial status write; AD-12)."""
-    return SBOMJob.objects.create(
+    """Create a PENDING job with its full task list (AD-12, Story 22.20)."""
+    job = SBOMJob.objects.create(
         org=org,
         manifest=manifest,
         user=user_ref(user),
         output_format=output_format,
         status=SBOMJob.Status.PENDING,
     )
+    seed_job_tasks(job)
+    return job
 
 
 def update_job_status(
     task_id: str,
     status: str,
     *,
-    progress: int = 0,
-    current_step: str = "",
+    progress: int | None = None,
+    current_step: str | None = None,
     failure_reason: str | None = None,
 ) -> None:
-    """Update a job's status/progress. The sole status writer for task code (AD-12)."""
-    SBOMJob.objects.filter(task_id=task_id).update(
-        status=status, progress=progress, current_step=current_step, failure_reason=failure_reason
-    )
+    """Update a job's status. The sole status writer for task code (AD-12).
+
+    ``progress`` and ``current_step`` default to **None meaning "leave alone"**, not to ``0``
+    and ``""`` meaning "reset". Every caller is a failure path that passes only a reason, and
+    the old defaults quietly wiped both — so a job that failed at 62% on version currency
+    displayed as 0% with no phase, discarding the one piece of information someone reading a
+    failed job actually wants.
+    """
+    fields: dict[str, object] = {"status": status, "failure_reason": failure_reason}
+    if progress is not None:
+        fields["progress"] = progress
+    if current_step is not None:
+        fields["current_step"] = current_step
+    SBOMJob.objects.filter(task_id=task_id).update(**fields)
+
+
+def seed_job_tasks(job: SBOMJob) -> None:
+    """Create the job's task rows, all pending (Story 22.20).
+
+    Seeded up front rather than on first touch so the results page can show the **whole**
+    pipeline from the moment a job is submitted — what is coming, not only what has happened.
+    A watcher can see there are eight steps before any of them start.
+    """
+    with _reporting_is_best_effort("seed", str(job.task_id)):
+        JobTask.objects.bulk_create(
+            [JobTask(job=job, key=task.key, ordinal=task.ordinal) for task in PIPELINE_TASKS],
+            ignore_conflicts=True,
+        )
+
+
+def _reporting_is_best_effort(operation: str, task_id: str) -> AbstractContextManager[None]:
+    """Never let progress reporting abort the work it is reporting on (Story 22.20).
+
+    Learned the hard way. ``start_job_task`` is called from ``_phase_guard`` *before* its
+    ``try``, so anything it raised propagated out of the context manager's entry and skipped
+    every failure path the guard exists to provide: the phase died, the job was never marked
+    FAILED, and it sat at PENDING showing "Queued" with nothing to explain it. A developer who
+    pulled migration ``0004`` without running it hit exactly that.
+
+    Telemetry is not the work. A reporting failure degrades the display and is logged loudly;
+    it must not cost the job.
+    """
+    return _swallow_reporting_error(operation, task_id)
+
+
+@contextmanager
+def _swallow_reporting_error(operation: str, task_id: str) -> Iterator[None]:
+    """Log and continue. Deliberately broad: any reporting failure beats a lost job."""
+    try:
+        yield
+    except Exception:
+        logger.error("job_progress_report_failed", operation=operation, task_id=str(task_id), exc_info=True)
+
+
+def _upsert_task(task_id: str, key: str, **fields: object) -> None:
+    """Write one task's row, creating it if the job was never seeded.
+
+    Seeding happens in :func:`create_job`, but a row that is merely *expected* to exist is a
+    silent failure waiting to happen: the progress list renders empty and nothing says why.
+    Creating on demand means a job submitted through any path still reports, and the unique
+    constraint keeps a race between the start and finish writes from doubling the row.
+
+    An unknown key is ignored rather than invented — it would have no place in the ordered
+    list, and a task the pipeline does not declare should not be able to appear on screen.
+    """
+    task = TASKS_BY_KEY.get(key)
+    if task is None:
+        return
+    job = SBOMJob.objects.filter(task_id=task_id).first()
+    if job is None:
+        return
+    JobTask.objects.update_or_create(job=job, key=key, defaults={"ordinal": task.ordinal, **fields})
+
+
+def _sync_job_progress(task_id: str, current_step: str | None = None) -> None:
+    """Recompute the job's percentage from how many of its tasks have finished.
+
+    Derived rather than reported, which is the point of Story 22.20: the old hand-picked bands
+    (5, 20, 45, 55, 80, 93, 95, 97) drifted and collided — two different tasks both claimed 93%
+    — so the bar and the label could disagree. Counting terminal rows cannot.
+
+    ``SBOMJob.progress`` is kept up to date because the API exposes it (Story 21.24 AC #9) and
+    the Job Status table shows a compact percentage beside each row.
+    """
+    finished = JobTask.objects.filter(job__task_id=task_id, state__in=JobTask.TERMINAL).count()
+    fields: dict[str, object] = {"status": SBOMJob.Status.PROGRESS, "progress": progress_for(finished)}
+    if current_step is not None:
+        # Kept in step for the two surfaces that still want one line rather than a list: the
+        # Job Status table's compact cell, and `current_phase` in the API's status payload,
+        # which Story 21.24 AC #9 froze. With several tasks running, the most recently started
+        # one is the summary — the results page's list is where the full truth lives.
+        fields["current_step"] = current_step
+    SBOMJob.objects.filter(
+        task_id=task_id,
+        status__in=(SBOMJob.Status.PENDING, SBOMJob.Status.PROGRESS),
+    ).update(**fields)
+
+
+def start_job_task(task_id: str, key: str) -> None:
+    """Mark one task running, and stamp when it started.
+
+    Each task writes only its **own** row, so the three concurrent analysis tasks cannot race
+    each other — the reason this is a table rather than a field on the job.
+
+    ``started_at`` records when the task began. The browser animates the dots from its own
+    counter rather than from this stamp — deriving them from elapsed time made them jump — but
+    the stamp is what tells an operator how long a task has been going.
+    """
+    with _reporting_is_best_effort("start", task_id):
+        _upsert_task(task_id, key, state=JobTask.State.RUNNING, started_at=timezone.now(), finished_at=None, detail="")
+        _sync_job_progress(task_id, current_step=task_label(key))
+
+
+def finish_job_task(task_id: str, key: str, *, failed: bool = False, detail: str = "") -> None:
+    """Mark one task finished, successfully or not, and advance the bar.
+
+    An errored task still counts as finished: FR-4.5 keeps the job running when an analysis
+    task fails, so a bar that stalled on it would misreport a job that is still working.
+    """
+    with _reporting_is_best_effort("finish", task_id):
+        _upsert_task(
+            task_id,
+            key,
+            state=JobTask.State.ERROR if failed else JobTask.State.COMPLETE,
+            finished_at=timezone.now(),
+            detail=detail[:200],
+        )
+        _sync_job_progress(task_id)
 
 
 def record_generation(task_id: str, result_key: str, package_count: int) -> None:
@@ -294,6 +425,24 @@ def delete_job_artifacts(job: SBOMJob) -> bool:
     return True
 
 
+#: Presigned artifact URLs live for 24 hours (AD-11).
+PRESIGN_TTL_SECONDS = 24 * 60 * 60
+
+
+def presigned_artifact_url(key: str) -> str:
+    """Return a presigned download URL for a stored artifact.
+
+    Django never streams artifact bytes; callers redirect to this URL instead (AD-11). One
+    implementation for both the API's 303 and the results page's download button, so the TTL
+    cannot drift between them.
+    """
+    try:
+        return default_storage.url(key, expire=PRESIGN_TTL_SECONDS)  # type: ignore[call-arg]
+    except TypeError:
+        # FileSystemStorage (dev/tests) has no presigning; url() takes only the name.
+        return default_storage.url(key)
+
+
 def delete_artifacts_for_jobs(jobs: Iterable[SBOMJob]) -> int:
     """Delete artifacts for each job via ``delete_job_artifacts``; return how many were purged.
 
@@ -301,6 +450,54 @@ def delete_artifacts_for_jobs(jobs: Iterable[SBOMJob]) -> int:
     duplicated deletion logic (AD-3). Jobs already cleaned are skipped and not counted.
     """
     return sum(1 for job in jobs if delete_job_artifacts(job))
+
+
+def delete_job_record(job: SBOMJob) -> None:
+    """Delete a job outright: every blob it owns, then the row and everything hanging off it.
+
+    Distinct from :func:`delete_job_artifacts`, which frees storage and keeps the record
+    (FR-8.1). This is the record-level delete Job Status offers: the SBOM blob, the analysis
+    report blobs, the uploaded manifest file, the ``AnalysisReport`` and ``JobTask`` rows (by
+    cascade), the ``SBOMJob`` row, and the ``ManifestUpload`` row once no other job needs it.
+    Irreversible — the caller is responsible for confirming.
+
+    Blobs go first and the row last: a job row with a missing blob is a state the app already
+    handles (Story 7.3), whereas a deleted row pointing at surviving blobs would leave storage
+    with nothing left to name it.
+    """
+    keys = [key for key in (job.result_key, *(r.artifact_key for r in job.reports.all())) if key]
+    manifest = job.manifest
+    manifest_file = manifest.file.name if manifest and manifest.file else None
+    # The manifest is shared if it has other jobs, so its file only goes with the last one.
+    last_job_for_manifest = manifest is not None and not manifest.jobs.exclude(pk=job.pk).exists()
+    if last_job_for_manifest and manifest_file:
+        keys.append(manifest_file)
+
+    for key in keys:
+        if default_storage.exists(key):
+            default_storage.delete(key)
+
+    org_id = job.org_id
+    task_id = str(job.task_id)
+    with transaction.atomic():
+        # Cascades to JobTask and AnalysisReport rows.
+        SBOMJob.objects.filter(task_id=job.task_id).delete()
+        if last_job_for_manifest and manifest is not None:
+            ManifestUpload.objects.filter(pk=manifest.pk).delete()
+    logger.info("job_record_deleted", task_id=task_id, org_id=org_id, blobs=len(keys))
+
+
+def delete_job_records(jobs: Iterable[SBOMJob]) -> int:
+    """Delete each job record via :func:`delete_job_record`; return how many were removed.
+
+    Bulk primitive behind Job Status's delete actions, reusing the single-job path so there is
+    one implementation of what "delete the record" means (AD-3).
+    """
+    deleted = 0
+    for job in jobs:
+        delete_job_record(job)
+        deleted += 1
+    return deleted
 
 
 def purge_expired_artifacts(now: datetime | None = None) -> int:
@@ -323,12 +520,19 @@ def purge_expired_artifacts(now: datetime | None = None) -> int:
 
 
 def build_provenance(manifest: ManifestUpload) -> Provenance:
-    """Lift the four provenance fields off a manifest for SBOM metadata (FR-3.8)."""
+    """Lift the provenance fields off a manifest for SBOM metadata (FR-3.8, Story 22.14).
+
+    The organization comes from the manifest's own ``org``, not from the acting request:
+    ``org`` is what the upload form recorded at submission time, and the SBOM must say which
+    line of business the job was filed against even when it is regenerated or exported later
+    by someone acting elsewhere.
+    """
     return Provenance(
         application_id=manifest.application_id,
         component_name=manifest.component_name,
         repository_url=manifest.repository_url,
         source_branch=manifest.source_branch,
+        organization=manifest.org.name if manifest.org_id else "",
     )
 
 

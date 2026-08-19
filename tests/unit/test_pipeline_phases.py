@@ -1,12 +1,10 @@
 """Tests for the Phase 1/2 task bodies and resolve_job_packages (Story 3.3)."""
 
-from unittest.mock import patch
-
 import pytest
 from django.core.files.base import ContentFile
 
 from inventory.manifests.models import ManifestUpload
-from inventory.sbom.models import SBOMJob
+from inventory.sbom.models import JobTask, SBOMJob
 from inventory.sbom.services import resolve_job_packages
 from inventory.tasks.sbom_pipeline import detect_and_parse_manifest, resolve_transitive_deps
 from inventory.users.services import create_org, register_user
@@ -53,11 +51,20 @@ def test_resolve_job_packages_reads_pixi_lock() -> None:
 
 @pytest.mark.django_db
 def test_phase_functions_report_progress_and_shape() -> None:
+    """Story 22.20 changed *where* a phase reports: its own task row, not `update_state`.
+
+    The old assertion was `update_state.called`, which only proved a phase told Celery's result
+    backend something. What the user sees comes from the task rows, so that is what is asserted
+    — and both phases must reach COMPLETE, not merely have started.
+    """
     job = _make_job()
-    with patch("celery.app.task.Task.update_state") as update_state:
-        phase1 = detect_and_parse_manifest.apply(args=(str(job.task_id),)).get()
-        phase2 = resolve_transitive_deps.apply(args=(phase1,)).get()
+
+    phase1 = detect_and_parse_manifest.apply(args=(str(job.task_id),)).get()
+    phase2 = resolve_transitive_deps.apply(args=(phase1,)).get()
 
     assert phase1["detected_format"] == "pixi_lock"
     assert {pkg["name"] for pkg in phase2["packages"]} == {"numpy", "requests"}
-    assert update_state.called
+
+    states = {task.key: task.state for task in job.tasks.all()}
+    assert states["detect"] == JobTask.State.COMPLETE
+    assert states["resolve"] == JobTask.State.COMPLETE

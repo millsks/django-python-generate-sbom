@@ -1,12 +1,22 @@
 # Organizations & Membership
 
-Manage the organizations a user belongs to and their rosters. All endpoints
-require [authentication](authentication.md). Endpoints marked **admin** require
-the caller to be an admin of the active organization; otherwise they return
-`403 not_admin`. Endpoints marked **global admin** require the caller to be a
-global admin (a member of the system ADMIN org); otherwise they return
-`403 not_global_admin`. Endpoints that need an active org return
-`404 no_active_org` when the user has none.
+Manage the organizations a deployment has and their rosters.
+
+!!! warning "The gates described below are not enforced"
+
+    Story 21.24 removed the app's authentication, so **every endpoint on this page is open
+    to an unauthenticated caller** — see [Authentication](authentication.md). The
+    admin/global-admin markers are kept because they record the authorization each endpoint
+    is *meant* to carry, and Epics 17-18 restore that decision from host-supplied OIDC group
+    claims at the same seam. Until then, treat them as intent, not protection, and deploy
+    only on a trusted network.
+
+    Two consequences are worth stating plainly. `403 not_admin` is still returned, but **only
+    when the deployment has no organization at all** — the caller is not being refused for
+    lack of privilege, and `404 no_active_org` means the same thing on the endpoints that use
+    it. The global-admin refusal is gone entirely: **no endpoint returns that code any more**
+    (Story 22.8 removed the last copy of the check).
+
 
 ## `GET /api/v1/orgs/`
 
@@ -23,8 +33,9 @@ List the organizations the caller belongs to, flagging the active one.
 
 ## `POST /api/v1/orgs/create/`
 
-Create a new organization with the caller as its admin. **Global admin only**
-(Story 2.12) — a non-global-admin receives `403 not_global_admin`. The `slug` is
+Create a new organization, with the caller as its admin **when there is one** — an
+anonymous request has no user, so the org is created with no membership (Story 22.8).
+Marked **global admin** (Story 2.12), not enforced. The `slug` is
 derived from `name` and made unique automatically (a numeric suffix is appended
 on collision).
 
@@ -32,8 +43,7 @@ on collision).
 
 **Response `201 Created`** — `{ "slug": "acme", "name": "Acme, Inc." }`.
 
-**Errors** — `403 not_global_admin` (caller is not a global admin),
-`400 validation_error` (missing or too-long `name`).
+**Errors** — `400 validation_error` (missing or too-long `name`).
 
 !!! note "Global-admin provisioning"
     Every [global admin](#global-admin-management) is automatically added as an
@@ -60,7 +70,7 @@ Return the current active organization.
 
 ## `GET /api/v1/orgs/members/`
 
-List the active org's roster and whether the caller is an admin. **Admin only.**
+List the active org's roster and whether the caller is an admin. **Admin-scoped** (see the notice above).
 
 **Response `200 OK`**
 
@@ -78,10 +88,12 @@ List the active org's roster and whether the caller is an admin. **Admin only.**
 
 ## `POST /api/v1/orgs/members/`
 
-Add an **already-registered** user to the active org by email. **Admin only.**
-There is no account creation here — the person must have
-[registered](authentication.md#post-apiv1authregister) first; an unknown email
-is rejected rather than provisioned. To provision a brand-new account instead,
+Add an **already-registered** user to the active org by email. **Admin-scoped** (see the notice above).
+There is no account creation here; an unknown email is rejected rather than
+provisioned. Self-registration was removed with the rest of the app's
+authentication (Story 21.24), so accounts now come from
+[create-user](#post-apiv1orgsmemberscreate-user), `seed_superuser`, or the Django
+admin. To provision a brand-new account instead,
 use [create-user](#post-apiv1orgsmemberscreate-user).
 
 **Request body**
@@ -104,7 +116,7 @@ use [create-user](#post-apiv1orgsmemberscreate-user).
 ## `POST /api/v1/orgs/members/create-user/`
 
 Create a **brand-new** user account and add it to the active org in one step
-(Story 2.10). **Admin only.** Distinct from
+(Story 2.10). **Admin-scoped** (see the notice above). Distinct from
 [add-existing](#post-apiv1orgsmembers): this provisions a new account with an
 admin-set temporary password (shared out of band — there is no email). Use it
 when the person does not have an account yet.
@@ -128,7 +140,7 @@ when the person does not have an account yet.
 
 ## `DELETE /api/v1/orgs/members/{user_id}/`
 
-Remove a member from the active org. **Admin only.**
+Remove a member from the active org. **Admin-scoped** (see the notice above).
 
 **Response `204 No Content`.**
 
@@ -138,7 +150,7 @@ removing a global admin from a single org).
 
 ## `POST /api/v1/orgs/promote-admin/`
 
-Promote a member of the active org to **admin** (Story 2.16). **Admin only.**
+Promote a member of the active org to **admin** (Story 2.16). **Admin-scoped** (see the notice above).
 This *adds* an admin — an org may have any number — and demotes no one. (It
 replaces the old `transfer-admin`, which demoted the sole admin.) Idempotent if
 the target is already an admin.
@@ -178,8 +190,10 @@ Leave the active organization. A sole admin cannot leave.
 
 The global-admin tier is the system **ADMIN** org (`Org.is_admin_org=True`): its
 members are global admins, provisioned as an admin of every organization. These
-endpoints are **global admin only** — any other caller receives
-`403 not_global_admin` (Story 13.1).
+endpoints are marked **global admin** (Story 13.1) — but the gate was removed with the
+rest of the app's authorization, and Story 22.8 removed the last in-body copies of it.
+**`403 not_global_admin` is not returned by any of them**; it is listed in the OpenAPI
+schema only as the response shape an enforcing deployment would use.
 
 ### `GET /api/v1/admin/global-admins/`
 
@@ -196,11 +210,11 @@ List the current global admins.
 }
 ```
 
-**Errors** — `403 not_global_admin`.
+**Errors** — none; the list is returned to any caller.
 
 ### `POST /api/v1/admin/global-admins/`
 
-Grant **global admin** to an **already-registered** user, looked up by email.
+Grant **global admin** to an existing user, looked up by email.
 The target is added to the ADMIN org and back-filled as an **admin of every
 existing (and future) organization**. There is no account creation — an unknown
 email is rejected, mirroring [add-existing](#post-apiv1orgsmembers).
@@ -213,8 +227,8 @@ email is rejected, mirroring [add-existing](#post-apiv1orgsmembers).
 
 **Response `201 Created`** — `{ "user_id": 5, "email": "ops@example.com" }`.
 
-**Errors** — `403 not_global_admin`, `400 validation_error` (missing/malformed
-`email`), `400 no_such_user` (no registered user with that email).
+**Errors** — `400 validation_error` (missing/malformed `email`), `400 no_such_user`
+(no user with that email).
 
 ### `DELETE /api/v1/admin/global-admins/{user_id}/`
 
@@ -224,6 +238,6 @@ them later if needed.
 
 **Response `204 No Content`.**
 
-**Errors** — `403 not_global_admin`, `404 not_found` (no user with that id),
+**Errors** — `404 not_found` (no user with that id),
 `400 last_global_admin` (cannot revoke the last remaining global admin — the
 tier must never be left empty).

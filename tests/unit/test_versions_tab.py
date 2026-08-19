@@ -336,13 +336,18 @@ def test_missing_and_failed_stay_distinct(org_client) -> None:  # type: ignore[n
 
 
 @pytest.mark.django_db
-def test_the_tab_is_org_scoped(org_client) -> None:  # type: ignore[no-untyped-def]
+def test_another_orgs_tab_is_reachable(org_client) -> None:  # type: ignore[no-untyped-def]
+    """Story 22.16: the pages are cross-org, so another org's tab must render.
+
+    Was `test_the_tab_is_org_scoped`, asserting a 404. History now lists every org's jobs, so
+    refusing to open their tabs would strand the rows it shows.
+    """
     client, _ = org_client
     outsider = register_user(email="outsider@example.com", password=PASSWORD)
     other_org = create_org(name="Other", admin_user=outsider)
     theirs = _job(other_org)
 
-    assert client.get(f"/results/{theirs.task_id}/tab/versions").status_code == 404
+    assert client.get(f"/results/{theirs.task_id}/tab/versions").status_code == 200
 
 
 @pytest.mark.django_db

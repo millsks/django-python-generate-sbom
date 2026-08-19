@@ -471,8 +471,187 @@ development_status:
   # Suggested order: 22.2 (bug) -> 22.1 -> 22.3 -> 22.4 -> 22.5.
   # Stories are defined in epics.md; run create-story to context each before dev.
   epic-22: in-progress
-  22-1-containerless-env-template-default: backlog
-  22-2-fix-unregistered-beat-maintenance-tasks: ready-for-dev
-  22-3-windows-ci-parity-full-gate: backlog
-  22-4-prove-local-pipeline-end-to-end: backlog
-  22-5-state-the-no-container-contract: backlog
+  22-1-containerless-env-template-default: review
+  22-2-fix-unregistered-beat-maintenance-tasks: review
+  22-3-windows-ci-parity-full-gate: review
+  22-4-prove-local-pipeline-end-to-end: review
+  # The DECISION GATE is answered: the Compose path is KEPT, de-emphasised, and explicitly
+  # qualified as unavailable to developers whose organization blocks Docker/Podman. Retiring
+  # it was rejected — it is the only local way to exercise PostgreSQL/Redis/S3 against the
+  # real backing services before a deployment, and the people who CAN run it are the ones who
+  # need it. Recorded as AD-18 in the architecture spine, stated in CONTRIBUTING.md and
+  # setup.md, and enforced by tests/unit/test_no_container_contract.py, which walks the
+  # `pixi run ci` task graph transitively rather than trusting the eight names listed under
+  # [tasks.ci]. PENDING PRODUCT-OWNER CONFIRMATION of the keep decision.
+  22-5-state-the-no-container-contract: review
+  # ADDED 2026-08-18 by product-owner direction, mid-epic: "remove the requirement to cleanup
+  # expired artifacts — we can do that manually when we need to review." AMENDS FR-8.2 (which
+  # specified a scheduled cleanup). Expiry is still TRACKED via artifacts_expire_at; only the
+  # unattended nightly purge goes. Lands right after 22.2 registered that task, which is what
+  # makes removing one schedule entry safe to reason about.
+  22-6-manual-reviewable-artifact-purge: review
+  # ADDED 2026-08-18. Found by Story 22.4's real-worker test on its FIRST Windows run, and
+  # shipping broken since Epic 20: kombu's filesystem:// transport imports pywintypes/win32file
+  # on Windows, pywin32 was never declared, so the worker/beat/dev all died at import. The one
+  # platform with no Docker fallback had no working background-job path at all.
+  22-7-fix-windows-worker-pywin32: review
+  # ADDED 2026-08-18, found by auditing the suite for post-refactor validity. TWO defects that
+  # Story 21.24 left behind and that no test could see, because every page/API test logs in
+  # first and nothing exercised the anonymous path that is now the ORDINARY one:
+  #   (a) org creation returned 500 for an anonymous caller on BOTH the API and the page
+  #       (AnonymousUser assigned to OrgMembership.user), and
+  #   (b) four DRF views kept in-body is_global_admin() gates, so SIGNING IN made a user more
+  #       restricted than staying anonymous.
+  22-8-anonymous-admin-surface: review
+  # ADDED 2026-08-18 by product-owner direction: "if that functionality is no longer needed i
+  # would rather get rid of it." Removed the Members and Global Admins UI (pages, routes,
+  # templates, nav entries, forms) and the leave-org action. All edited records that gate
+  # nothing without identity, and all three were BROKEN for the anonymous caller that is now
+  # the ordinary one — /organization/leave raised TypeError on AnonymousUser. The org and
+  # membership MODEL, the services, and the /api/v1/ endpoints are all retained: the model is
+  # the seam OIDC group claims re-attach to (Epics 17-18), and Story 21.24 AC #9 froze the API.
+  22-9-remove-inert-membership-ui: review
+  # ADDED 2026-08-18. Orgs are lines of business known up front, so they are seeded from a
+  # committed list (orgs.yml) by an idempotent boot-time command rather than typed into a form.
+  # Placeholder list ORG001-ORG005 pending the real one. The org-creation UI is RETAINED for
+  # now — retiring it is a separate decision (see the story notes).
+  22-10-seed-orgs-from-a-list: review
+  # ADDED 2026-08-18. With orgs seeded from orgs.yml (22.10), the creation form is redundant
+  # and the hub only linked to surfaces the nav already offers — so the Organization UI goes
+  # too. Nav is now Home/Upload/History/API Keys. Orgs remain first-class DATA: the header
+  # switcher selects one and the upload form files a job against one.
+  22-11-remove-organization-ui: review
+  # ADDED 2026-08-18, closing the three findings from the post-refactor suite audit:
+  #   (a) get_org_scoped_object_or_404 was documented as the org-isolation boundary and had
+  #       ZERO callers — every real lookup went through .for_org(). Deleted: a function that
+  #       looks like the security boundary and enforces nothing invites the next reader to
+  #       trust it.
+  #   (b) the no-organizations state (common/access.py) was entirely untested, and it turned
+  #       out to be the SAME condition behind most of users/views.py's uncovered lines, since
+  #       get_admin_org == get_request_org after 21.24. One scenario closed both.
+  #   (c) test-only _ScopedThing (no table, cascading FK to Org) made ANY Org delete fail once
+  #       its module was collected — a pass/fail that depended on test order. Table now created
+  #       for models declared under tests/.
+  22-12-close-post-refactor-audit-findings: review
+  # ADDED 2026-08-18, surfaced by an `mkdocs build` INFO line about a link to an endpoint
+  # Story 21.24 deleted. The API reference still described gates the app no longer enforces:
+  # "Admin only", "Global admin only", and `403 not_global_admin` listed as a returned error
+  # on endpoints that CANNOT return it. Documenting protection the app does not have is worse
+  # than documenting none. Also removed two dead constants (_NOT_GLOBAL_ADMIN,
+  # _INVALID_CREDENTIALS) that coverage could not see, since a module-level assignment always
+  # executes.
+  22-13-reconcile-api-reference-with-removed-authorization: review
+  # ADDED 2026-08-19 by product-owner direction: "we no longer need the org switcher. the
+  # orgs are selected in the upload form and should be added to the sbom with the other
+  # metadata." Split into the document half (22.14) and the UI half (22.16); 22.15 is a
+  # Windows defect the work surfaced on the way.
+  22-14-organization-in-sbom-metadata: review
+  # ADDED 2026-08-19. Found by CI, not review: Story 22.4's end-to-end test failed THREE times
+  # on Windows at progress=45. `requests` has no default timeout and Celery's soft time limit
+  # needs SIGUSR1 plus an interruptible pool — neither of which Windows has — so an unanswered
+  # connection stalled the only worker thread indefinitely and FR-6.7's degradation never
+  # fired. Two other hypotheses (solo-pool chord deadlock; broken TLS trust store) were
+  # falsified first. Proven by ablation: without the fix the reproduction test hangs.
+  22-15-analysis-http-timeouts: review
+  # ADDED 2026-08-19. The UI half of the org-switcher direction. TWO PO DECISIONS were taken
+  # before any code: pages scope (org becomes metadata; History lists every org with a column
+  # and filter) and SBOM field (each format's own supplier slot). AMENDS AD-2: org isolation
+  # now binds the API, where an API key really pins a tenant, and no longer the pages — which
+  # never enforced it against a person anyway, since 21.24 let anyone switch to any org.
+  # Contained a hazard the change introduced: "delete all artifacts" would have widened from
+  # one org to the whole deployment; it now follows the on-screen filter.
+  22-16-retire-the-org-switcher: review
+  # ADDED 2026-08-19 by product-owner direction: "rename the history page to job status …
+  # for both the ui and for the api." ONE PO DECISION taken first: the API has no "history"
+  # naming to rename (`/api/v1/sbom/jobs/`), and `/sbom/status/{task_id}/` already owns
+  # "status" for a single job — so the API renames its DOCUMENTED name only and keeps its
+  # paths (21.24 AC #9 froze that contract). The UI renamed paths in full, no alias.
+  22-17-rename-history-to-job-status: review
+  # ADDED 2026-08-19. THE actual cause of the Windows failure, found on the fourth attempt:
+  # the test starts the worker with stdout=PIPE and never reads it, so once the pipe buffer
+  # fills the process blocks forever on its next write — mid-task, silently. Windows buffers
+  # are far smaller than macOS/Linux, which is why only Windows hit it. Confirmed by raising
+  # the worker to --loglevel=DEBUG and reproducing the IDENTICAL hang on macOS (216s vs the
+  # usual 12s). Stories 22.15 (missing HTTP timeouts) was a real defect found on the way and
+  # stands on its own; it was not this one.
+  22-18-drain-the-worker-pipe: review
+  # ADDED 2026-08-19 by product-owner direction: "the progress bar on the job status page
+  # [should] update the text with the name of the phase that is currently being processed."
+  # The label existed since 6.2; the ANALYSIS phases never wrote it (task.update_state only),
+  # so a job read "generate SBOM document - 45%" for the whole fan-out. Needed a monotonic,
+  # race-safe advance: the three phases run concurrently with bands 55/80/93 and phase 8
+  # reports 95. Also fixed a failed phase reporting "complete" -> now "unavailable".
+  22-19-live-phase-name-on-the-progress-bar: review
+  # ADDED 2026-08-19 — PRODUCT-OWNER DESIGN, after Story 22.19's two attempts at a single
+  # status line both failed for the same reason: the three analysis tasks run concurrently, so
+  # one `current_step` string can never name more than one of them, and the hand-picked
+  # percentage bands had drifted until two tasks both reported 93%. A row per task (new
+  # JobTask model, migration 0004) makes concurrency a non-problem and lets the bar be DERIVED
+  # from finished tasks. Supersedes 22.19's `advance_job_progress` mechanism entirely.
+  # Also fixed the browser tab still reading "History" (22.17 missed the title block).
+  22-20-job-task-list-progress: review
+  # ADDED 2026-08-19, reported by the product owner: clicking a results tab left "Overview"
+  # highlighted with only a focus outline on the clicked one. The BODY was loading correctly
+  # the whole time — htmx targeted #tab-content alone, so the tab strip kept the `active`
+  # class the server first rendered. Strip and body are now one swap target from one template.
+  # The existing test asserted `hx-target="#tab-content"` — i.e. it pinned the bug and would
+  # have passed forever.
+  22-21-tab-strip-swaps-with-its-body: review
+  # ADDED 2026-08-19 by product-owner direction: "review and refresh all of the
+  # documentation … update, delete, do what needs to be done." Epic 22 removed the org
+  # switcher, the Members/Global Admins/Organization screens and the last sign-in language,
+  # renamed History to Job Status, made the pages cross-org and replaced the progress line
+  # with a task list — the docs still described all of it as current. Deleted the
+  # organization how-to outright; marked the two Epic 21 audit pages as FROZEN acceptance
+  # evidence rather than reference. Added test_documentation_accuracy.py so it fails the gate
+  # next time instead of rotting silently.
+  22-22-documentation-refresh: review
+  # ADDED 2026-08-19 by product-owner direction: rename the product to FABRIC (Framework for
+  # Automated Bill of Materials & Risk Inventory in Code), acronym written WITHOUT dots. Two
+  # settings lines carried it — Story 21.3's "name is defined once, never a literal in a
+  # template" rule is what made that possible. Top bar = acronym alone (the expansion was
+  # tried there and crowded the chrome); landing page spells it out at h2 with a break after
+  # the ampersand, computed in the view so the same string still serves <title> and footer.
+  # The DISTRIBUTION name (python-inventory-supply-lens) and the repo name deliberately do
+  # NOT change — Story 21.22 separated those identities.
+  22-23-rename-the-product-to-fabric: review
+  # ADDED 2026-08-19, reported by the product owner: clicking a finished Job Status row
+  # loaded the whole page into its own table. `row_attrs` defaulted the polling attributes to
+  # "" instead of omitting them; django-tables2 renders a blank attribute where it omits a
+  # None, and htmx reads an empty `hx-get` as "GET the current URL" — with a <tr>'s default
+  # trigger being a click. `poll_attrs` was already correct (it returns {}); only the default
+  # undid it. General lesson: for attribute-driven libraries, `attr=""` is a statement, not a
+  # blank.
+  22-24-finished-rows-carry-no-htmx-attributes: review
+  # ADDED 2026-08-19, reported by the product owner: sorting a results-tab column threw you
+  # back to Overview. django-tables2 builds sort links by preserving the CURRENT request's
+  # query string, and the tab fragment is fetched at /results/<id>/tab/<slug> which has none —
+  # so links came out as a bare `?sort=name`, and following one (a full page navigation)
+  # landed with no `tab` selected. The sort was applied the whole time, to a tab nobody was
+  # looking at. Fixed in the view rather than the template so the links are right however the
+  # fragment is requested.
+  22-25-sorting-a-tab-keeps-the-tab: review
+  # ADDED 2026-08-19 by product-owner direction: show Application and Component on Job Status
+  # between Organization and Submitted, and link back to the original manifest so it can be
+  # reviewed. The manifest had been write-only since upload — parsed once, then unreachable —
+  # so a surprising SBOM could not be checked against its input. Rendered into an ESCAPED
+  # <pre> on a normal page rather than served as a file: a manifest is whatever someone
+  # uploaded, and a raw response would let it choose how the browser treats it.
+  22-26-application-component-and-manifest-review: review
+  # ADDED 2026-08-19 after the product owner renamed the product to PyFABRIC (commit a2c627e)
+  # and the suite failed. BOTH defects were in the TESTS, not the product: five of them pinned
+  # the product name's literal value — undoing Story 21.3's "the name is configuration" rule —
+  # and the docs nav check compared str(path.relative_to(...)) against mkdocs.yml's forward
+  # slashes, which fails on Windows only. A new guard bans that path pattern across the suite
+  # and found five more instances on its first run. NOTE: a2c627e also removed the landing
+  # heading's line break requested in 22.23; left removed, flagged to the product owner.
+  22-27-tests-must-not-pin-configuration: review
+  # ADDED 2026-08-19, reported by the product owner with a 404: SBOM downloads redirected to
+  # /media/... and config/urls.py never routed it. FileSystemStorage has no presigning, so the
+  # containerless path is the only one where Django is asked to serve the blob at all — in
+  # containers MinIO does. Third defect of this exact shape after 22.15 and 22.18: every layer
+  # individually correct, only the combination broken, and only on the path this epic protects.
+  22-28-serve-media-in-containerless-dev: review
+  # Whole-record deletion + the page-scoped SBOM download were authored OUTSIDE this session,
+  # found uncommitted in the tree and committed at the product owner's request (commit 0611f74).
+  # AMENDS FR-8.1 for the UI path — recorded as AD-21.

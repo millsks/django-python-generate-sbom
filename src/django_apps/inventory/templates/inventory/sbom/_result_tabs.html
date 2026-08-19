@@ -1,0 +1,32 @@
+{% comment %} The results page's tab strip (Story 21.12; swapped as part of the panel since
+  Story 22.21).
+
+  Defined once and included by both the full page and the htmx fragment, because the `active`
+  class is computed here — two copies would drift, and the drift is invisible until a tab is
+  clicked.
+
+  The whole panel is the swap target, not just the body: htmx used to replace `#tab-content`
+  alone, which left this strip exactly as the server first rendered it. The clicked tab's body
+  loaded correctly while "Overview" stayed highlighted, so the page looked stuck on a tab it
+  was no longer showing.
+{% endcomment %}
+<ul class="nav nav-tabs mt-4" role="tablist">
+  {% for slug, label in tabs %}
+    <li class="nav-item" role="presentation">
+      {% if slug in artifact_tabs and not artifacts_available %}
+        <span class="nav-link disabled" aria-disabled="true" title="Artifacts were removed">{{ label }}</span>
+      {% else %}
+        <a class="nav-link {% if slug == active_tab %}active{% endif %}"
+           href="?tab={{ slug }}"
+           role="tab"
+           aria-selected="{% if slug == active_tab %}true{% else %}false{% endif %}"
+           hx-get="{% url 'ui-job-tab' task_id=job.task_id tab=slug %}"
+           hx-target="#tab-panel"
+           hx-swap="outerHTML"
+           {% comment %} Keeps the URL in step with the visible tab, so refreshing or
+             sharing after a click lands on the same place. {% endcomment %}
+           hx-push-url="?tab={{ slug }}">{{ label }}</a>
+      {% endif %}
+    </li>
+  {% endfor %}
+</ul>

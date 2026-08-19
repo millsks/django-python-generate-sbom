@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% load render_table from django_tables2 %}
+{% load crispy_forms_tags %}
+{% comment %} Job status (converted from HistoryPage.tsx, the SPA's largest page; called
+  History until Story 22.17 renamed it — the page shows running jobs as well as finished ones).
+
+  Live polling is NOT here — Story 21.11 adds it to these rows.
+
+  Filtering, sorting, and paging are all querystring-driven, so any view of this table can be
+  bookmarked or shared. That is the trade the epic accepted in exchange for the SPA's
+  client-side sorting of already-fetched rows.
+
+  Selection covers the CURRENT PAGE only, matching the SPA's toggleAll, and the confirmation
+  copy says so rather than implying it spans the filter.
+
+  Both delete buttons remove whole RECORDS, not just artifacts: job, tasks, reports, manifest
+  and every stored file. The confirmations are the only guard, so they name what goes.
+{% endcomment %}
+
+{% block title %}Job status · {{ product_name_short }}{% endblock %}
+
+{% block content %}
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <div>
+      <h1 class="h3 mb-0">Job status</h1>
+      {% comment %} Story 22.16: this page spans every organization now that the switcher is
+        gone, so the subtitle no longer names one — the Organization column and its filter say
+        which tenant each job belongs to. {% endcomment %}
+      <p class="text-body-secondary mb-0">Every organization</p>
+    </div>
+      {% comment %} Was admin-only (Story 2.17). Story 21.24 removed the app's access
+        control, so this is available to anyone; the confirm dialog is now the only
+        guard against an accidental click.
+
+        Story 22.16: the current filters ride along as hidden fields, so this deletes exactly
+        what the table is showing. Without them, making the page cross-org would have turned
+        this button into a deployment-wide wipe behind a confirmation naming one org. {% endcomment %}
+      <form method="post" action="{% url 'ui-jobs-delete-all-records' %}"
+            onsubmit="return confirm('Permanently delete {{ delete_all_scope|escapejs }}? This removes the whole record — the job and its history, the uploaded manifest, the SBOM, and every report file. This cannot be undone.');">
+        {% csrf_token %}
+        {% for name, value in active_filters %}
+          <input type="hidden" name="{{ name }}" value="{{ value }}">
+        {% endfor %}
+        <button type="submit" class="btn btn-sm btn-outline-danger">Delete all records</button>
+      </form>
+
+  </div>
+
+  <form method="get" class="row g-2 align-items-end mt-3">
+    <div class="col-sm-4 col-lg-3">
+      <label class="form-label" for="id_status">Status</label>
+      {{ filter.form.status }}
+    </div>
+    <div class="col-sm-4 col-lg-3">
+      <label class="form-label" for="id_format">Manifest format</label>
+      {{ filter.form.format }}
+    </div>
+    <div class="col-sm-auto">
+      {% comment %} No `page` field is carried over, so changing a filter starts at page 1
+        rather than stranding the user on a page that no longer exists. {% endcomment %}
+      <button type="submit" class="btn btn-outline-primary">Apply</button>
+      <a class="btn btn-link" href="{% url 'ui-job-status' %}">Clear</a>
+    </div>
+  </form>
+
+  <form method="post" action="{% url 'ui-jobs-delete-records' %}" id="bulk-delete"
+        onsubmit="return confirm('Permanently delete the selected jobs on this page? This removes the whole record — the job and its history, the uploaded manifest, the SBOM, and every report file. This cannot be undone.');">
+    {% csrf_token %}
+
+    {% comment %} `table-responsive` so a narrow viewport scrolls the TABLE rather than the
+      page — this table has eight columns and is the widest thing in the app. {% endcomment %}
+    <div class="table-responsive mt-3">
+      {% render_table table %}
+    </div>
+
+    <button type="submit" class="btn btn-sm btn-outline-danger" id="delete-selected">
+      Delete selected records
+    </button>
+    <span class="small text-body-secondary ms-2">Applies to the rows selected on this page.</span>
+  </form>
+
+  <script>
+    // Header checkbox toggles only the rows currently rendered — the same scope the SPA had.
+    (function () {
+      var all = document.getElementById('select-all');
+      if (!all) return;
+      all.addEventListener('change', function () {
+        document.querySelectorAll('#bulk-delete input[name="task_ids"]').forEach(function (box) {
+          box.checked = all.checked;
+        });
+      });
+    })();
+  </script>
+{% endblock %}

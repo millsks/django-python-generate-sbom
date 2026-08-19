@@ -1,0 +1,46 @@
+# 04_data-analysis — pandas / numpy analytics and reporting
+# Generated manifest; run `pixi lock` to resolve against conda-forge.
+
+[workspace]
+name = "data-analysis"
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64"]
+
+[dependencies]
+python = "3.13.*"
+numpy = ">=2.5"
+pandas = ">=3.0"
+scipy = ">=1.18"
+polars = ">=1.43"
+pyarrow = ">=25.0"
+python-duckdb = ">=1.5"
+matplotlib = ">=3.11"
+seaborn = ">=0.13"
+statsmodels = ">=0.14"
+openpyxl = ">=3.1"
+xlsxwriter = ">=3.2"
+tabulate = ">=0.10"
+tqdm = ">=4.70"
+python-dateutil = ">=2.9"
+jupyterlab = ">=4.6"
+ipykernel = ">=7.3"
+
+[feature.dev.dependencies]
+pytest = ">=8.3"
+pytest-cov = ">=6.0"
+ruff = ">=0.8"
+mypy = ">=1.14"
+pre-commit = ">=4.0"
+
+[feature.dev.tasks]
+bootstrap = "pre-commit install --install-hooks"
+fmt = "ruff format ."
+lint = "ruff check ."
+check = "mypy src/"
+test = "pytest tests/unit/"
+test-integration = "pytest tests/integration/"
+cov = "pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=90"
+ci = { depends-on = ["lint", "check", "cov"] }
+
+[environments]
+dev = { features = ["dev"] }

@@ -104,14 +104,26 @@ def _unique_org_slug(name: str) -> str:
     return slug
 
 
-def create_org(name: str, admin_user: UserT) -> Org:
-    """Create an org with ``admin_user`` as its sole admin.
+def create_org(name: str, admin_user: UserT | None = None) -> Org:
+    """Create an org, with ``admin_user`` as its sole admin when there is one.
 
-    Shared by create-additional-org (Story 2.3/2.5). Every global admin is
-    auto-added as an admin of the new org (Story 2.8, AC #2a).
+    Shared by create-additional-org (Story 2.3/2.5). Every global admin is auto-added as an
+    admin of the new org (Story 2.8, AC #2a).
+
+    ``admin_user`` is optional since Story 22.8. Story 21.24 removed the app's authentication,
+    so the ordinary caller is **anonymous** — and an anonymous request has no user to make an
+    admin. Passing ``AnonymousUser`` through raised
+    ``ValueError: Cannot assign ... "OrgMembership.user" must be a "User" instance``, so both
+    the API and the page returned **500** for the now-normal case.
+
+    An org with no memberships is a coherent state here, and the same shape the codebase
+    already uses elsewhere: ``ManifestUpload.user`` and ``SBOMJob.user`` are nullable precisely
+    so API-key (userless) work can be recorded. A synthetic user is deliberately NOT invented —
+    Story 21.24's notes rule that out explicitly.
     """
     org = Org.objects.create(name=name, slug=_unique_org_slug(name))
-    OrgMembership.objects.create(org=org, user=user_ref(admin_user), role=OrgMembership.Role.ADMIN)
+    if admin_user is not None and getattr(admin_user, "is_authenticated", False):
+        OrgMembership.objects.create(org=org, user=user_ref(admin_user), role=OrgMembership.Role.ADMIN)
     _provision_global_admins(org)
     return org
 

@@ -15,6 +15,7 @@ from rest_framework.test import APIClient
 from inventory.manifests.models import ManifestUpload
 from inventory.sbom.models import SBOMJob
 from inventory.sbom.parsers import PackageSpec, ResolutionError
+from inventory.sbom.pipeline_tasks import progress_for
 from inventory.tasks import sbom_pipeline as pipeline
 from inventory.users.services import create_org, register_user
 
@@ -135,7 +136,9 @@ def test_aggregate_writes_reports_and_merges_summaries() -> None:
 
     assert out == {"task_id": str(job.task_id), "analysis": envelopes}
     job.refresh_from_db()
-    assert job.progress == 95
+    # Story 22.20: the bar is derived from finished tasks, not chosen by the phase. Aggregate
+    # is task 7 of 8 and this test runs it alone, so one task has finished when it returns.
+    assert job.progress == progress_for(1)
 
     reports = {r.report_type: r for r in AnalysisReport.objects.filter(job=job)}
     assert reports["vuln"].failed is False and reports["vuln"].artifact_key == "k"

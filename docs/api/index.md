@@ -47,19 +47,21 @@ Errors return the appropriate HTTP status with a consistent JSON envelope:
 
 Some errors add fields (for example a failed report includes
 `failure_reason`). Codes you will encounter across the API include
-`validation_error`, `invalid_credentials`, `invalid_api_key`, `not_admin`,
-`not_global_admin`, `no_active_org`, `not_a_member`, `no_such_user`,
-`already_member`, `email_taken`, `last_admin`, `last_global_admin`,
-`global_admin_protected`, `not_found`, `not_ready`, `report_failed`,
-`rate_limited`, `unsupported_format`, and `parse_error`.
+`validation_error`, `invalid_api_key`, `not_admin`, `no_active_org`,
+`not_a_member`, `no_such_user`, `already_member`, `email_taken`, `last_admin`,
+`last_global_admin`, `global_admin_protected`, `not_found`, `not_ready`,
+`report_failed`, `rate_limited`, `unsupported_format`, and `parse_error`.
+
+`invalid_credentials` and `not_global_admin` were removed with the app's
+authentication (Stories 21.24 and 22.8) and are no longer returned by anything.
 
 ## Endpoint groups
 
 | Group | Description |
 | --- | --- |
-| [Authentication](authentication.md) | Registration, session login/logout, and how session vs. API-key auth work |
+| [Authentication](authentication.md) | Why the API is open, and how an API key selects the organization |
 | [Organizations & Membership](organizations.md) | List/create/switch orgs, roster, add/create/remove members, promote/demote admins, global-admin management, leave |
 | [API Keys](api-keys.md) | List, create (plaintext shown once), and revoke org API keys |
-| [Jobs](jobs.md) | Upload manifests, submit SBOM jobs, list jobs, poll status |
+| [Jobs](jobs.md) | Upload manifests, submit SBOM jobs, list job status, poll a single job |
 | [Reports](analysis.md) | Vulnerability, license, and version-currency reports |
 | [Artifacts & Downloads](artifacts.md) | SBOM download redirect, inline SBOM document |

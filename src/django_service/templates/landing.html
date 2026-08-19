@@ -15,7 +15,13 @@
 {% block content %}
   <div class="container py-4 py-md-5">
     <div class="text-center mx-auto" style="max-width: 46rem;">
-      <h1 class="display-5 fw-bold">{{ product_name }}</h1>
+      {% comment %} `h2` rather than `display-5`: the full name is long enough that display
+        sizing pushed everything below it off the first screen. It is still the page's `h1`
+        semantically — only the visual size drops. The name wraps naturally; an explicit break
+        after the ampersand was tried and removed. {% endcomment %}
+      <h1 class="h2 fw-bold">
+        {{ product_name }}
+      </h1>
       <p class="fs-4 text-body-secondary">
         Generate Software Bills of Materials from Python dependency manifests.
       </p>

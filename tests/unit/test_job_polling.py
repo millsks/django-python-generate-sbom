@@ -19,7 +19,7 @@ from inventory.users.models import Org
 from inventory.users.services import create_org, register_user
 
 PASSWORD = "pw12345678"
-HISTORY = "/history"
+HISTORY = "/job-status"
 
 # The interval the SPA polled at (POLL_MS = 5000); the conversion must not quietly change it.
 EXPECTED_TRIGGER = 'hx-trigger="every 5s"'
@@ -78,9 +78,9 @@ def test_only_non_terminal_rows_carry_a_polling_trigger(org_client) -> None:  # 
 
     html = client.get(HISTORY).content.decode()
 
-    assert f"/history/row/{running.task_id}" in html
-    assert f"/history/row/{done.task_id}" not in html
-    assert f"/history/row/{failed.task_id}" not in html
+    assert f"/job-status/row/{running.task_id}" in html
+    assert f"/job-status/row/{done.task_id}" not in html
+    assert f"/job-status/row/{failed.task_id}" not in html
 
 
 @pytest.mark.django_db
@@ -107,7 +107,7 @@ def test_the_row_partial_swaps_only_that_row(org_client) -> None:  # type: ignor
     running = _job(org, status=SBOMJob.Status.PROGRESS, progress=25, step="Parsing")
     other = _job(org, status=SBOMJob.Status.PROGRESS, progress=80, step="Analysing")
 
-    body = client.get(f"/history/row/{running.task_id}").content.decode()
+    body = client.get(f"/job-status/row/{running.task_id}").content.decode()
 
     assert "Parsing" in body
     assert "Analysing" not in body
@@ -121,7 +121,7 @@ def test_the_partial_shows_phase_and_percentage(org_client) -> None:  # type: ig
     client, org = org_client
     job = _job(org, status=SBOMJob.Status.PROGRESS, progress=63, step="Scanning vulnerabilities")
 
-    body = client.get(f"/history/row/{job.task_id}").content.decode()
+    body = client.get(f"/job-status/row/{job.task_id}").content.decode()
 
     assert "Scanning vulnerabilities" in body
     assert "63" in body
@@ -134,13 +134,13 @@ def test_a_job_that_finishes_returns_a_row_without_a_trigger(org_client) -> None
     client, org = org_client
     job = _job(org, status=SBOMJob.Status.PROGRESS, progress=90, step="Finalising")
 
-    assert EXPECTED_TRIGGER in client.get(f"/history/row/{job.task_id}").content.decode()
+    assert EXPECTED_TRIGGER in client.get(f"/job-status/row/{job.task_id}").content.decode()
 
     SBOMJob.objects.filter(pk=job.pk).update(
         status=SBOMJob.Status.SUCCESS, completed_at=timezone.now(), result_key="sboms/x.json"
     )
 
-    body = client.get(f"/history/row/{job.task_id}").content.decode()
+    body = client.get(f"/job-status/row/{job.task_id}").content.decode()
     assert EXPECTED_TRIGGER not in body
     assert "Completed" in body
 
@@ -150,7 +150,7 @@ def test_a_failed_row_shows_its_failure_reason(org_client) -> None:  # type: ign
     client, org = org_client
     job = _job(org, status=SBOMJob.Status.FAILED, reason="unsupported_format")
 
-    body = client.get(f"/history/row/{job.task_id}").content.decode()
+    body = client.get(f"/job-status/row/{job.task_id}").content.decode()
 
     assert "Failed" in body
     assert "unsupported_format" in body
@@ -167,14 +167,14 @@ def test_elapsed_advances_while_running_and_freezes_when_finished(org_client) ->
     job = _job(org, status=SBOMJob.Status.PROGRESS, progress=10)
     SBOMJob.objects.filter(pk=job.pk).update(created_at=timezone.now() - timedelta(seconds=90))
 
-    running = client.get(f"/history/row/{job.task_id}").content.decode()
+    running = client.get(f"/job-status/row/{job.task_id}").content.decode()
     assert "1m 3" in running  # ~1m30s and climbing
 
     completed_at = timezone.now()
     SBOMJob.objects.filter(pk=job.pk).update(status=SBOMJob.Status.SUCCESS, completed_at=completed_at)
 
-    first = client.get(f"/history/row/{job.task_id}").content.decode()
-    second = client.get(f"/history/row/{job.task_id}").content.decode()
+    first = client.get(f"/job-status/row/{job.task_id}").content.decode()
+    second = client.get(f"/job-status/row/{job.task_id}").content.decode()
     # Two reads a moment apart now agree, because the end point no longer moves.
     assert first == second
 
@@ -184,13 +184,23 @@ def test_elapsed_advances_while_running_and_freezes_when_finished(org_client) ->
 
 @pytest.mark.django_db
 def test_the_results_page_shows_progress_and_polls_while_running(org_client) -> None:  # type: ignore[no-untyped-def]
+    """Story 22.20 replaced the single status line with the pipeline's task list.
+
+    The page used to echo whatever string `current_step` held; it now shows every task and
+    marks the running one, so the assertion is about a *declared* task rather than free text.
+    """
+    from inventory.sbom.services import finish_job_task, start_job_task
+
     client, org = org_client
-    job = _job(org, status=SBOMJob.Status.PROGRESS, progress=55, step="Resolving")
+    job = _job(org, status=SBOMJob.Status.PROGRESS, progress=0, step="")
+    finish_job_task(str(job.task_id), "detect")
+    start_job_task(str(job.task_id), "resolve")
 
     html = client.get(f"/results/{job.task_id}").content.decode()
 
-    assert "Resolving" in html
-    assert "55" in html
+    assert "Task: Resolve dependencies" in html
+    assert "data-task-dots" in html, "the running task should animate"
+    assert "[COMPLETE]" in html, "the finished one should say so"
     assert EXPECTED_TRIGGER in html
 
 
@@ -238,29 +248,33 @@ def test_a_failed_job_shows_its_reason_on_the_results_page(org_client) -> None: 
 
 
 @pytest.mark.django_db
-def test_a_cross_org_job_is_indistinguishable_from_an_unknown_one(org_client) -> None:  # type: ignore[no-untyped-def]
-    """AD-2: 404 for both, so polling cannot be used to discover that a job exists."""
+def test_a_cross_org_job_polls_while_an_unknown_id_does_not(org_client) -> None:  # type: ignore[no-untyped-def]
+    """Story 22.16: cross-org is reachable now; an unknown id still 404s.
+
+    Inverted rather than deleted. The pages list every org's jobs since the switcher was
+    removed, so the only refusal left to assert is the one that is still real.
+    """
     client, _ = org_client
     outsider = register_user(email="outsider@example.com", password=PASSWORD)
     other_org = create_org(name="Other", admin_user=outsider)
     theirs = _job(other_org, status=SBOMJob.Status.PROGRESS)
     unknown = "00000000-0000-0000-0000-000000000000"
 
-    for url in (f"/history/row/{theirs.task_id}", f"/history/row/{unknown}"):
-        assert client.get(url).status_code == 404
+    assert client.get(f"/job-status/row/{theirs.task_id}").status_code == 200
+    assert client.get(f"/job-status/row/{unknown}").status_code == 404
 
-    for url in (f"/results/{theirs.task_id}", f"/results/{unknown}"):
-        assert client.get(url).status_code == 404
+    assert client.get(f"/results/{theirs.task_id}").status_code == 200
+    assert client.get(f"/results/{unknown}").status_code == 404
 
 
 @pytest.mark.django_db
-def test_the_progress_endpoint_is_org_scoped_too(org_client) -> None:  # type: ignore[no-untyped-def]
+def test_the_progress_endpoint_is_cross_org_too(org_client) -> None:  # type: ignore[no-untyped-def]
     client, _ = org_client
     outsider = register_user(email="outsider@example.com", password=PASSWORD)
     other_org = create_org(name="Other", admin_user=outsider)
     theirs = _job(other_org, status=SBOMJob.Status.PROGRESS)
 
-    assert client.get(f"/results/{theirs.task_id}/progress").status_code == 404
+    assert client.get(f"/results/{theirs.task_id}/progress").status_code == 200
 
 
 @pytest.mark.django_db
@@ -268,7 +282,7 @@ def test_polling_endpoints_reject_post(org_client) -> None:  # type: ignore[no-u
     client, org = org_client
     job = _job(org, status=SBOMJob.Status.PROGRESS)
 
-    assert client.post(f"/history/row/{job.task_id}").status_code == 405
+    assert client.post(f"/job-status/row/{job.task_id}").status_code == 405
     assert client.post(f"/results/{job.task_id}/progress").status_code == 405
 
 
@@ -286,3 +300,63 @@ def test_the_trigger_is_produced_in_exactly_one_place() -> None:
     app = Path(__file__).resolve().parents[2] / "src" / "django_apps" / "inventory"
     producers = [path.name for path in app.rglob("*.py") if "hx-trigger" in path.read_text(encoding="utf-8")]
     assert producers == ["tables.py"], producers
+
+
+# --- A finished row must carry no htmx attributes at all (Story 22.24) ----------------------
+
+
+@pytest.mark.django_db
+def test_a_finished_row_has_no_htmx_attributes_at_all(org_client) -> None:  # type: ignore[no-untyped-def]
+    """Empty is not the same as absent, and htmx treats the difference as an instruction.
+
+    `poll_attrs` returns `{}` for a terminal job, but the row rendered
+    `hx-get="" hx-trigger="" hx-swap=""` — the attributes were present and blank. An empty
+    `hx-get` means "GET the current URL", and a `<tr>`'s default trigger is a click, so
+    clicking a finished row fetched `/job-status` and swapped the entire page into the row.
+
+    Asserted as "no `hx-` at all" rather than "no `hx-get`", because the same mistake in any
+    one of the three produces the same class of surprise.
+    """
+    import re
+
+    client, org = org_client
+    job = _job(org, status=SBOMJob.Status.SUCCESS)
+
+    html = client.get(f"/job-status/row/{job.task_id}").content.decode()
+    row = re.search(r"<tr[^>]*>", html)
+
+    assert row is not None
+    assert "hx-" not in row.group(0), f"a finished row should issue no requests: {row.group(0)}"
+
+
+@pytest.mark.django_db
+def test_a_running_row_still_carries_the_full_trigger(org_client) -> None:  # type: ignore[no-untyped-def]
+    """The other half: omitting them when terminal must not omit them when running."""
+    import re
+
+    client, org = org_client
+    job = _job(org, status=SBOMJob.Status.PROGRESS)
+
+    html = client.get(f"/job-status/row/{job.task_id}").content.decode()
+    row = re.search(r"<tr[^>]*>", html)
+
+    assert row is not None
+    for attribute in ("hx-get=", "hx-trigger=", "hx-swap="):
+        assert attribute in row.group(0), f"{attribute} missing from a running row"
+    assert 'hx-get=""' not in row.group(0), "an empty hx-get means 'GET the current URL'"
+
+
+@pytest.mark.django_db
+def test_no_row_on_the_page_carries_an_empty_htmx_attribute(org_client) -> None:  # type: ignore[no-untyped-def]
+    """The full table, not just one partial — the bug was visible only on the rendered page."""
+    import re
+
+    client, org = org_client
+    _job(org, status=SBOMJob.Status.SUCCESS)
+    _job(org, status=SBOMJob.Status.PROGRESS)
+
+    html = client.get("/job-status").content.decode()
+
+    offenders = [row for row in re.findall(r"<tr[^>]*>", html) if re.search(r'hx-[a-z-]+=""', row)]
+
+    assert not offenders, f"rows with blank htmx attributes: {offenders}"

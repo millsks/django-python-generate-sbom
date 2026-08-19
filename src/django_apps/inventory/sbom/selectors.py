@@ -21,6 +21,23 @@ def get_job(org: Org, task_id: str) -> SBOMJob:
     return jobs.get(task_id=task_id)
 
 
+def get_any_job(task_id: str) -> SBOMJob:
+    """Return a job by id regardless of org — for the server-rendered pages (Story 22.16).
+
+    Deliberately **not** org-scoped, and deliberately separate from :func:`get_job`, which
+    stays scoped for the API. Since Story 22.16 the organization is provenance on a job rather
+    than a browsing boundary: Job Status lists every org's jobs, so following a row through to its
+    results must work for all of them.
+
+    This is not a loss of isolation. Anyone could already reach any org's jobs by switching to
+    it — `set_active_org_by_slug` accepts every non-ADMIN org since Story 21.24 removed
+    membership checks. The switcher made that a two-click detour; this makes it honest. The
+    **API** keeps :func:`get_job`, because an API key genuinely pins one tenant (AD-8).
+    """
+    jobs = cast("QuerySet[SBOMJob]", SBOMJob.objects.select_related("manifest", "org"))
+    return jobs.get(task_id=task_id)
+
+
 def get_job_by_task_id(task_id: str) -> SBOMJob:
     """Load a job by task_id for task code (org was established at submission)."""
     jobs = cast("QuerySet[SBOMJob]", SBOMJob.objects.select_related("manifest"))
@@ -28,7 +45,7 @@ def get_job_by_task_id(task_id: str) -> SBOMJob:
 
 
 # UI status-filter labels → SBOMJob.status values (Story 6.1). Public because the
-# server-rendered history FilterSet (Story 21.10) applies the same mapping; two copies of it
+# server-rendered Job Status FilterSet (Story 21.10) applies the same mapping; two copies of it
 # would let the API's filter and the page's filter drift.
 STATUS_FILTERS = {
     "In Progress": [SBOMJob.Status.PENDING, SBOMJob.Status.PROGRESS],
@@ -37,14 +54,47 @@ STATUS_FILTERS = {
 }
 
 
+def get_all_jobs(
+    *,
+    status_filter: str | None = None,
+    format_filter: str | None = None,
+) -> QuerySet[SBOMJob]:
+    """Return every org's jobs, most-recent-first — the Job Status page's queryset (Story 22.16).
+
+    See :func:`get_any_job` for why the pages are no longer org-scoped. The org travels with
+    each row (``select_related("org")``) so the table can show which line of business a job
+    was filed against, which is what the removed switcher used to say implicitly.
+    """
+    jobs = cast("QuerySet[SBOMJob]", SBOMJob.objects.select_related("manifest", "org")).order_by("-created_at")
+    return _apply_job_filters(jobs, status_filter=status_filter, format_filter=format_filter)
+
+
 def get_jobs(
     org: Org,
     *,
     status_filter: str | None = None,
     format_filter: str | None = None,
 ) -> QuerySet[SBOMJob]:
-    """Return the org's jobs (most-recent-first), optionally filtered by status/format (AD-2)."""
+    """Return the org's jobs (most-recent-first), optionally filtered by status/format (AD-2).
+
+    Still org-scoped, and still the API's selector: an API key pins one tenant (AD-8), so a
+    programmatic caller must never see another org's jobs. Only the pages went cross-org.
+    """
     jobs = cast("QuerySet[SBOMJob]", SBOMJob.objects.for_org(org)).select_related("manifest").order_by("-created_at")
+    return _apply_job_filters(jobs, status_filter=status_filter, format_filter=format_filter)
+
+
+def _apply_job_filters(
+    jobs: QuerySet[SBOMJob],
+    *,
+    status_filter: str | None = None,
+    format_filter: str | None = None,
+) -> QuerySet[SBOMJob]:
+    """Apply the status and format filters shared by the org-scoped and cross-org selectors.
+
+    Extracted when Story 22.16 added :func:`get_all_jobs`: two copies of "what does In
+    Progress mean" is exactly the drift Story 6.4 was caused by.
+    """
     statuses = STATUS_FILTERS.get(status_filter or "")  # "All"/None → no status filter
     if statuses:
         jobs = jobs.filter(status__in=statuses)

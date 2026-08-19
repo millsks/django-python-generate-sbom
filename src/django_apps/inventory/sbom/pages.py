@@ -39,13 +39,20 @@ from inventory.analysis.tables import (
 from inventory.common.access import OrgContextMixin
 from inventory.common.users import UserT
 from inventory.manifests.detection import ManifestParseError, UnsupportedFormatError
+from inventory.users.models import Org
 
 from .filters import JobFilterSet
 from .forms import ManifestUploadForm
 from .models import SBOMJob
 from .overview import build_metrics
-from .selectors import get_job, get_jobs, read_inline_document
-from .services import TERMINAL_STATUSES, ConcurrencyLimitError, delete_artifacts_for_jobs, submit_job
+from .selectors import get_all_jobs, get_any_job, read_inline_document
+from .services import (
+    TERMINAL_STATUSES,
+    ConcurrencyLimitError,
+    delete_job_records,
+    presigned_artifact_url,
+    submit_job,
+)
 from .tables import JobTable, SbomComponentTable
 
 
@@ -111,14 +118,18 @@ class UploadPageView(OrgContextMixin, FormView):  # type: ignore[type-arg]
         return context
 
 
-# --- Job history (Story 21.10) -------------------------------------------------------------
+# --- Job status (Story 21.10; renamed from History by Story 22.17) -------------------------------------------------------------
 
 #: Matches the SPA's PAGE_SIZE and the API's PageNumberPagination default.
 JOBS_PER_PAGE = 25
 
 
-class JobHistoryView(OrgContextMixin, SingleTableMixin, FilterView):
-    """Filterable, paginated job history (converted from ``HistoryPage.tsx``).
+class JobStatusView(OrgContextMixin, SingleTableMixin, FilterView):
+    """Filterable, paginated job status (converted from ``HistoryPage.tsx``).
+
+    Called "History" until Story 22.17 renamed it. The page has always shown running jobs as
+    well as finished ones — live progress polling was added in Story 21.11 — so "history" was
+    describing half of what it does.
 
     Sorting and paging are **server-side**, via the querystring, so a filtered view is
     bookmarkable and shareable. That is a deliberate trade the epic accepted: the SPA sorted
@@ -128,68 +139,105 @@ class JobHistoryView(OrgContextMixin, SingleTableMixin, FilterView):
     model = SBOMJob
     table_class = JobTable
     filterset_class = JobFilterSet
-    template_name = "inventory/sbom/history.html"
+    template_name = "inventory/sbom/job_status.html"
     paginate_by = JOBS_PER_PAGE
 
+    #: Filter fields carried into the delete-all form so it acts on what is on screen.
+    FILTER_FIELDS = ("org", "status", "format")
+
     def get_queryset(self):  # type: ignore[no-untyped-def]
-        """Only the active org's jobs (AD-2), newest first."""
-        return get_jobs(self.org)
+        """Every organization's jobs, newest first (Story 22.16)."""
+        return get_all_jobs()
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the active filters and a plain-English description of the delete-all scope.
+
+        The description is built here rather than in the template because a confirmation that
+        misdescribes what it is about to delete is worse than no confirmation — and the
+        template cannot resolve an org id to a name.
+        """
+        context: dict[str, Any] = super().get_context_data(**kwargs)
+        active = [(field, self.request.GET[field]) for field in self.FILTER_FIELDS if self.request.GET.get(field)]
+        context["active_filters"] = active
+        context["delete_all_scope"] = self._describe_scope()
+        return context
+
+    def _describe_scope(self) -> str:
+        """Name what "delete all" would actually cover, in the words on the page."""
+        org_id = self.request.GET.get("org")
+        org = Org.objects.filter(pk=org_id).first() if org_id else None
+        parts = [p for p in (self.request.GET.get("status"), self.request.GET.get("format")) if p]
+        where = f"every job in {org.name}" if org else "EVERY job in EVERY organization"
+        return f"{where} matching the current filters ({', '.join(parts)})" if parts else where
 
 
-class _ArtifactDeleteMixin(OrgContextMixin):
+class _RecordDeleteMixin(OrgContextMixin):
     """Shared redirect target for the delete actions."""
 
     def _back(self) -> HttpResponse:
-        return HttpResponseRedirect(reverse("ui-history"))
+        return HttpResponseRedirect(reverse("ui-job-status"))
 
 
-class JobArtifactsDeleteView(_ArtifactDeleteMixin, View):
-    """Delete artifacts for one job or for a page selection (Story 7.2, FR-8.2).
+class JobRecordsDeleteView(_RecordDeleteMixin, View):
+    """Delete whole job records for one job or for a page selection.
+
+    Deletes the record, not just its files: the job row, its tasks and analysis reports, every
+    blob it owns, and the uploaded manifest once no other job needs it. This deliberately goes
+    further than the artifact-only delete these buttons used to perform — the API keeps that
+    narrower operation, where FR-8.1's "records are retained" still holds.
 
     Single and bulk are the same operation with a different number of ids, so they share an
-    endpoint rather than duplicating the org scoping.
+    endpoint rather than duplicating the scoping.
     """
 
     def post(self, request: HttpRequest) -> HttpResponse:
-        """Purge the named jobs' artifacts, keeping every job record."""
+        """Delete the named jobs outright."""
         task_ids = request.POST.getlist("task_ids")
         if not task_ids:
             messages.error(request, "Select at least one job.")
             return self._back()
 
-        # Scoped to the active org, so a task id from another org simply matches nothing
-        # (AD-2) — there is no branch that could treat it differently.
-        jobs = get_jobs(self.org).filter(task_id__in=task_ids, result_key__isnull=False)
-        deleted = delete_artifacts_for_jobs(jobs)
+        # Cross-org since Story 22.16, because the page is: the ids come from checkboxes on
+        # rows the caller can see, so scoping the delete to one org would silently skip rows
+        # they explicitly ticked. Deletion is still confined to the ids actually submitted.
+        jobs = get_all_jobs().filter(task_id__in=task_ids)
+        deleted = delete_job_records(jobs)
 
         if deleted:
-            messages.success(request, f"Deleted artifacts for {deleted} job(s). The job records were kept.")
+            messages.success(request, f"Deleted {deleted} job record(s) and all of their files.")
         else:
-            messages.info(request, "Nothing to delete — those jobs have no artifacts.")
+            messages.info(request, "Nothing to delete — those jobs no longer exist.")
         return self._back()
 
 
-class JobArtifactsDeleteAllView(OrgContextMixin, View):
-    """Delete every artifact in the active org (FR-8.5) — **admin only**.
+class JobRecordsDeleteAllView(OrgContextMixin, View):
+    """Delete every job **currently listed** on Job Status, records and all.
 
-    The gate is this mixin, not the hidden button. Story 2.17 exists because an admin-only
-    action was once enforced only in the UI, and `test_a_member_cannot_post_the_org_wide_delete`
-    is what stops that recurring here.
+    Story 22.16 made the page cross-org, which would have quietly turned this from "every job
+    in my org" into "every job in the deployment" — the same button, the same confirmation
+    naming a single org, and a far larger blast radius. So it deletes exactly what the page is
+    showing: the page's filters are re-applied here from the submitted form.
+
+    That keeps the button honest in both directions. Filter to one organization and it deletes
+    that organization's jobs; clear the filters and it really does mean all, which is what the
+    confirmation then says.
     """
 
     def post(self, request: HttpRequest) -> HttpResponse:
-        """Purge artifacts org-wide, keeping every job record."""
-        jobs = get_jobs(self.org).filter(result_key__isnull=False)
-        deleted = delete_artifacts_for_jobs(jobs)
-        messages.success(request, f"Deleted artifacts for {deleted} job(s). The job records were kept.")
-        return HttpResponseRedirect(reverse("ui-history"))
+        """Delete the filtered set outright."""
+        # Bound against POST: the page's form posts its current filter values as hidden
+        # fields, so what is deleted is what was on screen when the button was pressed.
+        jobs = JobFilterSet(request.POST, queryset=get_all_jobs()).qs
+        deleted = delete_job_records(jobs)
+        messages.success(request, f"Deleted {deleted} job record(s) and all of their files.")
+        return HttpResponseRedirect(reverse("ui-job-status"))
 
 
 # --- Live progress (Story 21.11) -----------------------------------------------------------
 
 
 class JobRowPartialView(OrgContextMixin, View):
-    """Re-render one history row (the polling endpoint for the table).
+    """Re-render one Job Status row (the polling endpoint for the table).
 
     Org-scoped through ``get_job``, so a cross-org or unknown task id is a 404 — identical
     responses, no existence leak (AD-2). htmx stops polling on a 404 by default, which is
@@ -199,7 +247,7 @@ class JobRowPartialView(OrgContextMixin, View):
     def get(self, request: HttpRequest, task_id: str) -> HttpResponse:
         """Return the row's current markup, with or without a poll trigger."""
         try:
-            job = get_job(self.org, task_id)
+            job = get_any_job(task_id)
         except SBOMJob.DoesNotExist as exc:
             raise Http404 from exc
         # Built from the same JobTable as the full table, so every cell renderer — badge,
@@ -237,17 +285,22 @@ def _tab_template(tab: str) -> str:
 
 
 class _JobScopedView(OrgContextMixin, View):
-    """Look a job up within the active org, 404ing identically for missing and cross-org.
+    """Look a job up by id, 404ing when it does not exist.
 
-    AD-2: an unauthorised request must be indistinguishable from a nonexistent one — the SPA
-    showed a single message for both ("You don't have access to these results, or they don't
-    exist"), and the server-rendered path keeps that property by having one code path.
+    **No longer org-scoped** (Story 22.16). Job Status lists every org's jobs now that the
+    organization is provenance rather than a browsing boundary, so a row must open. Scoping
+    the lookup while listing across orgs would give every other org's rows a 404 on click.
+
+    ``OrgContextMixin`` stays for ``self.org`` — the templates still show the acting org — and
+    the DRF views keep the scoped :func:`get_job`, because an API key really does pin one
+    tenant (AD-8). The isolation this drops from the UI was already notional: since Story
+    21.24 the switcher accepted any non-ADMIN org from anyone.
     """
 
     def get_job_or_404(self, task_id: str) -> SBOMJob:
         """Return the job, or raise Http404."""
         try:
-            return get_job(self.org, task_id)
+            return get_any_job(task_id)
         except SBOMJob.DoesNotExist as exc:
             raise Http404 from exc
 
@@ -269,6 +322,10 @@ class JobResultsView(_JobScopedView):
             "job": job,
             "org": self.org,
             "job_is_terminal": terminal,
+            # The same list the polled fragment renders (Story 22.20). Supplied here too, or
+            # the first paint of a running job would show an empty task list until the first
+            # poll five seconds later.
+            "job_tasks": list(job.tasks.all()),
             "tabs": RESULT_TABS,
             "active_tab": active_tab,
             # Rendered server-side so a bookmarked ?tab= survives a refresh with no
@@ -290,14 +347,71 @@ class JobTabPartialView(_JobScopedView):
         if tab not in dict(RESULT_TABS):
             raise Http404
         job = self.get_job_or_404(task_id)
+        # Story 22.25: this fragment is fetched at `/results/<id>/tab/<slug>`, which carries no
+        # query string. django-tables2 builds every sort link by preserving the current
+        # request's query string, so it had nothing to preserve and emitted a bare
+        # `?sort=name`. Following one is a full page navigation, so it landed on the results
+        # page with no `tab` and rendered Overview — sorting a tab threw you out of it.
+        #
+        # Declared here rather than added to the `hx-get` URL in the template so the links are
+        # right however this view is reached: a caller that forgets the parameter would
+        # otherwise get subtly broken markup back.
+        #
+        # The `type: ignore` is django-stubs typing `request.GET` as immutable. Replacing it
+        # with a mutable copy is the documented Django idiom.
+        params = request.GET.copy()
+        params["tab"] = tab
+        request.GET = params  # type: ignore[assignment]
         context: dict[str, Any] = {
             "job": job,
             "active_tab": tab,
             "artifacts_available": bool(job.result_key),
             "metrics": build_metrics(job.summary_stats),
+            # Story 22.21: the tab STRIP is swapped along with the body, so this fragment has
+            # to supply what the strip needs. Returning only the body left the strip as the
+            # server first rendered it — the clicked tab's content appeared while "Overview"
+            # stayed highlighted.
+            "tabs": RESULT_TABS,
+            "artifact_tabs": ARTIFACT_TABS,
+            "active_tab_template": _tab_template(tab),
         }
         context.update(tab_context(request, job, tab))
-        return render(request, _tab_template(tab), context)
+        return render(request, "inventory/sbom/_tab_panel.html", context)
+
+
+class JobManifestView(_JobScopedView):
+    """Show the manifest a job was generated from (Story 22.26).
+
+    Rendered into an escaped `<pre>` on a normal page rather than served as a file. A manifest
+    is **whatever someone uploaded**: a raw response would let it choose how the browser treats
+    it, and the point here is to read the input next to the job it produced, not to download
+    it.
+
+    Cross-org like every other page (Story 22.16) — Job Status lists every organization's jobs,
+    so their rows have to open.
+    """
+
+    def get(self, request: HttpRequest, task_id: str) -> HttpResponse:
+        """Return the manifest page: its content, a too-large notice, or a missing notice."""
+        job = self.get_job_or_404(task_id)
+        manifest = job.manifest
+        context: dict[str, Any] = {"job": job, "manifest": manifest, "org": self.org}
+
+        try:
+            size = manifest.file.size
+        except (FileNotFoundError, ValueError):
+            # The row outlives the blob: a purge clears artifacts and keeps metadata (FR-8.1),
+            # and local storage can simply lose a file. Saying so beats a 500.
+            context["manifest_available"] = False
+            return render(request, "inventory/sbom/manifest.html", context)
+
+        context["manifest_available"] = True
+        context["size_bytes"] = size
+        context["too_large"] = size > MANIFEST_INLINE_MAX_BYTES
+        if not context["too_large"]:
+            with manifest.file.open("rb") as handle:
+                context["content"] = handle.read().decode("utf-8", errors="replace")
+        return render(request, "inventory/sbom/manifest.html", context)
 
 
 class JobProgressPartialView(_JobScopedView):
@@ -312,11 +426,20 @@ class JobProgressPartialView(_JobScopedView):
         """Return the progress fragment, or ask htmx to reload once the job is done."""
         job = self.get_job_or_404(task_id)
         terminal = job.status in TERMINAL_STATUSES
-        response = render(request, "inventory/sbom/_job_progress.html", {"job": job, "job_is_terminal": terminal})
+        response = render(
+            request,
+            "inventory/sbom/_job_progress.html",
+            {"job": job, "job_is_terminal": terminal, "job_tasks": list(job.tasks.all())},
+        )
         if terminal:
             response["HX-Refresh"] = "true"
         return response
 
+
+#: A manifest larger than this is described rather than shown. The upload cap is 50 MB
+#: (FR-3.4) and a `<pre>` that size makes the page unusable, so the limit here is about what a
+#: person can read, not about what the server can send.
+MANIFEST_INLINE_MAX_BYTES = 1024 * 1024
 
 #: A raw document larger than this is offered as a download instead of being inlined. A
 #: multi-megabyte <pre> block makes the results page unusable, and the browser has to hold the
@@ -546,3 +669,22 @@ class CombinedExportView(_JobScopedView):
         if not sheets:
             raise Http404
         return _xlsx_response(sheets, f"report-{job.task_id}.xlsx")
+
+
+class SbomDownloadView(_JobScopedView):
+    """Download the SBOM blob for the results page's "Download SBOM" button.
+
+    The button used to link straight at ``/api/v1/sbom/result/{id}/``, which is **org-scoped**
+    (AD-8, and rightly so — an API key pins one tenant). Since Story 22.16 the results page
+    opens any org's job, so on a cross-org job the page rendered fine and the button answered
+    ``{"error": "Job not found."}``. This is the same 303-to-presigned-URL redirect (AD-11)
+    reached through the page's own scoping, so the button works wherever the page does.
+    """
+
+    def get(self, request: HttpRequest, task_id: str) -> HttpResponse:
+        """Redirect to a presigned URL for the SBOM, or 404 when there is nothing to serve."""
+        job = self.get_job_or_404(task_id)
+        if job.status != SBOMJob.Status.SUCCESS or not job.result_key:
+            # Never produced, still running, or purged (Story 7.3) — the page already says so.
+            raise Http404
+        return HttpResponseRedirect(presigned_artifact_url(job.result_key))

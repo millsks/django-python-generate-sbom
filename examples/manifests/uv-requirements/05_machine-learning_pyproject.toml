@@ -1,0 +1,36 @@
+# 05_machine-learning — classical ML: modeling, tuning, tracking
+# uv: `uv sync` to install, `uv lock` to produce uv.lock.
+
+[project]
+name = "ml-classical"
+version = "0.1.0"
+description = "classical ML: modeling, tuning, tracking"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy==2.5.2",
+    "pandas==2.3.3",
+    "scikit-learn==1.9.0",
+    "xgboost==3.4.1",
+    "lightgbm==4.7.0",
+    "catboost==1.2.10",
+    "imbalanced-learn==0.14.2",
+    "optuna==4.9.0",
+    "shap==0.52.0",
+    "mlflow==3.15.1",
+    "joblib==1.5.3",
+    "matplotlib==3.11.1",
+    "seaborn==0.13.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "ruff>=0.8",
+    "mypy>=1.14",
+    "pre-commit>=4.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

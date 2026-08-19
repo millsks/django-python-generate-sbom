@@ -10,4 +10,3 @@ Short, task-focused recipes for accomplishing a specific goal quickly. Each page
 - [Find outdated dependencies](find-outdated-dependencies.md)
 - [Export a report to Excel](export-to-excel.md)
 - [Create and use an API key](manage-api-keys.md)
-- [Invite a member / switch organizations](manage-organization.md)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import ClassVar
 
 from django.conf import settings
 from django.db import models
@@ -42,3 +43,58 @@ class SBOMJob(OrgScopedModel):
     def __str__(self) -> str:
         """Return a readable job summary."""
         return f"SBOMJob {self.task_id} ({self.status})"
+
+
+class JobTask(models.Model):
+    """One pipeline task's state for one job (Story 22.20).
+
+    A row per task, rather than a JSON blob on ``SBOMJob``, because the three analysis tasks
+    run concurrently: each writes **only its own row**, so there is no read-modify-write to
+    race on. It also lets the UI show two tasks running at once, which a single
+    ``current_step`` string cannot express and which is the honest picture of a chord.
+
+    ``SBOMJob.progress`` is still maintained, derived from how many of these rows have
+    finished — the API contract (Story 21.24 AC #9) exposes it and the Job Status table shows
+    a compact percentage.
+    """
+
+    class State(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        RUNNING = "RUNNING", "Running"
+        COMPLETE = "COMPLETE", "Complete"
+        ERROR = "ERROR", "Error"
+
+    #: Terminal states — a task in one of these has finished, successfully or not, and counts
+    #: toward the bar. FR-4.5 keeps the job going when an analysis task errors, so an errored
+    #: task is finished in exactly the sense the bar cares about.
+    TERMINAL = (State.COMPLETE, State.ERROR)
+
+    job = models.ForeignKey(SBOMJob, on_delete=models.CASCADE, related_name="tasks")
+    key = models.CharField(max_length=32)
+    ordinal = models.PositiveSmallIntegerField()
+    state = models.CharField(max_length=10, choices=State.choices, default=State.PENDING)
+    detail = models.CharField(max_length=200, default="", blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("ordinal",)
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(fields=("job", "key"), name="uniq_job_task_key")
+        ]
+
+    def __str__(self) -> str:
+        """Return a readable task summary."""
+        return f"{self.key} ({self.state}) for {self.job_id}"
+
+    @property
+    def label(self) -> str:
+        """The user-facing task name, from the one declaration of the sequence."""
+        from .pipeline_tasks import task_label
+
+        return task_label(self.key)
+
+    @property
+    def is_running(self) -> bool:
+        """Whether this task should show the animated dots."""
+        return self.state == self.State.RUNNING

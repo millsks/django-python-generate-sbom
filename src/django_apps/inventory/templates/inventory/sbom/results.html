@@ -16,11 +16,14 @@
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
     <div>
       <h1 class="h3 mb-0">{{ job.manifest.original_filename }}</h1>
+      {% comment %} job.org, not the acting org: since Story 22.16 a row from any org opens
+        here, so the acting org would name the wrong owner on a cross-org job. Both org and
+        manifest are select_related in get_any_job, so this costs no extra query. {% endcomment %}
       <p class="text-body-secondary mb-0">
-        {{ job.manifest.component_name }} &middot; {{ job.manifest.application_id }}
+        {{ job.org.name }} &middot; {{ job.manifest.application_id }} &middot; {{ job.manifest.component_name }}
       </p>
     </div>
-    <a class="btn btn-sm btn-outline-secondary" href="{% url 'ui-history' %}">Back to history</a>
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'ui-job-status' %}">Back to job status</a>
   </div>
 
   {% if not job_is_terminal %}
@@ -44,29 +47,6 @@
       </div>
     {% endif %}
 
-    <ul class="nav nav-tabs mt-4" role="tablist">
-      {% for slug, label in tabs %}
-        <li class="nav-item" role="presentation">
-          {% if slug in artifact_tabs and not artifacts_available %}
-            <span class="nav-link disabled" aria-disabled="true" title="Artifacts were removed">{{ label }}</span>
-          {% else %}
-            <a class="nav-link {% if slug == active_tab %}active{% endif %}"
-               href="?tab={{ slug }}"
-               role="tab"
-               aria-selected="{% if slug == active_tab %}true{% else %}false{% endif %}"
-               hx-get="{% url 'ui-job-tab' task_id=job.task_id tab=slug %}"
-               hx-target="#tab-content"
-               hx-swap="innerHTML"
-               {% comment %} Keeps the URL in step with the visible tab, so refreshing or
-                 sharing after a click lands on the same place. {% endcomment %}
-               hx-push-url="?tab={{ slug }}">{{ label }}</a>
-          {% endif %}
-        </li>
-      {% endfor %}
-    </ul>
-
-    <div id="tab-content" class="border border-top-0 rounded-bottom p-3">
-      {% include active_tab_template %}
-    </div>
+    {% include "inventory/sbom/_tab_panel.html" %}
   {% endif %}
 {% endblock %}

@@ -10,7 +10,9 @@ import re
 from pathlib import Path
 
 import pytest
+from django.conf import settings
 from django.test import Client
+from django.utils.html import escape
 
 from inventory.users.models import OrgMembership
 from inventory.users.services import create_org, grant_global_admin, register_user
@@ -21,9 +23,16 @@ PASSWORD = "pw12345678"
 TEMPLATE_ROOT = Path(__file__).resolve().parents[2] / "src" / "django_service" / "templates"
 
 # Labels as they appear in the rendered nav.
-ALWAYS_VISIBLE = ["Home", "Upload", "History", "API Keys"]
-ADMIN_ONLY = ["Members", "Organization"]
-GLOBAL_ADMIN_ONLY = ["Global Admins"]
+#: The four destinations that remain. Story 21.24 removed the role gates (so the old
+#: ALWAYS_VISIBLE / ADMIN_ONLY / GLOBAL_ADMIN_ONLY split stopped meaning anything),
+#: Story 22.9 removed Members and Global Admins, and Story 22.11 removed Organization —
+#: orgs are seeded from orgs.yml, so a creation form is redundant.
+NAV_ITEMS = ["Home", "Upload", "Job Status", "API Keys"]
+
+#: Asserted absent, not merely "not required": a dead nav entry pointing at a deleted route
+#: is worse than a missing one. "History" is here because Story 22.17 renamed that entry to
+#: Job Status — leaving both would be the same drift in a different direction.
+REMOVED_ITEMS = ["Members", "Global Admins", "Organization", "History"]
 
 
 def _nav_html(client: Client) -> str:
@@ -58,8 +67,10 @@ def test_every_nav_item_renders_for_an_anonymous_visitor() -> None:
     """
     html = _nav_html(Client())
 
-    for label in ALWAYS_VISIBLE + ADMIN_ONLY + GLOBAL_ADMIN_ONLY:
+    for label in NAV_ITEMS:
         assert f">{label}</span>" in html, label
+    for label in REMOVED_ITEMS:
+        assert f">{label}</span>" not in html, f"{label} was removed by Story 22.9"
     assert "Sign in" not in html
     assert "Sign out" not in html
 
@@ -70,7 +81,7 @@ def test_the_nav_is_the_same_for_a_signed_in_user() -> None:
     anonymous = _nav_html(Client())
     signed_in = _nav_html(_logged_in("member@example.com", org="Acme"))
 
-    for label in ALWAYS_VISIBLE + ADMIN_ONLY + GLOBAL_ADMIN_ONLY:
+    for label in NAV_ITEMS:
         assert f">{label}</span>" in anonymous, label
         assert f">{label}</span>" in signed_in, label
 
@@ -78,7 +89,7 @@ def test_the_nav_is_the_same_for_a_signed_in_user() -> None:
 @pytest.mark.django_db
 def test_global_admin_sees_every_item() -> None:
     html = _nav_html(_logged_in("root@example.com", org="Acme", admin=True, global_admin=True))
-    for label in ALWAYS_VISIBLE + ADMIN_ONLY + GLOBAL_ADMIN_ONLY:
+    for label in NAV_ITEMS:
         assert f">{label}</span>" in html
 
 
@@ -95,21 +106,30 @@ def test_nav_is_rendered_twice_so_desktop_and_mobile_cannot_drift() -> None:
 @pytest.mark.django_db
 def test_both_product_name_forms_come_from_the_single_definition() -> None:
     html = _nav_html(Client())
-    assert "Python Inventory Supply Lens" in html  # footer, full form
-    assert "Supply Lens" in html  # header brand, short form
+    # The full name contains "&", which the template escapes.
+    assert escape(settings.PRODUCT_NAME) in html  # footer, full form
+    assert escape(settings.PRODUCT_NAME_SHORT) in html  # header brand, short form
     # The SPA's old name must not survive anywhere in the shell.
     assert "Generate SBOM" not in html
 
 
 def test_no_template_hardcodes_the_product_name() -> None:
-    # AC #4: the name is defined once, in settings, and reaches templates through the
-    # context processor. A literal in markup is the thing this forbids.
-    offenders = [
-        path.name
-        for path in TEMPLATE_ROOT.rglob("*.html")
-        if "Python Inventory Supply Lens" in path.read_text(encoding="utf-8")
-        or "Supply Lens" in path.read_text(encoding="utf-8")
-    ]
+    """AC #4: the name is defined once, in settings, and reaches templates through the
+    context processor. A literal in *markup* is the thing this forbids.
+
+    `{% comment %}` blocks are stripped before checking: they never reach the rendered page,
+    and a rule that also banned them would push design notes out of the file they explain.
+    `{# ... #}` is deliberately NOT stripped — Django's lexer has no DOTALL, so a multi-line
+    one leaks into the HTML, which is the house trap this codebase has already been bitten by.
+    """
+    import re
+
+    offenders = []
+    for path in TEMPLATE_ROOT.rglob("*.html"):
+        markup = re.sub(r"{%\s*comment\s*%}.*?{%\s*endcomment\s*%}", "", path.read_text(encoding="utf-8"), flags=re.S)
+        if settings.PRODUCT_NAME in markup or settings.PRODUCT_NAME_SHORT in markup:
+            offenders.append(path.name)
+
     assert not offenders, f"templates hardcoding the product name: {offenders}"
 
 
@@ -218,3 +238,36 @@ def test_the_icon_sprite_is_a_subset_not_the_full_icon_set() -> None:
     sprite = (TEMPLATE_ROOT.parent / "static" / "images" / "icons.svg").read_text(encoding="utf-8")
     symbols = sprite.count("<symbol ")
     assert 0 < symbols < 60, f"sprite carries {symbols} symbols — expected a small subset"
+
+
+# --- The brand: an acronym over the words it stands for (Story 22.23) ----------------------
+
+
+@pytest.mark.django_db
+def test_the_header_shows_the_acronym_alone() -> None:
+    """The bar carries the acronym only; the landing page is where the name is spelled out.
+
+    The expansion was tried here, stacked beneath it, and crowded the bar without earning the
+    space. Asserted on the rendered brand specifically: both forms appear elsewhere on the page
+    — the title uses the short one, the footer the long one — so checking the whole document
+    would pass whatever the brand contained.
+    """
+    import re
+
+    html = _nav_html(Client())
+    brand = re.search(r'<a class="navbar-brand.*?</a>', html, re.DOTALL)
+
+    assert brand is not None, "the header brand is missing"
+    assert escape(settings.PRODUCT_NAME_SHORT) in brand.group(0)
+    assert escape(settings.PRODUCT_NAME) not in brand.group(0), "the bar should not carry the expansion"
+
+
+def test_the_acronym_is_written_without_dots() -> None:
+    """A deliberate choice, and the kind that gets "corrected" by someone tidying up.
+
+    Asserted as a property rather than against a literal: pinning the value made a product
+    rename fail the suite, which is exactly what Story 21.3's "the name is configuration" rule
+    exists to avoid.
+    """
+    assert "." not in settings.PRODUCT_NAME_SHORT
+    assert settings.PRODUCT_NAME_SHORT == settings.PRODUCT_NAME_SHORT.strip()

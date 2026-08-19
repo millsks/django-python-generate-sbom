@@ -66,8 +66,18 @@ PROGRESS → SUCCESS`/`FAILED`. Each phase runs inside a `_phase_guard` context 
 that marks the job `FAILED` with a specific `failure_reason` (e.g.
 `resolution_failed`, `sbom_generation_failed`, `missing_artifact`) on error — so a
 phase failure can never leave a job stuck at `PROGRESS`. A soft-timeout is caught the
-same way (`failure_reason="soft_timeout"`). Progress and the current step are reported
-as phases advance, so the results page can poll live status over htmx and API clients
+same way (`failure_reason="soft_timeout"`).
+
+`_phase_guard` also owns each task's **reporting**: it marks the task `RUNNING` on entry
+and `COMPLETE` or `ERROR` on exit, writing one `JobTask` row per task (Story 22.20). Placing
+those calls at each phase instead is how the previous hand-picked percentages drifted until
+two phases both reported 93%. `SBOMJob.progress` is derived from how many rows are terminal
+— an equal share per task — so no phase chooses its own number.
+
+Reporting is **best-effort**: a failure to write a task row is logged and swallowed rather
+than aborting the phase. Telemetry must not be able to cost the job it describes.
+
+Progress is reported as phases advance, so the results page can poll live status over htmx and API clients
 can poll the status endpoint.
 
 Task dispatch from the generate view uses `delay_on_commit()` (AD-10), so the pipeline

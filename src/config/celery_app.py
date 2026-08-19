@@ -20,15 +20,26 @@ app.autodiscover_tasks()
 # (not a per-app tasks.py), so discover it explicitly.
 app.autodiscover_tasks(["inventory"])
 
+# Every task named here MUST be reachable from `inventory/tasks/__init__.py`, or Beat
+# dispatches a name no worker can resolve. `tests/unit/test_beat_schedule_registry.py`
+# enforces that (Story 22.2, after both entries had silently drifted).
 app.conf.beat_schedule = {
     # Weekly refresh of the parselmouth conda↔PyPI name mapping (Story 8.10).
     "refresh-parselmouth-mapping": {
         "task": "inventory.tasks.maintenance.refresh_parselmouth_mapping",
         "schedule": crontab(hour=3, minute=0, day_of_week=1),
     },
-    # Nightly purge of expired artifact blobs; job metadata is retained (Story 7.1).
-    "purge-expired-artifacts": {
-        "task": "inventory.tasks.maintenance.purge_expired_artifacts",
-        "schedule": crontab(hour=4, minute=0),
-    },
+    # NOT SCHEDULED: expired-artifact purging.
+    #
+    # It used to run nightly at 04:00 (Story 7.1, FR-8.2). Removed at the product owner's
+    # direction: deleting artifacts is now a deliberate act, taken after looking at what
+    # would go, rather than something that happens unattended overnight.
+    #
+    # `artifacts_expire_at` is still stamped on every job, so expiry is still *tracked* —
+    # nothing is purged until somebody asks. Run it with:
+    #
+    #     pixi run python manage.py purge_expired_artifacts --dry-run   # review first
+    #     pixi run python manage.py purge_expired_artifacts
+    #
+    # The Celery task remains registered for dispatching the sweep to a worker instead.
 }

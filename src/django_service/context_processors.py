@@ -27,7 +27,6 @@ from django.http import HttpRequest
 from django.utils.functional import SimpleLazyObject
 
 from inventory.users.auth import get_admin_org, get_request_org
-from inventory.users.selectors import get_switchable_orgs
 
 
 def ui(request: HttpRequest) -> dict[str, Any]:
@@ -57,8 +56,8 @@ def ui(request: HttpRequest) -> dict[str, Any]:
         # rather than hardcoded so the seam stays a single function to change.
         "is_org_admin": SimpleLazyObject(lambda: get_admin_org(request) is not None),
         "is_global_admin": True,
-        # get_switchable_orgs excludes the system ADMIN org, so it is never offered as a
-        # workspace (Story 2.18). The switcher hides itself below two entries (Story 2.19).
-        "switchable_orgs": SimpleLazyObject(lambda: list(get_switchable_orgs())),
+        # No `switchable_orgs` since Story 22.16 removed the header switcher. The org is
+        # chosen on the upload form, shown as a column on Job Status, and travels into the SBOM
+        # as its supplier — it is provenance now, not a mode the whole UI sits in.
     }
     return context

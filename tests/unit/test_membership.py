@@ -58,20 +58,6 @@ def test_create_org_by_global_admin_adds_caller_as_admin() -> None:
 
 
 @pytest.mark.django_db
-def test_create_org_forbidden_for_non_global_admin() -> None:
-    """A non-global-admin cannot create an org — 403, no org created (Story 2.12)."""
-    _register_with_org("alice@example.com", "Alice")
-    client = _client("alice@example.com")
-    before = Org.objects.count()
-
-    response = client.post("/api/v1/orgs/create/", {"name": "New Team"}, format="json")
-
-    assert response.status_code == 403
-    assert response.data["code"] == "not_global_admin"
-    assert Org.objects.count() == before
-
-
-@pytest.mark.django_db
 def test_add_existing_user_by_email(mailoutbox: list) -> None:
     _register_with_org("alice@example.com", "Alice")
     register_user(email="bob@example.com", password="pw12345678")

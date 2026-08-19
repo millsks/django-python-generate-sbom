@@ -1,8 +1,11 @@
 # User Guide
 
-This guide walks through using **Python Inventory Supply Lens** end to end — from
-creating an account to generating a Software Bill of Materials (SBOM) and reading each
-report.
+This guide walks through using **FABRIC** end to end — from
+choosing an organization to generating a Software Bill of Materials (SBOM) and reading
+each report.
+
+There is no account to create: the application has no sign-in. See
+[Organizations](accounts-and-organizations.md) for what that means and why.
 
 ## What the app does
 
@@ -17,11 +20,11 @@ browser, export any of them to Excel, and download the SBOM document itself.
 
 | Step | Page |
 |---|---|
-| 1. Choose an organization | [Accounts & Organizations](accounts-and-organizations.md) |
+| 1. Choose an organization | [Organizations](accounts-and-organizations.md) |
 | 2. Upload a manifest and start a job | [Generating an SBOM](generating-an-sbom.md) |
 | 3. Read the results | [Reading the Results](reading-the-results.md) |
 | 4. Export reports and download the SBOM | [Exporting & Downloading](exporting-and-downloading.md) |
-| 5. Review past jobs | [Job History](job-history.md) |
+| 5. Track and review jobs | [Job Status](job-status.md) |
 | 6. Automate with API keys | [API Keys](api-keys.md) |
 
 !!! info "Screenshots"

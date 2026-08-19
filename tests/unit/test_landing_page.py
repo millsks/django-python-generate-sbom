@@ -12,6 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from django.conf import settings
 from django.test import Client
 from django.utils.html import escape
 
@@ -111,9 +112,9 @@ def test_the_landing_title_uses_the_full_name_and_the_brand_uses_the_short_form(
     """Story 21.3's two-form rule, applied where it is most visible."""
     html = Client().get(HOME).content.decode()
 
-    assert "<title>Python Inventory Supply Lens</title>" in html
+    assert f"<title>{escape(settings.PRODUCT_NAME)}</title>" in html
     # The header brand stays short.
-    assert ">Supply Lens</span>" in html
+    assert f">{escape(settings.PRODUCT_NAME_SHORT)}</span>" in html
 
 
 @pytest.mark.django_db
@@ -195,7 +196,7 @@ def test_the_navigation_collapses_on_narrow_viewports() -> None:
 @pytest.mark.django_db
 def test_wide_tables_scroll_inside_their_own_container() -> None:
     """The page itself must not scroll horizontally because a report table is wide."""
-    for template in ("history.html", "tabs/_versions.html", "tabs/_vulnerabilities.html", "tabs/_sbom.html"):
+    for template in ("job_status.html", "tabs/_versions.html", "tabs/_vulnerabilities.html", "tabs/_sbom.html"):
         source = (TEMPLATE_ROOTS[1] / "inventory" / "sbom" / template).read_text(encoding="utf-8")
         assert "overflow" in source or "table-responsive" in source, template
 
@@ -210,9 +211,9 @@ def test_inner_pages_keep_the_spa_title_form() -> None:
     create_org(name="Acme", admin_user=user)
     client = _client("dev3@example.com")
 
-    for path, leading in (("/upload", "Upload"), ("/history", "History"), ("/members", "Members")):
+    for path, leading in (("/upload", "Upload"), ("/job-status", "Job status"), ("/keys", "API keys")):
         html = client.get(path).content.decode()
-        assert f"<title>{leading} · Supply Lens</title>" in html, path
+        assert f"<title>{leading} · {escape(settings.PRODUCT_NAME_SHORT)}</title>" in html, path
 
 
 @pytest.mark.django_db
@@ -231,3 +232,34 @@ def test_the_external_links_are_settings_driven_with_the_spa_defaults() -> None:
 # The `*`-route fallback that this module used to pin lives in test_spa_retirement.py now:
 # Story 21.19 deleted the SPA catch-all, so an unknown path 404s rather than rendering the
 # landing page. The replacement is `test_an_unknown_path_now_404s`.
+
+
+# --- The heading, broken where the name reads as two halves (Story 22.23) --------------------
+
+
+@pytest.mark.django_db
+def test_the_heading_carries_the_full_product_name() -> None:
+    """The landing page is where the name is spelled out — the top bar shows only the short form.
+
+    Read from settings rather than pinned to a literal: hardcoding it made a product rename
+    fail the suite, which defeats Story 21.3's rule that the name is configuration.
+    """
+    import re
+
+    html = Client().get("/").content.decode()
+    heading = re.search(r"<h1[^>]*>(.*?)</h1>", html, re.DOTALL)
+
+    assert heading is not None
+    assert escape(settings.PRODUCT_NAME) in " ".join(heading.group(1).split())
+
+
+@pytest.mark.django_db
+def test_the_heading_is_not_display_sized() -> None:
+    """`display-5` pushed everything below the name off the first screen once it got long."""
+    import re
+
+    html = Client().get("/").content.decode()
+    heading = re.search(r"<h1([^>]*)>", html)
+
+    assert heading is not None
+    assert "display-" not in heading.group(1), "the product name should not use display sizing"

@@ -1,0 +1,19 @@
+# 06_deep-learning — PyTorch + Hugging Face training/fine-tuning
+# Install torch from the CUDA-matched index for GPU hosts:
+#   pip install -r 06_deep-learning_requirements.txt --extra-index-url https://download.pytorch.org/whl/cu124
+
+torch==2.13.0
+torchvision==0.28.0
+torchaudio==2.11.0
+transformers==5.15.0
+tokenizers==0.22.2
+datasets==5.0.1
+accelerate==1.14.0
+peft==0.20.0
+safetensors==0.8.0
+sentencepiece==0.2.2
+evaluate==0.4.6
+einops==0.8.2
+tensorboard==2.21.0
+wandb==0.28.2
+numpy==2.5.2

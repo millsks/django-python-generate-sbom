@@ -122,7 +122,11 @@ def test_the_repo_and_docs_urls_are_unchanged() -> None:
 
 def test_the_product_name_is_not_the_distribution_name() -> None:
     """Three names, three jobs: product copy, distribution, external identity."""
-    assert settings.PRODUCT_NAME == "Python Inventory Supply Lens"
+    # Derived, not pinned: the point is that the two identities DIFFER, not what either says.
+    # Asserting the literal made every product rename a test failure — which is the opposite of
+    # what Story 21.3's "the name is configuration" rule is for.
+    assert settings.PRODUCT_NAME != "python-inventory-supply-lens"
+    assert settings.PRODUCT_NAME_SHORT not in settings.PRODUCT_NAME.replace(" ", "").lower()
     assert settings.PRODUCT_NAME != DISTRIBUTION
     assert EXTERNAL_IDENTITY not in settings.PRODUCT_NAME
 

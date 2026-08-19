@@ -1,0 +1,52 @@
+# 03_fastapi — FastAPI async service (async ORM + auth + background jobs)
+# Generated manifest; run `pixi lock` to resolve against conda-forge.
+
+[workspace]
+name = "fastapi-service"
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64"]
+
+[dependencies]
+python = "3.13.*"
+fastapi = ">=0.141"
+uvicorn-standard = ">=0.52"
+starlette = ">=1.6"
+pydantic = ">=2.13"
+pydantic-settings = ">=2.15"
+sqlalchemy = ">=2.0"
+alembic = ">=1.19"
+asyncpg = ">=0.31"
+psycopg = ">=3.3"
+httpx = ">=0.28"
+passlib = ">=1.7"
+python-multipart = ">=0.0.32"
+email-validator = ">=2.3"
+redis-py = ">=8.1"
+celery = ">=5.6"
+orjson = ">=3.12"
+tenacity = ">=9.1"
+structlog = ">=26.1"
+gunicorn = ">=26.1"
+
+[pypi-dependencies]
+python-jose = { version = ">=3.5.0", extras = ["cryptography"] }
+
+[feature.dev.dependencies]
+pytest = ">=8.3"
+pytest-cov = ">=6.0"
+ruff = ">=0.8"
+mypy = ">=1.14"
+pre-commit = ">=4.0"
+
+[feature.dev.tasks]
+bootstrap = "pre-commit install --install-hooks"
+fmt = "ruff format ."
+lint = "ruff check ."
+check = "mypy src/"
+test = "pytest tests/unit/"
+test-integration = "pytest tests/integration/"
+cov = "pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=90"
+ci = { depends-on = ["lint", "check", "cov"] }
+
+[environments]
+dev = { features = ["dev"] }

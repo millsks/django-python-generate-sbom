@@ -55,13 +55,15 @@
             {% icon 'chrome.menu' 24 %}
           </button>
 
+          {% comment %} The acronym alone. The expansion was tried here and stacked beneath
+            it; it crowded the bar without earning the space, and the landing page already
+            spells the name out for anyone meeting it for the first time. {% endcomment %}
           <a class="navbar-brand d-flex align-items-center gap-2" href="/">
             {% icon 'chrome.brand' 24 %}
             <span>{{ product_name_short }}</span>
           </a>
 
           <div class="ms-auto d-flex align-items-center gap-1">
-            {% include "_org_switcher.html" %}
             {% if api_docs_url %}
               <a class="btn btn-link link-body-emphasis p-2" href="{{ api_docs_url }}"
                  target="_blank" rel="noopener noreferrer" aria-label="API docs" title="API docs">
@@ -140,6 +142,10 @@
     <script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
     <script src="{% static 'js/htmx.min.js' %}"></script>
     <script src="{% static 'js/theme.js' %}"></script>
+    {% comment %} Story 22.20: animates the running-task dots on the job progress list. A no-op
+      on every page that has no such list, and it must live OUTSIDE the htmx-swapped fragment
+      or the 5s swap would reload the script and restart the animation. {% endcomment %}
+    <script src="{% static 'js/task-dots.js' %}"></script>
     {% block extra_js %}{% endblock %}
   </body>
 </html>

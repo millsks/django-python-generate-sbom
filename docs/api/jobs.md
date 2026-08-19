@@ -60,7 +60,13 @@ Upload a manifest **and** dispatch the SBOM generation pipeline. Content type:
 
 ## `GET /api/v1/sbom/jobs/`
 
-List the active org's jobs, most recent first. Paginated.
+List job status, most recent first — running jobs as well as finished ones. Paginated.
+
+!!! note "The UI calls this Job Status; the path still says `jobs`"
+    Story 22.17 renamed the page from History to **Job Status**. The path deliberately did not
+    move: the `/api/v1/` contract is frozen, and `/api/v1/sbom/status/{task_id}/` already means
+    the status of a *single* job, so a `job-status` list beside it would be worse than the
+    inconsistency. Scoped to the organization the caller's API key belongs to.
 
 **Query parameters**
 

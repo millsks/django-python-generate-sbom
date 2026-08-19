@@ -26,12 +26,21 @@ package set:
 
 On the **Upload** page:
 
-1. **Choose file** — select your manifest file.
-2. **Application ID** — an identifier for the application this component belongs to.
-3. **Component name** — the name of the component being described.
-4. **Repository URL** — the source repository for the component.
-5. **Source branch** — the branch the manifest was taken from.
-6. **Output format** — the SBOM document format to produce (see below).
+1. **Organization** — the line of business this job is filed against. This is the only
+   place it is chosen, and the choice is permanent: it is recorded on the job, shown as a
+   column on [Job Status](job-status.md), and written into the generated SBOM as the
+   document's **supplier**. The options come from `orgs.yml` — see
+   [Organizations](accounts-and-organizations.md).
+2. **Manifest file** — select your manifest file.
+3. **Application ID** — an identifier for the application this component belongs to.
+4. **Component name** — the name of the component being described.
+5. **Repository URL** — the source repository for the component.
+6. **Source branch** — the branch the manifest was taken from.
+7. **Output format** — the SBOM document format to produce (see below).
+
+All fields are required. The provenance fields — Application ID, Component name,
+Repository URL, Source branch, and the Organization — are embedded in the generated SBOM's
+metadata, which is why the form asks for them rather than inferring them.
 
 ## Output formats
 
@@ -44,13 +53,12 @@ On the **Upload** page:
 ## Start the job
 
 Choose **Generate SBOM**. The app queues a job and takes you to its **Results** page,
-where a progress bar tracks the pipeline as it resolves dependencies, builds the SBOM
-document, and runs the analysis phases.
+which lists every task in the pipeline and marks each one complete as it finishes.
 
 !!! info "One job at a time per organization"
     To keep resource use predictable, a new job waits if another is already running for
     your organization. You can watch progress on the Results page or from
-    [Job History](job-history.md).
+    [Job Status](job-status.md).
 
 When the pipeline finishes, the Results page shows the report tabs — see
 [Reading the Results](reading-the-results.md).

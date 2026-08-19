@@ -126,7 +126,11 @@ def test_tabs_load_their_content_over_htmx(org_client) -> None:  # type: ignore[
     html = client.get(f"/results/{job.task_id}").content.decode()
 
     assert f"/results/{job.task_id}/tab/vulnerabilities" in html
-    assert 'hx-target="#tab-content"' in html
+    # Story 22.21: the whole panel is the target, tab strip included. Targeting the body alone
+    # left the strip as first rendered, so the clicked tab's content appeared while "Overview"
+    # stayed highlighted.
+    assert 'hx-target="#tab-panel"' in html
+    assert 'hx-swap="outerHTML"' in html
     # The URL is pushed so a click leaves a shareable address behind.
     assert 'hx-push-url="?tab=vulnerabilities"' in html
 
@@ -171,13 +175,12 @@ def test_an_unrecognised_tab_partial_is_404(org_client) -> None:  # type: ignore
 
 
 @pytest.mark.django_db
-def test_cross_org_and_unknown_results_are_byte_identical(org_client) -> None:  # type: ignore[no-untyped-def]
-    """AD-2. The SPA showed one message for both cases on purpose; so does this.
+def test_another_orgs_results_render_while_an_unknown_id_404s(org_client) -> None:  # type: ignore[no-untyped-def]
+    """Story 22.16 inverted this: the two cases are now meant to differ.
 
-    Two things are masked before comparing, and neither is a leak. The CSRF token is
-    re-salted per render. The org switcher's hidden ``next`` field echoes **the path the
-    caller just requested** — their own input, which tells them nothing they did not
-    already know. What must not differ is anything derived from whether the job exists.
+    It used to assert the two responses were byte-identical, so a caller could not learn that
+    another org's job existed. With History listing every org that secret no longer exists to
+    keep, and the rows have to open. The unknown id is the only refusal left.
     """
     client, _ = org_client
     outsider = register_user(email="outsider@example.com", password=PASSWORD)
@@ -187,22 +190,18 @@ def test_cross_org_and_unknown_results_are_byte_identical(org_client) -> None:  
     cross_org = client.get(f"/results/{theirs.task_id}")
     missing = client.get("/results/00000000-0000-0000-0000-000000000000")
 
-    def normalise(response: object) -> str:
-        body = CSRF.sub("MASKED", response.content.decode())  # type: ignore[attr-defined]
-        return re.sub(r"/results/[0-9a-f-]{36}", "/results/REQUESTED", body)
-
-    assert cross_org.status_code == missing.status_code == 404
-    assert normalise(cross_org) == normalise(missing)
+    assert cross_org.status_code == 200
+    assert missing.status_code == 404
 
 
 @pytest.mark.django_db
-def test_cross_org_tab_partials_are_also_denied(org_client) -> None:  # type: ignore[no-untyped-def]
+def test_cross_org_tab_partials_are_also_served(org_client) -> None:  # type: ignore[no-untyped-def]
     client, _ = org_client
     outsider = register_user(email="outsider@example.com", password=PASSWORD)
     other_org = create_org(name="Other", admin_user=outsider)
     theirs = _job(other_org)
 
-    assert client.get(f"/results/{theirs.task_id}/tab/overview").status_code == 404
+    assert client.get(f"/results/{theirs.task_id}/tab/overview").status_code == 200
 
 
 # --- AC #3: Overview reads only summary_stats ---------------------------------------------
@@ -251,14 +250,16 @@ def test_each_metric_deep_links_to_its_tab(org_client) -> None:  # type: ignore[
 
 @pytest.mark.django_db
 def test_the_sbom_download_points_at_the_presigned_endpoint(org_client) -> None:  # type: ignore[no-untyped-def]
-    # AD-11: Django 303s to storage and never streams artifact bytes, so the page links at the
-    # existing endpoint rather than proxying the download through a new view.
+    # AD-11 still holds — the route redirects to storage rather than proxying bytes — but the
+    # button goes through the page's own route, not the org-scoped API it used to link at,
+    # which 404'd on the cross-org jobs Story 22.16 lets this page open.
     client, org = org_client
     job = _job(org)
 
     html = client.get(f"/results/{job.task_id}").content.decode()
 
-    assert f"/api/v1/sbom/result/{job.task_id}/" in html
+    assert f"/results/{job.task_id}/sbom/download" in html
+    assert "/api/v1/sbom/result/" not in html
 
 
 # --- AC #4: a failed phase is "Unavailable", never 0 ---------------------------------------
@@ -348,3 +349,150 @@ def test_a_running_job_still_shows_the_progress_gate(org_client) -> None:  # typ
 
     assert 'hx-trigger="every 5s"' in html
     assert "Total packages" not in html
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("tab", [slug for slug, _label in RESULT_TABS])
+def test_the_clicked_tab_is_the_one_marked_active(org_client, tab: str) -> None:  # type: ignore[no-untyped-def]
+    """Story 22.21: the strip and the body must never disagree about which tab is showing.
+
+    htmx swapped only `#tab-content`, so the `active` class stayed exactly where the server
+    first put it — the Version Currency table would render under a highlighted "Overview", with
+    the clicked tab showing nothing but a focus outline.
+
+    Asserted on the fragment htmx actually receives, per tab, because the bug was invisible on
+    first load and appeared only after a click.
+    """
+    import re
+
+    client, org = org_client
+    job = _job(org)
+
+    fragment = client.get(f"/results/{job.task_id}/tab/{tab}").content.decode()
+
+    active = re.findall(r'<a class="nav-link active"[^>]*hx-push-url="\?tab=([a-z]+)"', fragment)
+    assert active == [tab], f"expected only {tab} active, got {active}"
+
+
+@pytest.mark.django_db
+def test_the_tab_fragment_carries_the_whole_strip(org_client) -> None:  # type: ignore[no-untyped-def]
+    """The fragment replaces the panel, so it has to bring every tab with it.
+
+    Returning only the body would leave the user with no way back to the other tabs.
+    """
+    client, org = org_client
+    job = _job(org)
+
+    fragment = client.get(f"/results/{job.task_id}/tab/licenses").content.decode()
+
+    assert 'id="tab-panel"' in fragment
+    for slug, _label in RESULT_TABS:
+        assert f"/tab/{slug}" in fragment, slug
+
+
+# --- Sorting from inside a swapped-in tab (Story 22.25) ---------------------------------------
+
+
+def _job_with_version_report(org: Org) -> SBOMJob:
+    """A job whose Version Currency tab actually has a sortable table.
+
+    The report body lives in storage, not on the row — the model carries only its key (AD-6).
+    """
+    import json
+
+    from django.core.files.base import ContentFile
+    from django.core.files.storage import default_storage
+
+    from inventory.analysis.models import AnalysisReport
+
+    job = _job(org)
+    key = f"reports/{job.task_id}-version.json"
+    default_storage.save(
+        key,
+        ContentFile(
+            json.dumps(
+                {
+                    "packages": [
+                        {"name": "numpy", "installed": "1.26.0", "latest": "2.0.0", "currency": "behind-1"},
+                        {"name": "requests", "installed": "2.32.3", "latest": "2.32.3", "currency": "current"},
+                    ],
+                    "summary": {"current": 1, "behind-1": 1, "behind-2+": 0, "unknown": 0},
+                }
+            )
+        ),
+    )
+    AnalysisReport.objects.create(job=job, report_type=AnalysisReport.ReportType.VERSION, artifact_key=key)
+    return job
+
+
+@pytest.mark.django_db
+def test_sort_links_inside_a_tab_fragment_keep_the_tab(org_client) -> None:  # type: ignore[no-untyped-def]
+    """Sorting a tab's table used to drop you back on Overview.
+
+    The tab fragment is fetched at `/results/<id>/tab/<slug>`, which carries **no query
+    string**, so django-tables2's `{% querystring %}` had nothing to preserve and produced bare
+    `?sort=name` links. A sort is a full page navigation, so following one landed on
+    `/results/<id>?sort=name` — no `tab`, therefore Overview.
+
+    Asserted on the fragment, because the full page gets this right on its own: there
+    `request.GET` already contains `tab`, which is why the bug was invisible from the server's
+    point of view until a tab had been clicked.
+    """
+    import re
+
+    client, org = org_client
+    job = _job_with_version_report(org)
+
+    fragment = client.get(f"/results/{job.task_id}/tab/versions").content.decode()
+    sort_links = re.findall(r'<th[^>]*>\s*<a href="([^"]+)"', fragment)
+
+    assert sort_links, "the versions tab should render a sortable table"
+    for link in sort_links:
+        assert "tab=" in link, f"sort link drops the tab — {link}"
+
+
+@pytest.mark.django_db
+def test_following_a_sort_link_from_a_fragment_stays_on_that_tab(org_client) -> None:  # type: ignore[no-untyped-def]
+    """The end-to-end claim, walked the way a person does it.
+
+    Fetch the fragment, take a sort link exactly as rendered, follow it, and check which tab
+    comes back. Asserting the link's shape alone would not catch one that is well-formed and
+    still resolves to the wrong place.
+    """
+    import re
+    from html import unescape
+
+    client, org = org_client
+    job = _job_with_version_report(org)
+
+    fragment = client.get(f"/results/{job.task_id}/tab/versions").content.decode()
+    link = unescape(re.findall(r'<th[^>]*>\s*<a href="([^"]+)"', fragment)[0])
+
+    page = client.get(f"/results/{job.task_id}{link}").content.decode()
+    active = re.findall(r'<a class="nav-link active"[^>]*hx-push-url="\?tab=([a-z]+)"', page)
+
+    assert active == ["versions"], f"following {link} landed on {active}"
+
+
+@pytest.mark.django_db
+def test_the_subheading_reads_org_then_app_id_then_component(org_client) -> None:  # type: ignore[no-untyped-def]
+    """Widest scope first: the org owns the App ID, which the component only qualifies."""
+    client, org = org_client
+    job = _job(org)
+
+    html = client.get(f"/results/{job.task_id}").content.decode()
+
+    assert "Acme &middot; APP-1 &middot; billing" in html
+
+
+@pytest.mark.django_db
+def test_the_subheading_names_the_jobs_org_not_the_acting_one(org_client) -> None:  # type: ignore[no-untyped-def]
+    """Story 22.16 lets any org's row open here, so the acting org would name the wrong owner."""
+    client, _ = org_client
+    outsider = register_user(email="outsider@example.com", password=PASSWORD)
+    other_org = create_org(name="Other", admin_user=outsider)
+    theirs = _job(other_org)
+
+    html = client.get(f"/results/{theirs.task_id}").content.decode()
+
+    assert "Other &middot; APP-1 &middot; billing" in html

@@ -55,10 +55,17 @@ from .services import (
 
 logger = structlog.get_logger()
 
-_INVALID_CREDENTIALS = {"error": "Invalid email or password", "code": "invalid_credentials"}
 _NOT_ADMIN = {"error": "Admin privileges are required.", "code": "not_admin"}
 _NO_ACTIVE_ORG = {"error": "No active org.", "code": "no_active_org"}
-_NOT_GLOBAL_ADMIN = {"error": "Global admin privileges are required.", "code": "not_global_admin"}
+# There is deliberately NO global-admin refusal constant here. Story 21.24 removed the
+# global-admin gate and Story 22.8 removed the last copies that survived inside view bodies, so
+# no code path can refuse on that basis — keeping the constant "for the schema" made it read as
+# though one still might. A test in `tests/unit/test_users_api_error_envelopes.py` pins that its
+# error code appears nowhere in `src/`, since coverage cannot see a dead module constant.
+#
+# `_NOT_ADMIN` below is a different case: it IS returned, though only when the deployment has no
+# organization at all, since `get_admin_org` is now `get_request_org`. Its wording is stale and
+# deliberately left alone — Epics 17-18 restore a real admin decision at that seam.
 
 
 def _validation_error(serializer_errors: object) -> Response:
@@ -139,8 +146,6 @@ class GlobalAdminsView(APIView):
     @extend_schema(responses={200: GlobalAdminsResponseSerializer, 403: ErrorResponseSerializer})
     def get(self, request: Request) -> Response:
         """List current global admins (id + email); 403 unless the caller is one."""
-        if not is_global_admin(cast(UserT, request.user)):
-            return Response(_NOT_GLOBAL_ADMIN, status=status.HTTP_403_FORBIDDEN)
         data = [{"user_id": u.pk, "email": u.email} for u in list_global_admins()]
         return Response({"global_admins": data})
 
@@ -150,8 +155,6 @@ class GlobalAdminsView(APIView):
     )
     def post(self, request: Request) -> Response:
         """Grant global admin to a registered user by email; 403 unless the caller is one."""
-        if not is_global_admin(cast(UserT, request.user)):
-            return Response(_NOT_GLOBAL_ADMIN, status=status.HTTP_403_FORBIDDEN)
         serializer = AddMemberSerializer(data=request.data)
         if not serializer.is_valid():
             return _validation_error(serializer.errors)
@@ -181,8 +184,6 @@ class GlobalAdminDetailView(APIView):
     )
     def delete(self, request: Request, user_id: int) -> Response:
         """Revoke the target's global-admin status; 403 unless the caller is one."""
-        if not is_global_admin(cast(UserT, request.user)):
-            return Response(_NOT_GLOBAL_ADMIN, status=status.HTTP_403_FORBIDDEN)
         target = user_model().objects.filter(pk=user_id).first()
         if target is None:
             return Response(
@@ -251,13 +252,15 @@ class CreateOrgView(APIView):
         responses={201: OrgSummarySerializer, 400: ErrorResponseSerializer, 403: ErrorResponseSerializer},
     )
     def post(self, request: Request) -> Response:
-        """Create the org (global-admin only); 403 for anyone else (Story 2.12)."""
-        user = cast(UserT, request.user)
-        if not is_global_admin(user):
-            return Response(_NOT_GLOBAL_ADMIN, status=status.HTTP_403_FORBIDDEN)
+        """Create the org. Ungated since Story 21.24; anonymous callers are the normal case.
+
+        The creator becomes the org's admin **when there is one** — an anonymous request has no
+        user, so the org is created without a membership (Story 22.8).
+        """
         serializer = CreateOrgSerializer(data=request.data)
         if not serializer.is_valid():
             return _validation_error(serializer.errors)
+        user = cast(UserT, request.user) if request.user.is_authenticated else None
         org = create_org(name=serializer.validated_data["name"], admin_user=user)
         return Response({"slug": org.slug, "name": org.name}, status=status.HTTP_201_CREATED)
 

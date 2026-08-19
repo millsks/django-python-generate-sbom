@@ -1,6 +1,6 @@
 # Deploying to OpenShift
 
-This section explains how to move Python Inventory Supply Lens from the local
+This section explains how to move FABRIC from the local
 Docker Compose stack (see [Local Development](../../developer/setup.md)) onto the
 **Red Hat OpenShift Container Platform (OCP)**. It is written for a first-time
 OpenShift deployer: no prior Kubernetes or OpenShift experience is assumed, and

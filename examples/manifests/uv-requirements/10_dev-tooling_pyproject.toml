@@ -1,0 +1,40 @@
+# 10_dev-tooling — test, lint, type-check, and release tooling (dev only)
+# uv: `uv sync` to install, `uv lock` to produce uv.lock.
+
+[project]
+name = "dev-tooling"
+version = "0.1.0"
+description = "test, lint, type-check, and release tooling (dev only)"
+requires-python = ">=3.12"
+dependencies = [
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+    "pytest-asyncio==1.4.0",
+    "pytest-mock==3.15.1",
+    "pytest-xdist==3.8.0",
+    "coverage==7.15.4",
+    "hypothesis==6.165.10",
+    "respx==0.23.1",
+    "responses==0.26.2",
+    "faker==40.36.0",
+    "freezegun==1.5.5",
+    "ruff==0.16.3",
+    "mypy==2.3.1",
+    "pre-commit==4.6.2",
+    "tox==4.60.0",
+    "build==1.5.0",
+    "twine==7.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "ruff>=0.8",
+    "mypy>=1.14",
+    "pre-commit>=4.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

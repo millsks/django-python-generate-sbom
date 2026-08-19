@@ -3,7 +3,7 @@
 
   Active state is an EXACT path match. Every destination is currently a single
   top-level path, so that is sufficient and needs no custom template tag. A story that
-  adds nested server-rendered routes (e.g. /history/<id>/results) and wants the parent
+  adds nested server-rendered routes (e.g. /job-status/<id>/results) and wants the parent
   highlighted should add a `startswith`-style filter then, rather than open-coding
   string surgery in the template.
 {% endcomment %}

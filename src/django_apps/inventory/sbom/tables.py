@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import django_tables2 as tables
+from django.template.defaultfilters import capfirst
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html
@@ -51,7 +52,7 @@ STATUS_BADGES = {
 def format_duration(seconds: float | None) -> str:
     """Format a duration the way ``duration.ts`` did (Story 6.3).
 
-    Ported rather than reinvented so the History page reads identically before and after the
+    Ported rather than reinvented so the Job Status page reads identically before and after the
     conversion: an em dash when unknown, then ms / s / m+s / h+m.
 
     Args:
@@ -84,6 +85,16 @@ class JobTable(tables.Table):
         attrs={"th__input": {"id": "select-all", "aria-label": "Select all rows on this page"}},
         verbose_name="",
     )
+    # Story 22.16: with the org switcher gone, Job Status lists every org and this column is
+    # what says which one a job was filed against. It leads the data columns because that is
+    # the question the switcher used to answer before you read anything else.
+    org = tables.Column(accessor="org__name", verbose_name="Organization", orderable=True)
+    # Story 22.26: which application and component this job describes. The Manifest column is
+    # often the same word on every row — "requirements.txt" identifies nothing — so these are
+    # what let a reader tell one job from another, and they sit next to the organization
+    # because that is the same question at a finer grain.
+    application_id = tables.Column(accessor="manifest__application_id", verbose_name="Application")
+    component_name = tables.Column(accessor="manifest__component_name", verbose_name="Component")
     created_at = tables.DateTimeColumn(verbose_name="Submitted", format="Y-m-d H:i")
     manifest = tables.Column(accessor="manifest__original_filename", verbose_name="Manifest", orderable=False)
     detected_format = tables.Column(accessor="manifest__detected_format", verbose_name="Format", orderable=False)
@@ -96,7 +107,18 @@ class JobTable(tables.Table):
         # django-tables2 Meta options, not mutable dataclass defaults — same exemption the
         # project already applies to Django model Meta classes.
         model = SBOMJob
-        fields = ("select", "created_at", "manifest", "detected_format", "output_format", "status", "elapsed")
+        fields = (
+            "select",
+            "org",
+            "application_id",
+            "component_name",
+            "created_at",
+            "manifest",
+            "detected_format",
+            "output_format",
+            "status",
+            "elapsed",
+        )
         # Newest-first is the queryset's ordering; stated here too so a user clearing the sort
         # returns to it rather than to an undefined order.
         order_by = "-created_at"
@@ -105,13 +127,30 @@ class JobTable(tables.Table):
         # Only non-terminal rows carry a trigger, which is the single biggest load
         # difference between this and a naive implementation: a page of finished jobs
         # issues zero requests.
+        # `.get(attr)` — NOT `.get(attr, "")`. django-tables2 omits an attribute whose value
+        # is None and renders one whose value is "" as a blank attribute, and htmx reads the
+        # difference as an instruction: an empty `hx-get` means "GET the current URL", and a
+        # `<tr>`'s default trigger is a click. Finished rows carried `hx-get=""`, so clicking
+        # one fetched /job-status and swapped the whole page into the row (Story 22.24).
         row_attrs = {  # noqa: RUF012  # tables2 Meta option
             "id": lambda record: f"job-row-{record.task_id}",
             **{
-                name: (lambda attr: lambda record: poll_attrs(record).get(attr, ""))(name)
+                name: (lambda attr: lambda record: poll_attrs(record).get(attr))(name)
                 for name in ("hx-get", "hx-trigger", "hx-swap")
             },
         }
+
+    def render_manifest(self, record: SBOMJob) -> SafeString:
+        """Link the manifest's filename to a page that shows what was uploaded (Story 22.26).
+
+        The file was previously write-only — uploaded, parsed, and unreachable — so a
+        surprising SBOM could not be checked against the input that produced it.
+        """
+        return format_html(
+            '<a href="{}">{}</a>',
+            reverse("ui-job-manifest", kwargs={"task_id": record.task_id}),
+            record.manifest.original_filename,
+        )
 
     def render_detected_format(self, value: str, record: SBOMJob) -> str:
         """Show the manifest format's human label rather than its code."""
@@ -134,7 +173,7 @@ class JobTable(tables.Table):
                 'aria-valuenow="{}" aria-valuemin="0" aria-valuemax="100">'
                 '<div class="progress-bar" style="width:{}%"></div></div>',
                 badge,
-                record.current_step or "Queued",
+                capfirst(record.current_step or "Queued"),
                 record.progress,
                 record.progress,
             )

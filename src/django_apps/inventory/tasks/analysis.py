@@ -28,7 +28,7 @@ from inventory.analysis.services import vulnerability
 from inventory.analysis.services.reports import make_envelope
 from inventory.sbom.parsers import PackageSpec
 from inventory.sbom.selectors import get_job_by_task_id
-from inventory.sbom.services import resolve_job_packages
+from inventory.sbom.services import finish_job_task, resolve_job_packages, start_job_task
 
 logger = structlog.get_logger()
 
@@ -53,8 +53,19 @@ def _run_phase(
     raising, so the chord/job still completes with the SBOM (FR-4.5).
     """
     task_id = ctx["task_id"]
+    # Logged BEFORE `update_state` and the job load, both of which write to or read from the
+    # database. Without this line a phase that blocks in either produces no output at all, and
+    # the worker log stops at Celery's own "Task … received" — which is where three Windows CI
+    # failures left the investigation with nothing to go on (Stories 22.15, 22.18).
+    logger.info(f"phase_{report_type}_started", task_id=str(task_id), step=step)
     task.update_state(state="PROGRESS", meta={"progress": start_pct, "current_step": step})
+    # Story 22.20: this task's own row. Reporting only to Celery's result backend left the
+    # progress display showing "generate SBOM document" for the whole analysis fan-out — the
+    # longest part of a real run — and these three run concurrently, so a single shared
+    # "current step" could never show more than one of them anyway.
+    start_job_task(task_id, report_type)
     job = get_job_by_task_id(task_id)
+    logger.debug(f"phase_{report_type}_job_loaded", task_id=str(task_id), org_id=job.org_id)
     started = time.monotonic()
     try:
         packages = resolve_job_packages(task_id)
@@ -81,7 +92,12 @@ def _run_phase(
         )
         envelope = make_envelope(report_type, failed=True, failure_reason=fail_reason)
 
-    task.update_state(state="PROGRESS", meta={"progress": end_pct, "current_step": f"{step} complete"})
+    # The bar advances either way: FR-4.5 keeps the job running when an analysis task fails, so
+    # stalling on it would misreport a job that is still working. The task's own row records
+    # WHICH outcome it was, so the list can show [ERROR] beside it rather than pretending.
+    failed = bool(envelope.get("failed"))
+    task.update_state(state="PROGRESS", meta={"progress": end_pct, "current_step": step})
+    finish_job_task(task_id, report_type, failed=failed, detail=str(envelope.get("failure_reason") or ""))
     return envelope
 
 

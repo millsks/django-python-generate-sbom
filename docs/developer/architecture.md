@@ -35,7 +35,7 @@ backend for the UI.
 | `web` | Django + DRF (gunicorn) — serves the server-rendered UI, the REST API, and static assets |
 | `worker-pipeline` | Celery worker on the `pipeline` queue (sequential SBOM phases) |
 | `worker-analysis` | Celery worker on the `analysis` queue (parallel enrichment) |
-| `beat` | Celery Beat — scheduled maintenance (artifact expiry, mapping refresh) |
+| `beat` | Celery Beat — scheduled maintenance (the conda↔PyPI mapping refresh; **artifact purging is manual**, see below) |
 | `postgres` | Relational store |
 | `redis` | Celery broker + result backend |
 | `minio` | S3-compatible artifact blob storage |
@@ -56,6 +56,10 @@ These are the load-bearing rules from the spine. Respect them when adding code.
   the HTTP API. (This supersedes **AD-5**, which mandated a React SPA; Epic 21 reversed it.)
 - **AD-6 — Storage triad.** Artifact **blobs live in S3/MinIO only** — never in
   PostgreSQL or Redis. The pipeline passes storage **keys**, not blobs, between phases.
+  Expiry is *tracked* on every job (`artifacts_expire_at`) but **nothing is purged on a
+  schedule** (Story 22.6): run `pixi run python manage.py purge_expired_artifacts --dry-run`
+  to review, then the same command without the flag to delete. Job records are never removed
+  (FR-8.1).
 - **AD-7 — Per-org concurrency gate at enqueue.** The generate endpoint gates
   concurrent jobs per org and creates the `ManifestUpload` + `SBOMJob` in one
   transaction before dispatch.
@@ -70,6 +74,10 @@ These are the load-bearing rules from the spine. Respect them when adding code.
 - **AD-16 — One reusable app.** All domain code is in `inventory`, imported unqualified.
 - **AD-17 — No concrete `User` import.** App code uses `settings.AUTH_USER_MODEL` and
   `get_user_model()`; the concrete model is owned by the host project.
+- **AD-18 — No container on the local path or the gate.** Nothing reachable from
+  `pixi run dev` or `pixi run ci` may invoke Docker or Podman, because neither is
+  permitted on Windows in the destination organization. Containers remain how
+  production runs; the Compose stack stays behind the opt-in `docker-*` tasks.
 
 ## Accounts, orgs, and the global-admin tier
 
@@ -92,18 +100,35 @@ Identity and tenancy were always **decoupled**, and tenancy is the half that sur
 `Org` is a tenant boundary; an `OrgMembership` records who belongs to it. See the
 [Data Model](data-model.md) for the fields.
 
-- **Org isolation is untouched (AD-2).** It is a tenancy invariant, not an authentication
-  one. Every org-scoped query still goes through `.for_org(org)`, and
-  `get_org_scoped_object_or_404` still makes another org's object indistinguishable from a
-  missing one. Removing the login did **not** make organizations visible to each other.
+- **Org isolation now binds the API, not the pages (AD-2, amended by Story 22.16).** Every
+  API query still goes through `.for_org(org)`, because an API key genuinely pins one tenant
+  (AD-8) and a programmatic caller must never see another org's jobs.
+
+    The **pages** are deliberately cross-org: Job Status lists every organization with a
+    column and a filter, and its rows open. That is not a reduction in real isolation — since
+    Story 21.24 removed authentication, the org switcher accepted any non-ADMIN org from
+    anyone, so another org's work was always two clicks away. The switcher made that a
+    detour; listing it makes it honest. `get_all_jobs` / `get_any_job` serve the pages;
+    `get_jobs` / `get_job` stay scoped for the API.
+
+- **The organization is provenance (Story 22.16).** It is chosen on the upload form, recorded
+  on the job, shown as a Job Status column, and written into the generated SBOM as its
+  **supplier** (Story 22.14). It is no longer a mode the interface sits in — the header
+  switcher is gone.
 
 - **The acting org.** `get_request_org` resolves it, in one place, for both the pages and
   the API (AD-2). A presented API key wins and pins the caller to that key's org; otherwise
   a Django-admin session's org applies; otherwise the default org. The system ADMIN org is
   never the acting org (Story 2.18) — it is a platform tier, not a workspace.
 
-- **Membership and the global-admin tier still exist and are still editable.** They no
-  longer gate anything, and are the seam that host-supplied group claims will re-attach to.
+- **Organizations are seeded, not created in the app (Story 22.10).** `seed_orgs` reads a
+  committed `orgs.yml`, matching by slug because the slug is what the default-org setting and
+  every API key reference. Removing a line deletes nothing.
+
+- **Membership and the global-admin tier still exist as data**, and are still editable
+  through `/api/v1/`. They no longer gate anything, their management screens were removed
+  (Stories 22.9 and 22.11), and `OrgMembership.role` is read by nothing outside the
+  membership services themselves. They are the seam host-supplied group claims re-attach to.
 
 - **Per-org promote / demote.** Admins add or remove *per-org* admins with
   `promote_member_to_admin` (Story 2.16) and `demote_admin_to_member` (Story 2.20);

@@ -162,6 +162,32 @@ DATABASES = {
     "default": env.db("DATABASE_URL", default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
 }
 
+# --- SQLite concurrency (Story 22.4) ---
+# `pixi run dev` runs THREE processes against one SQLite file (web + worker + beat), and SQLite
+# allows a single writer. Applied only to SQLite: these keys are invalid for PostgreSQL, which
+# is what the container/OCP path uses.
+if "sqlite3" in DATABASES["default"]["ENGINE"]:
+    DATABASES["default"]["OPTIONS"] = {
+        # THE load-bearing one. Django's default `BEGIN` is DEFERRED: a transaction takes a
+        # SHARED lock to read, then tries to upgrade to RESERVED to write. If another
+        # connection already holds RESERVED, SQLite returns SQLITE_BUSY *immediately* — and
+        # `timeout` below does NOT apply, because waiting could never resolve it. That is the
+        # classic "database is locked" a web request and a worker produce between them.
+        #
+        # Measured on this codebase, 4 threads doing read-then-write on one file:
+        #     deferred BEGIN  -> 3 of 4 raised "database is locked"  (in BOTH journal modes)
+        #     BEGIN IMMEDIATE -> 0 errors                            (in BOTH journal modes)
+        # So WAL alone does not fix this; IMMEDIATE does. Requires Django 5.1+.
+        "transaction_mode": "IMMEDIATE",
+        # Readers no longer block behind an open writer — the everyday `pixi run dev` case,
+        # where the web process serves pages while the worker writes phase progress. This is a
+        # separate benefit from the deadlock fix above, not a substitute for it.
+        "init_command": "PRAGMA journal_mode=WAL;",
+        # Django's own default is also 5s; set explicitly because it is load-bearing under
+        # IMMEDIATE — contenders now queue here instead of failing instantly.
+        "timeout": 20,
+    }
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
@@ -215,8 +241,12 @@ DJANGO_TABLES2_TEMPLATE = "django_tables2/bootstrap5.html"
 # single source, never a literal in a template. Two forms because the header brand and a
 # per-page <title> suffix want the short one while documents and the landing page want
 # the full one. Exposed to templates by django_service.context_processors.ui.
-PRODUCT_NAME = "Python Inventory Supply Lens"
-PRODUCT_NAME_SHORT = "Supply Lens"
+#
+# The short form is the acronym the long form spells out, so the two are not
+# interchangeable phrasings of one name — the header shows both, stacked, because "FABRIC"
+# alone tells a first-time reader nothing. Written without dots, deliberately.
+PRODUCT_NAME = "Python Framework for Automated Bill of Materials & Risk Inventory in Code"
+PRODUCT_NAME_SHORT = "PyFABRIC"
 
 # Footer + header chrome values, mirroring the SPA's config.ts so the server-rendered
 # shell reproduces it (Story 12.3 footer, Story 11.8 header links, Story 11.20 API docs
@@ -235,6 +265,11 @@ PRODUCT_VERSION = env.str("PRODUCT_VERSION", default=_DISTRIBUTION_VERSION)
 # boundary, so an anonymous request must still resolve to one. Migration 0003 seeds it.
 INVENTORY_DEFAULT_ORG_SLUG = env.str("INVENTORY_DEFAULT_ORG_SLUG", default="enterprise-wells-fargo-technology")
 
+# The organizations (lines of business) this deployment seeds, read by `manage.py seed_orgs`
+# (Story 22.10). A committed file rather than a form: the set is known up front, and a file is
+# reviewable in a pull request. Overridable so a deployment can supply its own list.
+INVENTORY_ORGS_FILE = env.str("INVENTORY_ORGS_FILE", default=str(BASE_DIR / "orgs.yml"))
+
 REPO_URL = env.str("REPO_URL", default="https://github.com/millsks/django-python-generate-sbom")
 DOCS_URL = env.str("DOCS_URL", default="https://millsks.github.io/django-python-generate-sbom/")
 
@@ -248,6 +283,14 @@ CELERY_RESULT_BACKEND = REDIS_URL
 # so the cache is shared across analysis workers (FR-5.5).
 REQUESTS_CACHE_BACKEND = env.str("REQUESTS_CACHE_BACKEND", default="memory")
 CELERY_TASK_DEFAULT_QUEUE = "pipeline"
+# Outbound analysis HTTP bounds (Story 22.15). These are the REAL protection against a hung
+# external API, not the Celery soft time limit below: `SoftTimeLimitExceeded` is delivered by
+# SIGUSR1, which Windows has no equivalent for, and the `--pool=solo` worker Windows runs
+# cannot be interrupted anyway. Without these a single unanswered connection stalls the only
+# worker thread indefinitely, and FR-6.7's per-phase degradation never gets to fire.
+ANALYSIS_HTTP_CONNECT_TIMEOUT = env.float("ANALYSIS_HTTP_CONNECT_TIMEOUT", default=5.0)
+ANALYSIS_HTTP_READ_TIMEOUT = env.float("ANALYSIS_HTTP_READ_TIMEOUT", default=30.0)
+
 CELERY_TASK_SOFT_TIME_LIMIT = env.int("CELERY_TASK_SOFT_TIME_LIMIT", default=1800)
 CELERY_TASK_TIME_LIMIT = env.int("CELERY_TASK_TIME_LIMIT", default=2100)
 

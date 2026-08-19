@@ -7169,3 +7169,286 @@ gate, may require a container.
 4. **The docs stop implying Docker is expected.**
    Given `setup.md` currently frames Compose as a normal alternative, when it is updated, then the
    containerless path is unambiguously the supported local path and Compose is qualified accordingly.
+
+### Story 22.6: Make Expired-Artifact Purging Manual and Reviewable
+
+As a maintainer,
+I want artifact purging to happen only when I ask for it, after I have seen what would be deleted,
+so that blob deletion is a deliberate act rather than something that happens unattended overnight.
+
+**Context:** Added mid-epic at the product owner's direction: *"remove the requirement to cleanup expired
+artifacts — we can do that manually when we need to review."* This **amends FR-8.2**, which specified a
+scheduled cleanup, and it lands immediately after Story 22.2 registered that very task. The sequence is
+deliberate rather than wasted: 22.2 established that the schedule and the registry cannot silently disagree,
+which is what makes removing one entry safe to reason about.
+
+**What is retained:** `artifacts_expire_at` is still stamped on every job (`completed_at + ARTIFACT_RETENTION_DAYS`),
+so expiry is still *tracked* — nothing is purged until somebody asks. `delete_job_artifacts`,
+`purge_expired_artifacts`, the org-scoped delete controls on the history page, and FR-8.1 (job records are never
+deleted) are all unchanged.
+
+**Acceptance Criteria:**
+
+1. **Nothing purges on a schedule.**
+   Given Beat ran the purge nightly at 04:00, when the schedule is amended, then `beat_schedule` contains no
+   purge entry, Beat dispatches no purge, and a test asserts the absence rather than trusting the diff.
+2. **The remaining schedule is still guarded.**
+   Given Story 22.2 added a registry guard, when an entry is removed, then that guard still passes for what
+   remains and still fails for a schedule entry naming an unregistered task.
+3. **A manual sweep exists and is reviewable.**
+   Given "manually" must not mean hand-writing a shell one-liner, when the story completes, then a management
+   command performs the sweep, and a `--dry-run` mode reports exactly which jobs and how many blobs *would* be
+   purged **without deleting anything**.
+4. **The manual sweep behaves like the scheduled one did.**
+   Given the selection rule is `artifacts_expire_at <= now AND result_key IS NOT NULL`, when the command runs,
+   then it purges exactly those jobs, nulls `result_key` and each related `AnalysisReport.artifact_key`, and
+   **retains every job record and its metadata** (FR-8.1, AD-6).
+5. **The retirement is recorded where it will be read.**
+   Given FR-8.2 specified a scheduled cleanup and several documents describe one, when the story completes,
+   then the architecture spine, `README.md`, the developer architecture and data-model pages, and the OpenShift
+   reference no longer describe an automatic purge, and each says how to run it instead.
+6. **Gate green.** `pixi run ci` exits 0.
+
+### Story 22.7: Fix the Celery Worker Failing to Start on Windows
+
+As a developer on Windows,
+I want the containerless Celery worker to start,
+so that background jobs run at all on the platform that has no Docker fallback.
+
+**Context:** Found by Story 22.4's real-worker test on its **first** run against `windows-latest`, and
+**shipping broken since Epic 20**. Kombu's `filesystem://` transport locks its message files with
+`LockFileEx`, so `kombu/transport/filesystem.py` unconditionally imports `pywintypes`, `win32con`, and
+`win32file` under `os.name == "nt"` — its own comment reads *"needs win32all to work on Windows"*. `pywin32`
+was never declared, so `pixi run worker`, `pixi run beat`, and therefore `pixi run dev` all died at import
+with `ModuleNotFoundError`.
+
+Nothing could have caught this earlier: Story 20.6's Windows job ran unit tests only, and those use eager
+Celery, which never loads the transport. This is the second real defect the Epic 22 hardening has surfaced.
+
+**Acceptance Criteria:**
+
+1. **The worker starts on Windows.**
+   Given the transport needs `pywin32`, when the dependency is declared, then a real Celery worker boots on
+   `windows-latest` and Story 22.4's end-to-end test passes there.
+2. **The dependency is scoped to the platform that needs it.**
+   Given `pywin32` is meaningless on macOS and Linux, when it is added, then it is declared under
+   `[target.win-64.dependencies]` only and does not appear in any other platform's resolved environment.
+3. **It cannot be dropped silently.**
+   Given the failure is invisible on macOS and Linux, when the story completes, then a test asserts the
+   win-64 declaration exists, and the reason is recorded beside it.
+
+---
+
+**Stories 22.8-22.12 were added mid-epic**, in response to product-owner direction and to an audit of whether
+the test suite was still valid after the Epic 21 refactor. They are recorded here because they changed the
+shipped product, not just its packaging.
+
+### Story 22.8: Make the Admin Surfaces Work for an Anonymous Caller
+
+As an operator of an app with no authentication,
+I want the surfaces Story 21.24 declared open to actually work when nobody is signed in,
+so that the ordinary caller is not the one path nothing was tested against.
+
+**Context:** Story 21.24 removed the app's authentication and stated (AC #5) that member management, org
+creation, API-key create/revoke, bulk artifact deletion, and the global-admins page all remain reachable and
+succeed. Two defects slipped through, and **the suite could not see either, because every page and API test
+logs in first** — so nothing exercised the anonymous path that is now the ordinary one.
+
+**Acceptance Criteria:**
+
+1. **Org creation succeeds without a user.**
+   Given `create_org` assigned `admin_user` to `OrgMembership.user`, and an `AnonymousUser` raises
+   `ValueError: Cannot assign ...`, when the caller is anonymous, then the org is created with **no**
+   membership rather than a synthetic user — the same coherent shape as a userless API-key upload.
+2. **Signing in never removes capability.**
+   Given four DRF views kept in-body `is_global_admin()` checks, and `is_global_admin` returns `True` for
+   anonymous but does the real membership query for a real user, when a signed-in ordinary user calls those
+   endpoints, then they are not more restricted than an anonymous caller. Asserted as a **relationship**, since
+   that relationship is what inverted; two separate absolutes would not have caught it.
+
+### Story 22.9: Remove the Inert Membership and Global-Admin UI
+
+As a user,
+I want the navigation to offer only what still does something,
+so that a screen does not imply an access-control decision the app no longer makes.
+
+**Context:** Product-owner direction: *"if that functionality is no longer needed i would rather get rid of
+it."* Members, Global Admins, and the leave-org action all edited records that gate nothing without identity,
+and all three were broken for the anonymous caller — `/organization/leave` raised `TypeError` on
+`AnonymousUser`.
+
+**Acceptance Criteria:**
+
+1. The pages, routes, templates, nav entries, and forms for Members, Global Admins, and leave-org are removed.
+2. **The org and membership model, the services, and the `/api/v1/` endpoints are retained.** The model is the
+   seam OIDC group claims re-attach to (Epics 17-18), and Story 21.24 AC #9 froze the API surface.
+
+### Story 22.10: Seed Organizations From a Committed List
+
+As a maintainer,
+I want organizations created from a reviewable file rather than typed into a form,
+so that the tenant list is deliberate instead of accumulated.
+
+**Context:** Organizations are lines of business, known up front. A creation form gets typos, near-duplicates,
+and slugs nobody chose.
+
+**Acceptance Criteria:**
+
+1. **`seed_orgs` is idempotent and boot-safe.** Runs on every boot, skips what exists, and says why.
+2. **The slug is the identity.** Matching is by slug, never by name — the slug is what
+   `INVENTORY_DEFAULT_ORG_SLUG`, the switcher, and API keys reference. A name that differs from the file is
+   *reported*, never silently rewritten.
+3. **Removing a line deletes nothing.** Deleting an org would orphan its jobs and artifacts.
+4. **A bad list seeds nothing at all.** Validation completes before any write: a half-seeded tenant list is
+   worse than none, because jobs start landing in whichever orgs happened to exist.
+5. **The reserved `admin` slug is refused.** Migration `0002` owns the ADMIN org, which is a platform tier and
+   not a workspace (Stories 2.12/2.18).
+
+### Story 22.11: Remove the Organization UI
+
+As a user,
+I want the navigation to reflect that orgs are seeded, not created,
+so that the app does not offer a form that duplicates a committed file.
+
+**Context:** With 22.10 seeding orgs from `orgs.yml`, the creation form is redundant and the organization hub
+only linked to surfaces the nav already offers.
+
+**Acceptance Criteria:**
+
+1. The Organization pages, routes, templates, and nav entry are removed; the nav is Home / Upload / History /
+   API Keys.
+2. **Orgs remain first-class data.** The header switcher selects one and the upload form files a job against
+   one; only the management UI goes.
+
+### Story 22.12: Close the Post-Refactor Suite Audit Findings
+
+As a maintainer,
+I want the things that merely *look* covered to be either real or gone,
+so that a green suite means what it appears to mean.
+
+**Context:** An audit of the suite's validity after the Epic 21/22 refactor found three problems of the same
+kind.
+
+**Acceptance Criteria:**
+
+1. **The fake security boundary is deleted.** `get_org_scoped_object_or_404` was documented as the org-isolation
+   boundary and had **zero callers** — every real lookup went through `.for_org()`. A function that looks like
+   the boundary and enforces nothing is worse than no function, because it invites the next reader to trust it.
+2. **The no-organizations state is covered on every surface.** It proved to be the same condition behind nearly
+   all of `users/views.py`'s uncovered lines, since `get_admin_org` has been `get_request_org` since Story
+   21.24 — so the `not_admin` 403s now fire when the database has no org, not because a caller lacks privilege.
+   Pages answer 200 with an explanation; the API answers its documented `{error, code}` envelope; nothing 500s.
+3. **The order-dependent test landmine is removed.** Test-only `_ScopedThing` (no table, cascading FK to `Org`)
+   made *any* `Org` delete fail with `no such table` once its module was collected — a pass/fail that depended
+   on collection order. Tables are now created for models declared under `tests/`.
+
+### Story 22.13: Reconcile the API Reference With the Removed Authorization
+
+As a reader of the API reference,
+I want the documented gates to match what the app enforces,
+so that I do not conclude an endpoint is protected when it is open.
+
+**Context:** Surfaced by an `mkdocs build` INFO line about a link to an endpoint Story 21.24 deleted.
+`docs/api/authentication.md` was updated by that story and is accurate; `organizations.md`, `api-keys.md`, and
+`index.md` were missed and still said "Admin only", "Global admin only", and listed `403 not_global_admin` as a
+returned error on endpoints that **cannot return it**.
+
+**Acceptance Criteria:**
+
+1. **Every API page that describes endpoints states the true posture up front**, and the admin markers are kept
+   as a record of the authorization each endpoint is *meant* to carry (Epics 17-18 restore it at that seam).
+2. **No page lists an error code the app cannot return.** `not_global_admin` and `invalid_credentials` are gone
+   from the code and from the reference — both were dead module constants that coverage could not see, because
+   a module-level assignment always executes.
+3. **The stale `403 not_admin` listings are explained rather than deleted.** That code *is* still returned, but
+   only when the deployment has no organization at all.
+4. **A test ties the docs to the code**, asserting the retired codes appear nowhere in `src/` and that no API
+   page mentions them without saying they are retired.
+
+---
+
+**Stories 22.14-22.28 were added after the epic began**, almost all of them from the product owner using the
+running application. That is worth stating plainly: they are not scope creep but the epic doing its job —
+Epic 22 exists to make the containerless path trustworthy, and most of these were found by someone actually
+running it.
+
+### Story 22.14: Carry the Organization Into the SBOM Metadata
+
+The organization chosen on the upload form went no further than the job row. It is now emitted as each
+format's own **supplier** — CycloneDX `metadata.supplier`, SPDX `PackageSupplier` — rather than a custom
+property only this application could read. Taken from the manifest's own org, so a regenerated document still
+names the tenant the job was filed against.
+
+### Story 22.15: Give Every Outbound Analysis Call a Timeout
+
+`requests` has no default timeout, and Celery's soft time limit needs `SIGUSR1` and an interruptible pool —
+neither of which Windows has. One unreachable API stalled the only worker thread indefinitely and FR-6.7's
+per-phase degradation never fired. Found by CI, after two other hypotheses were falsified.
+
+### Story 22.16: Retire the Org Switcher; the Organization Is Provenance
+
+The switcher put the whole UI into a mode, and since Story 21.24 accepted any organization from anyone.
+The org is now chosen per upload, shown as a Job Status column with a filter, and written into the SBOM.
+**Amends AD-2** — see AD-19.
+
+### Story 22.17: Rename the History Page to Job Status
+
+It has shown running jobs since Story 21.11 added live polling, so "history" described half of what it does.
+The UI renamed its paths; the API kept its own, because Story 21.24 AC #9 froze that contract and
+`/sbom/status/{id}/` already means the status of a single job.
+
+### Story 22.18: Drain the Test Worker's Pipe
+
+The real-worker test failed on Windows three times. The worker was started with `stdout=PIPE` and nothing
+read it, so once the pipe buffer filled the process blocked forever — mid-task, silently. Windows buffers are
+far smaller, which is why only Windows hit it.
+
+### Story 22.19 / 22.20: Progress as a Task List
+
+Two attempts at making a single status line describe the pipeline failed for the same reason: the three
+analysis tasks run concurrently, so one string can never name more than one. A `JobTask` row per task fixed
+both that and the drifting percentages. **See AD-20.**
+
+### Story 22.21: Swap the Tab Strip With the Tab It Shows
+
+htmx targeted `#tab-content` alone, so the tab strip kept the `active` class the server first rendered — the
+clicked tab's content loaded under a highlighted "Overview".
+
+### Story 22.22: Refresh the Documentation
+
+Deleted the organization how-to outright, rewrote the organizations page, and marked the two Epic 21 audit
+pages as frozen acceptance evidence rather than rotting reference. Added `test_documentation_accuracy.py`.
+
+### Story 22.23 / 22.27: Rename the Product, and Stop Tests Pinning It
+
+Renamed to **FABRIC**, then **PyFABRIC**. The second rename failed the suite, which was the real defect:
+five tests pinned the name's literal value, undoing Story 21.3's rule that the name is configuration. They
+now assert properties. The same story fixed a Windows-only path comparison.
+
+### Story 22.24: Finished Rows Carry No htmx Attributes
+
+`row_attrs` defaulted the polling attributes to `""` rather than omitting them, and htmx reads an empty
+`hx-get` as "GET the current URL" — so clicking a finished row loaded the whole page into its own table.
+
+### Story 22.25: Sorting a Tab Keeps the Tab
+
+django-tables2 builds sort links from the current request's query string, and the tab fragment's URL has
+none — so sorting navigated to a results page with no tab selected.
+
+### Story 22.26: Application, Component, and Manifest Review
+
+Job Status now names the application and component, and the manifest is readable rather than write-only.
+Rendered into an escaped `<pre>` rather than served as a file, because a manifest is whatever someone
+uploaded.
+
+### Story 22.28: Serve Media on the Containerless Dev Server
+
+`FileSystemStorage` has no presigning, so the SBOM download redirected to `/media/…` — a path the URLconf
+never routed. Every download 404'd locally while working perfectly in containers, where MinIO serves the
+blob. The third defect of that exact shape in this epic, after 22.15 and 22.18.
+
+### Whole-record deletion (amends FR-8.1)
+
+Job Status's delete buttons now remove the record — job, tasks, reports, manifest, and every blob they own —
+rather than purging artifacts and keeping history. The API and the manual sweep still purge artifacts only.
+**See AD-21.**

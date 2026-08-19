@@ -1,0 +1,13 @@
+# 09_async-worker — background job processing and scheduling
+
+celery==5.6.3
+kombu==5.6.2
+billiard==4.2.4
+redis==8.1.0
+flower==2.1.0
+rq==2.11.0
+APScheduler==3.11.3
+SQLAlchemy==2.0.52
+tenacity==9.1.4
+structlog==26.1.0
+sentry-sdk==2.68.0

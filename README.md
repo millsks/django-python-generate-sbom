@@ -1,4 +1,4 @@
-# Python Inventory Supply Lens
+# FABRIC
 
 A self-hosted, open-source Django web service that accepts Python dependency
 manifests and generates production-grade Software Bills of Materials (SBOMs) in
@@ -6,11 +6,13 @@ standard formats (CycloneDX, SPDX), alongside three analysis reports:
 vulnerability findings, license obligations, and version currency — through
 both a web UI and a REST API.
 
-> The product is **Python Inventory Supply Lens** ("**Supply Lens**" for short). The
-> repository, the docs-site URL, and the badge links below still use the original
-> `django-python-generate-sbom` identifier — renaming those would break existing links
-> and discard the project's SonarCloud analysis history, so they are deliberately left
-> alone.
+> The product is **FABRIC** — *Framework for Automated Bill of Materials & Risk Inventory in Code*. The acronym is written without dots.
+>
+> The repository, the docs-site URL, the badge links below, and the distribution name
+> (`python-inventory-supply-lens`) still use earlier identifiers. Renaming those would break
+> existing links and discard the project's SonarCloud analysis history, so they are
+> deliberately left alone — the **product** name and the **distribution** name are separate
+> things, and only the product one changed.
 
 <!-- Status -->
 [![CI](https://github.com/millsks/django-python-generate-sbom/actions/workflows/ci.yml/badge.svg)](https://github.com/millsks/django-python-generate-sbom/actions/workflows/ci.yml)
@@ -51,7 +53,7 @@ is multi-tenant and scoped to your organization.
 - **Accounts & orgs** — registration, org switching, membership management,
   and API keys; session and API-key authentication.
 - **Async pipeline** — a Celery workflow with live progress, MinIO artifact
-  storage, and scheduled retention/cleanup.
+  storage, and retention tracking with an on-request artifact purge.
 - **Server-rendered web UI** (Django templates, Bootstrap, htmx) and a **REST API**,
   served from one origin — one language, one toolchain, no build step.
 
@@ -99,18 +101,34 @@ django-python-generate-sbom/   ← repo root (pixi umbrella)
 Requires [pixi](https://pixi.sh). Python is installed by pixi — no separate toolchain
 setup needed, and no Node.
 
+### Run it locally — no containers
+
+This is the supported path on both macOS and Windows, and it needs no Docker, PostgreSQL,
+Redis, or MinIO. Django serves the UI, the API, and static assets from one port.
+
 ```sh
-pixi install          # installs the environment
-pixi run bootstrap    # installs the pre-commit git hooks
+pixi install                  # installs the environment
+cp .env.example .env          # containerless defaults; `copy` on Windows cmd
+pixi run migrate              # creates db.sqlite3 and seeds the default organization
+pixi run dev                  # web + worker + beat, together, in the foreground
+```
+
+Then open <http://localhost:8000> and go to **Upload**.
+
+```sh
+pixi run bootstrap    # one-time: installs the pre-commit git hooks
 pixi run ci           # full validation gate (build · type-check · lint · coverage · docs)
 ```
 
-The Docker stack is the simplest way to run the whole app — Django serves the UI, the
-API, and static assets from one port, so there is nothing else to start:
+### Optionally, the prod-parity stack — requires Docker
+
+Docker Compose runs the app against real PostgreSQL, Redis, and MinIO. Useful for exercising
+those integrations; **not required for development**, and unavailable on Windows under some
+enterprise security policies.
 
 ```sh
-cp .env.example .env          # then edit SECRET_KEY (and any passwords) in .env
-docker compose up --build     # web, both Celery workers, beat, postgres, redis, minio
+cp .env.container.example .env   # then edit SECRET_KEY (and any passwords) in .env
+docker compose up --build        # web, both Celery workers, beat, postgres, redis, minio
 ```
 
 Wait until the `web` service is healthy, then open:

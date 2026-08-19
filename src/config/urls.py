@@ -5,10 +5,11 @@
 # fallback now: an unmatched path 404s, which is the point — a mistyped URL used to
 # answer 200 with the landing page, hiding broken links.
 from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import URLPattern, include, path
 
-from django_service.views import LandingPageView, OrgSwitchView, ShellPreviewView
+from django_service.views import LandingPageView, ShellPreviewView
 from inventory.common.views import health
 
 urlpatterns = [
@@ -19,13 +20,6 @@ urlpatterns = [
     # template. The `ui/` prefix existed to escape the SPA catch-all; with the catch-all
     # gone it is now just this page's path.
     path("ui/", ShellPreviewView.as_view(), name="shell-preview"),
-    # The org switcher form posts here (Story 21.4).
-    #
-    # The name is `ui-org-switch`, NOT `org-switch`: inventory/users/urls.py already
-    # registers `org-switch` for the DRF endpoint, and Django resolves a duplicate name to
-    # whichever pattern is registered LAST — which silently pointed the HTML form at the
-    # JSON API. tests/unit/test_org_switcher.py pins the resolved action.
-    path("ui/orgs/switch/", OrgSwitchView.as_view(), name="ui-org-switch"),
     # The app's server-rendered pages (Stories 21.5-21.18), at their real paths.
     path("", include("inventory.urls_pages")),
     path("api/v1/", include("inventory.users.urls")),
@@ -48,3 +42,29 @@ if settings.API_DOCS_ENABLED:
         path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
         path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
     ]
+
+
+def media_urlpatterns() -> list[URLPattern]:
+    """Serve ``MEDIA_ROOT`` from the development server, and only there (Story 22.28).
+
+    Containerless local development stores artifacts with ``FileSystemStorage``, whose
+    ``url()`` returns ``/media/…``. The SBOM download redirects to exactly that (AD-11), so
+    without this route the dev server had no pattern for its own storage URLs and every
+    download 404'd. In containers the same code works untouched, because MinIO serves the blob
+    rather than Django — which is why this only ever broke on the path this epic protects.
+
+    Guarded on ``DEBUG`` rather than on the storage backend. Django serving user uploads in
+    production would bypass the storage backend entirely and hand out every stored manifest
+    over an unauthenticated path — and this application has no authentication (Story 21.24), so
+    the absence of the route is the only thing standing between the two.
+
+    A function rather than an inline ``if`` so the rule can be tested without reimporting the
+    URLconf: module-level ``DEBUG`` branches are evaluated once at import and are effectively
+    untestable afterwards.
+    """
+    if not settings.DEBUG:
+        return []
+    return static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+
+urlpatterns += media_urlpatterns()

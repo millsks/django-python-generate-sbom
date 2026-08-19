@@ -1,0 +1,34 @@
+# 09_async-worker — background job processing and scheduling
+# poetry: `poetry install` to install, `poetry lock` to produce poetry.lock.
+
+[tool.poetry]
+name = "async-worker"
+version = "0.1.0"
+description = "background job processing and scheduling"
+authors = ["Your Name <you@example.com>"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.12"
+celery = "^5.6.3"
+kombu = "^5.6.2"
+billiard = "^4.2.4"
+redis = "^8.1.0"
+flower = "^2.1.0"
+rq = "^2.11.0"
+APScheduler = "^3.11.3"
+SQLAlchemy = "^2.0.52"
+tenacity = "^9.1.4"
+structlog = "^26.1.0"
+sentry-sdk = "^2.68.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3"
+pytest-cov = "^6.0"
+ruff = "^0.8"
+mypy = "^1.14"
+pre-commit = "^4.0"
+
+[build-system]
+requires = ["poetry-core>=2.0"]
+build-backend = "poetry.core.masonry.api"

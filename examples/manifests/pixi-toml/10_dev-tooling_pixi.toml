@@ -1,0 +1,50 @@
+# 10_dev-tooling — test, lint, type-check, and release tooling (dev only)
+# Generated manifest; run `pixi lock` to resolve against conda-forge.
+
+[workspace]
+name = "dev-tooling"
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64"]
+
+[dependencies]
+python = "3.13.*"
+pytest = ">=9.1"
+pytest-cov = ">=7.1"
+pytest-asyncio = ">=1.4"
+pytest-mock = ">=3.15"
+pytest-xdist = ">=3.8"
+coverage = ">=7.15"
+hypothesis = ">=6.165"
+responses = ">=0.26"
+faker = ">=40.36"
+freezegun = ">=1.5"
+ruff = ">=0.16"
+mypy = ">=2.3"
+pre-commit = ">=4.6"
+tox = ">=4.60"
+python-build = ">=1.5"
+twine = ">=7.0"
+git-cliff = ">=2.13"
+
+[pypi-dependencies]
+respx = ">=0.23.1"
+
+[feature.dev.dependencies]
+pytest = ">=8.3"
+pytest-cov = ">=6.0"
+ruff = ">=0.8"
+mypy = ">=1.14"
+pre-commit = ">=4.0"
+
+[feature.dev.tasks]
+bootstrap = "pre-commit install --install-hooks"
+fmt = "ruff format ."
+lint = "ruff check ."
+check = "mypy src/"
+test = "pytest tests/unit/"
+test-integration = "pytest tests/integration/"
+cov = "pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=90"
+ci = { depends-on = ["lint", "check", "cov"] }
+
+[environments]
+dev = { features = ["dev"] }

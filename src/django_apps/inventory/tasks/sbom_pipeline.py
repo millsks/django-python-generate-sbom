@@ -38,12 +38,6 @@ from inventory.tasks.analysis import (
 logger = structlog.get_logger()
 
 
-def _report(task: Any, task_id: str, progress: int, step: str) -> None:
-    """Report progress via Celery state and mirror it to the job (keeps polled progress monotonic)."""
-    task.update_state(state="PROGRESS", meta={"progress": progress, "current_step": step})
-    services.update_job_status(task_id, SBOMJob.Status.PROGRESS, progress=progress, current_step=step)
-
-
 def _fail_if_unfinished(task_id: str, *, failure_reason: str) -> None:
     """Safety net: never leave a job stuck at PROGRESS when a phase raises.
 
@@ -61,8 +55,14 @@ def _fail_if_unfinished(task_id: str, *, failure_reason: str) -> None:
 
 
 @contextmanager
-def _phase_guard(task_id: str, *, detected_format: str = "") -> Iterator[None]:
-    """Mark the job FAILED on any phase failure, and log it with its manifest format.
+def _phase_guard(task_id: str, key: str, *, detected_format: str = "") -> Iterator[None]:
+    """Own one task's lifecycle: mark it running, then complete or errored (Story 22.20).
+
+    The start/finish writes live here rather than at each call site so a phase cannot forget
+    one — a task stuck on "running" after it finished is exactly the kind of drift the old
+    hand-placed progress calls produced.
+
+    Also marks the job FAILED on any phase failure, and logs it with its manifest format.
 
     On ``SoftTimeLimitExceeded`` the job is failed with reason ``soft_timeout`` and no
     partial SBOM is produced (FR-4.6). Any other failure is logged with the full
@@ -70,16 +70,21 @@ def _phase_guard(task_id: str, *, detected_format: str = "") -> Iterator[None]:
     a specific reason a phase already set, else a generic ``pipeline_error`` — so a
     phase error can never leave the job stuck at PROGRESS.
     """
+    services.start_job_task(task_id, key)
     try:
         yield
     except SoftTimeLimitExceeded:
+        services.finish_job_task(task_id, key, failed=True, detail="soft_timeout")
         services.update_job_status(task_id, SBOMJob.Status.FAILED, failure_reason="soft_timeout")
         logger.error("phase_soft_timeout", task_id=str(task_id), detected_format=detected_format, exc_info=True)
         raise
     except Exception:
+        services.finish_job_task(task_id, key, failed=True, detail="pipeline_error")
         logger.error("phase_failed", task_id=str(task_id), detected_format=detected_format, exc_info=True)
         _fail_if_unfinished(task_id, failure_reason="pipeline_error")
         raise
+    else:
+        services.finish_job_task(task_id, key)
 
 
 # --- Chain assembly ------------------------------------------------------------------
@@ -114,8 +119,7 @@ def run_sbom_pipeline(task_id: str) -> None:
 @shared_task(bind=True, queue="pipeline")  # type: ignore[untyped-decorator]
 def detect_and_parse_manifest(self: Any, task_id: str) -> dict[str, Any]:
     """Phase 1 (0-15%): confirm the job's manifest and detected format."""
-    with _phase_guard(task_id):
-        _report(self, task_id, 5, "detect & parse manifest")
+    with _phase_guard(task_id, "detect"):
         job = get_job_by_task_id(task_id)
         logger.info(
             "phase_detect_parse", task_id=str(task_id), org_id=job.org_id, detected_format=job.manifest.detected_format
@@ -127,8 +131,7 @@ def detect_and_parse_manifest(self: Any, task_id: str) -> dict[str, Any]:
 def resolve_transitive_deps(self: Any, prev: dict[str, Any]) -> dict[str, Any]:
     """Phase 2 (15-40%): resolve the full transitive package list."""
     task_id = prev["task_id"]
-    with _phase_guard(task_id, detected_format=prev.get("detected_format", "")):
-        _report(self, task_id, 20, "resolve dependencies")
+    with _phase_guard(task_id, "resolve", detected_format=prev.get("detected_format", "")):
         try:
             packages = services.resolve_job_packages(task_id)
         except ResolutionError:
@@ -150,8 +153,7 @@ def generate_sbom_document(self: Any, prev: dict[str, Any]) -> dict[str, Any]:
     """
     task_id = prev["task_id"]
     job = get_job_by_task_id(task_id)
-    with _phase_guard(task_id, detected_format=job.manifest.detected_format):
-        _report(self, task_id, 45, "generate SBOM document")
+    with _phase_guard(task_id, "generate", detected_format=job.manifest.detected_format):
         packages = [PackageSpec(**spec) for spec in prev["packages"]]
         provenance = services.build_provenance(job.manifest)
         # Resolve each package's license here (I/O), then hand it to the pure serializer (Story 8.25).
@@ -186,21 +188,20 @@ def aggregate_analysis_results(results: list[dict[str, Any]], task_id: str) -> d
     their reason). Analysis-task failures never abort the chord — each task always
     returns an envelope (FR-4.5).
     """
-    services.update_job_status(task_id, SBOMJob.Status.PROGRESS, progress=95, current_step="aggregate analysis")
-    job = get_job_by_task_id(task_id)
-    for envelope in results:
-        write_report(job, envelope)
-    services.record_analysis_summaries(task_id, results)
-    failed = [envelope["report_type"] for envelope in results if envelope.get("failed")]
-    logger.info("phase_aggregate", task_id=str(task_id), report_count=len(results), failed=failed)
-    return {"task_id": task_id, "analysis": results}
+    with _phase_guard(task_id, "aggregate"):
+        job = get_job_by_task_id(task_id)
+        for envelope in results:
+            write_report(job, envelope)
+        services.record_analysis_summaries(task_id, results)
+        failed = [envelope["report_type"] for envelope in results if envelope.get("failed")]
+        logger.info("phase_aggregate", task_id=str(task_id), report_count=len(results), failed=failed)
+        return {"task_id": task_id, "analysis": results}
 
 
 @shared_task(bind=True, queue="pipeline")  # type: ignore[untyped-decorator]
 def persist_artifacts(self: Any, task_id: str) -> dict[str, Any]:
     """Phase 8 (97-100%): finalize the job record — key, expiry, stats, SUCCESS (AD-6/12)."""
-    with _phase_guard(task_id):
-        _report(self, task_id, 97, "persist artifacts")
+    with _phase_guard(task_id, "persist"):
         job = get_job_by_task_id(task_id)
         if job.result_key is None:  # Phase 3 always records it; guard the invariant.
             services.update_job_status(task_id, SBOMJob.Status.FAILED, failure_reason="missing_artifact")

@@ -226,8 +226,8 @@ def test_an_oversized_document_offers_a_download_instead_of_inlining_it(org_clie
     body = client.get(f"/results/{job.task_id}/sbom/raw").content.decode()
 
     assert "too large to display" in body
-    # The presigned download endpoint (AD-11), not a proxied stream.
-    assert f"/api/v1/sbom/result/{job.task_id}/" in body
+    # Still a redirect to storage (AD-11), not a proxied stream — through the page's own route.
+    assert f"/results/{job.task_id}/sbom/download" in body
     assert "bomFormat" not in body
 
 
@@ -271,13 +271,13 @@ def test_a_missing_blob_is_a_notice_not_a_crash(org_client) -> None:  # type: ig
 
 
 @pytest.mark.django_db
-def test_the_raw_view_is_org_scoped(org_client) -> None:  # type: ignore[no-untyped-def]
+def test_the_raw_view_serves_another_orgs_document(org_client) -> None:  # type: ignore[no-untyped-def]
     client, _ = org_client
     outsider = register_user(email="outsider@example.com", password=PASSWORD)
     other_org = create_org(name="Other", admin_user=outsider)
     theirs = _job(other_org)
 
-    assert client.get(f"/results/{theirs.task_id}/sbom/raw").status_code == 404
+    assert client.get(f"/results/{theirs.task_id}/sbom/raw").status_code == 200
 
 
 @pytest.mark.django_db

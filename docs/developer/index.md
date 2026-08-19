@@ -5,6 +5,8 @@ and anyone extending the application.
 
 - **[Architecture](architecture.md)** — the layered modular monolith, the async
   pipeline, and the invariants that keep it consistent.
+- **[Tech Stack](tech-stack.md)** — the major frameworks and libraries, layer by
+  layer, and why each is here.
 - **[Local Development](setup.md)** — get the stack running containerless with
   `pixi run dev` on macOS or Windows (Docker Compose is the optional prod-parity
   path).
@@ -17,7 +19,7 @@ and anyone extending the application.
 
 ## The 30-second overview
 
-**Python Inventory Supply Lens** is a **Django + DRF** application with a
+**FABRIC** is a **Django + DRF** application with a
 **server-rendered UI** and a **Celery** worker fleet, all managed as one project by a
 **pixi** umbrella toolchain — one language, one environment, one runner. A user uploads a
 Python dependency manifest; an asynchronous pipeline resolves the dependency tree,

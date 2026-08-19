@@ -109,6 +109,7 @@ nav:
       - Tech Stack: developer/tech-stack.md
       - Local Development: developer/setup.md
       - Project Layout: developer/project-layout.md
+      - Inventory App Reference: developer/inventory-app-reference.md
       - SBOM Pipeline: developer/pipeline.md
       - Data Model: developer/data-model.md
       - Testing: developer/testing.md

@@ -11,6 +11,9 @@ and anyone extending the application.
   `pixi run dev` on macOS or Windows (Docker Compose is the optional prod-parity
   path).
 - **[Project Layout](project-layout.md)** — where everything lives in the `src/` tree.
+- **[Inventory App Reference](inventory-app-reference.md)** — a file-by-file tour of the
+  reusable `inventory` app: what each module does, the invariant it carries, and which of
+  its neighbours it may import.
 - **[SBOM Pipeline](pipeline.md)** — the eight-phase Celery pipeline, phase by phase.
 - **[Data Model](data-model.md)** — the core Django models and how they relate.
 - **[Testing](testing.md)** — the unit/integration split and the `pixi run ci` gate.

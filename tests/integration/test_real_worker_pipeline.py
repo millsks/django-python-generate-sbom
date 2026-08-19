@@ -22,6 +22,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -65,7 +66,10 @@ def _worker_command() -> list[str]:
         "-Q",
         "pipeline,analysis",
         pool,
-        "--loglevel=INFO",
+        # DEBUG rather than INFO: this test has only ever failed on Windows, where the
+        # author cannot attach a debugger, so the log IS the debugger. The extra volume costs
+        # nothing on a run that passes and is the whole diagnosis on one that does not.
+        "--loglevel=DEBUG",
         "--without-heartbeat",
         "--without-gossip",
         "--without-mingle",
@@ -155,6 +159,65 @@ def stack(tmp_path: Path, dead_proxy: str) -> dict[str, object]:
     return {"env": env, "db": db_path, "media": REPO / "media"}
 
 
+class _Worker:
+    """A Celery worker subprocess whose output is drained continuously.
+
+    **The draining is the point, not a convenience.** `stdout=PIPE` with nobody reading it is a
+    deadlock waiting to happen: once the OS pipe buffer fills, the child blocks forever on its
+    next write — mid-task, with no error and no further output.
+
+    That is not hypothetical. It is what made this test fail on Windows CI three times at
+    `progress=45` with `scan_vulnerabilities received` as the last line: Windows pipe buffers
+    are far smaller than macOS/Linux ones, so the same log volume that fits on the author's
+    machine overflows there. Two other explanations were investigated and fixed on their own
+    merits (Story 22.15's missing HTTP timeouts among them) before raising the worker's log
+    level reproduced the hang on macOS in one run — which is what identified this.
+
+    So the reader thread runs for the worker's whole life, not just during boot.
+    """
+
+    def __init__(self, proc: subprocess.Popen) -> None:
+        self._proc = proc
+        self._lines: list[str] = []
+        self._lock = threading.Lock()
+        self._thread = threading.Thread(target=self._pump, daemon=True)
+        self._thread.start()
+
+    def _pump(self) -> None:
+        stream = self._proc.stdout
+        if stream is None:  # pragma: no cover - stdout is always piped here
+            return
+        for line in iter(stream.readline, ""):
+            with self._lock:
+                self._lines.append(line)
+
+    @property
+    def log(self) -> str:
+        """Everything the worker has written so far."""
+        with self._lock:
+            return "".join(self._lines)
+
+    def wait_for_ready(self, timeout: int) -> None:
+        """Block until the worker announces itself, or fail with whatever it did say."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if self._proc.poll() is not None:
+                pytest.fail(f"worker exited during boot:\n{self.log}")
+            text = self.log.lower()
+            if "ready" in text or "celery@" in text:
+                return
+            time.sleep(0.1)
+        pytest.fail(f"worker did not become ready in {timeout}s:\n{self.log}")  # pragma: no cover
+
+    def stop(self) -> None:
+        self._proc.terminate()
+        try:
+            self._proc.wait(timeout=30)
+        except subprocess.TimeoutExpired:  # pragma: no cover
+            self._proc.kill()
+        self._thread.join(timeout=5)
+
+
 @pytest.fixture
 def worker(stack: dict[str, object]) -> object:
     """A real Celery worker subprocess draining the temp filesystem broker."""
@@ -165,27 +228,14 @@ def worker(stack: dict[str, object]) -> object:
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        bufsize=1,
     )
-    deadline = time.monotonic() + WORKER_BOOT_TIMEOUT
-    banner: list[str] = []
+    running = _Worker(proc)
     try:
-        while time.monotonic() < deadline:
-            if proc.poll() is not None:
-                banner.append(proc.stdout.read() if proc.stdout else "")
-                pytest.fail(f"worker exited during boot:\n{''.join(banner)}")
-            line = proc.stdout.readline() if proc.stdout else ""
-            banner.append(line)
-            if "ready" in line.lower() or "celery@" in line.lower():
-                break
-        else:  # pragma: no cover - boot timeout
-            pytest.fail(f"worker did not become ready in {WORKER_BOOT_TIMEOUT}s:\n{''.join(banner)}")
-        yield proc
+        running.wait_for_ready(WORKER_BOOT_TIMEOUT)
+        yield running
     finally:
-        proc.terminate()
-        try:
-            proc.wait(timeout=30)
-        except subprocess.TimeoutExpired:  # pragma: no cover
-            proc.kill()
+        running.stop()
 
 
 def _run_in_stack(stack: dict[str, object], script: str) -> str:
@@ -240,25 +290,6 @@ print(f"status={{job.status}} result_key={{job.result_key}} progress={{job.progr
 """
 
 
-def _drain(proc: object) -> str:
-    """Stop the worker and return everything it wrote.
-
-    Terminating first is deliberate: a non-blocking read needs `selectors`, which cannot poll
-    a pipe on Windows — the one platform this test has ever failed on, and so the one platform
-    that must not lose its log. Once the process is stopped, a plain read works everywhere,
-    and the worker is being torn down by the fixture moments later regardless.
-    """
-    stream = proc.stdout  # type: ignore[attr-defined]
-    if stream is None:  # pragma: no cover - stdout is always piped here
-        return "(no worker output captured)"
-    proc.terminate()  # type: ignore[attr-defined]
-    try:
-        proc.wait(timeout=30)  # type: ignore[attr-defined]
-    except subprocess.TimeoutExpired:  # pragma: no cover
-        proc.kill()  # type: ignore[attr-defined]
-    return stream.read() or "(worker produced no output)"
-
-
 def test_a_real_worker_completes_a_job_over_the_filesystem_broker(stack: dict[str, object], worker: object) -> None:
     """The end-to-end claim: dispatch to a broker on disk, a separate process finishes the job.
 
@@ -273,7 +304,7 @@ def test_a_real_worker_completes_a_job_over_the_filesystem_broker(stack: dict[st
     # `status=PROGRESS progress=45`, which is consistent with half a dozen causes and
     # distinguishes none of them. The worker's own log is the difference between diagnosing
     # and guessing.
-    assert "status=SUCCESS" in output, f"{output}\n\n--- worker log ---\n{_drain(worker)}"
+    assert "status=SUCCESS" in output, f"{output}\n\n--- worker log ---\n{worker.log}"
     assert "result_key=None" not in output, output
 
     key = output.split("result_key=")[1].split()[0]
@@ -300,15 +331,11 @@ def test_the_worker_registers_the_scheduled_maintenance_tasks(worker: object) ->
     `test_beat_schedule_registry.py` asks an in-process registry. This asks a real worker
     process, which is what Beat's dispatch actually lands on.
     """
-    proc = worker
     deadline = time.monotonic() + 30
-    seen: list[str] = []
     while time.monotonic() < deadline:
-        line = proc.stdout.readline() if proc.stdout else ""  # type: ignore[attr-defined]
-        if not line:
-            break
-        seen.append(line)
-        if "maintenance.purge_expired_artifacts" in line:
+        if "maintenance.purge_expired_artifacts" in worker.log:  # type: ignore[attr-defined]
             return
-    joined = "".join(seen)
-    assert "maintenance" in joined, f"worker never listed the maintenance tasks:\n{joined}"
+        time.sleep(0.2)
+    assert "maintenance" in worker.log, (  # type: ignore[attr-defined]
+        f"worker never listed the maintenance tasks:\n{worker.log}"  # type: ignore[attr-defined]
+    )

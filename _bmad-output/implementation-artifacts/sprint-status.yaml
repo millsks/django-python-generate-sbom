@@ -567,3 +567,11 @@ development_status:
   # "status" for a single job — so the API renames its DOCUMENTED name only and keeps its
   # paths (21.24 AC #9 froze that contract). The UI renamed paths in full, no alias.
   22-17-rename-history-to-job-status: review
+  # ADDED 2026-08-19. THE actual cause of the Windows failure, found on the fourth attempt:
+  # the test starts the worker with stdout=PIPE and never reads it, so once the pipe buffer
+  # fills the process blocks forever on its next write — mid-task, silently. Windows buffers
+  # are far smaller than macOS/Linux, which is why only Windows hit it. Confirmed by raising
+  # the worker to --loglevel=DEBUG and reproducing the IDENTICAL hang on macOS (216s vs the
+  # usual 12s). Stories 22.15 (missing HTTP timeouts) was a real defect found on the way and
+  # stands on its own; it was not this one.
+  22-18-drain-the-worker-pipe: review

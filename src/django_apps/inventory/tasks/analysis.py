@@ -53,8 +53,14 @@ def _run_phase(
     raising, so the chord/job still completes with the SBOM (FR-4.5).
     """
     task_id = ctx["task_id"]
+    # Logged BEFORE `update_state` and the job load, both of which write to or read from the
+    # database. Without this line a phase that blocks in either produces no output at all, and
+    # the worker log stops at Celery's own "Task … received" — which is where three Windows CI
+    # failures left the investigation with nothing to go on (Stories 22.15, 22.18).
+    logger.info(f"phase_{report_type}_started", task_id=str(task_id), step=step)
     task.update_state(state="PROGRESS", meta={"progress": start_pct, "current_step": step})
     job = get_job_by_task_id(task_id)
+    logger.debug(f"phase_{report_type}_job_loaded", task_id=str(task_id), org_id=job.org_id)
     started = time.monotonic()
     try:
         packages = resolve_job_packages(task_id)

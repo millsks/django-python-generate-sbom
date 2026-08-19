@@ -19,7 +19,7 @@ from inventory.users.models import Org
 from inventory.users.services import create_org, register_user
 
 PASSWORD = "pw12345678"
-HISTORY = "/history"
+HISTORY = "/job-status"
 
 # The interval the SPA polled at (POLL_MS = 5000); the conversion must not quietly change it.
 EXPECTED_TRIGGER = 'hx-trigger="every 5s"'
@@ -78,9 +78,9 @@ def test_only_non_terminal_rows_carry_a_polling_trigger(org_client) -> None:  # 
 
     html = client.get(HISTORY).content.decode()
 
-    assert f"/history/row/{running.task_id}" in html
-    assert f"/history/row/{done.task_id}" not in html
-    assert f"/history/row/{failed.task_id}" not in html
+    assert f"/job-status/row/{running.task_id}" in html
+    assert f"/job-status/row/{done.task_id}" not in html
+    assert f"/job-status/row/{failed.task_id}" not in html
 
 
 @pytest.mark.django_db
@@ -107,7 +107,7 @@ def test_the_row_partial_swaps_only_that_row(org_client) -> None:  # type: ignor
     running = _job(org, status=SBOMJob.Status.PROGRESS, progress=25, step="Parsing")
     other = _job(org, status=SBOMJob.Status.PROGRESS, progress=80, step="Analysing")
 
-    body = client.get(f"/history/row/{running.task_id}").content.decode()
+    body = client.get(f"/job-status/row/{running.task_id}").content.decode()
 
     assert "Parsing" in body
     assert "Analysing" not in body
@@ -121,7 +121,7 @@ def test_the_partial_shows_phase_and_percentage(org_client) -> None:  # type: ig
     client, org = org_client
     job = _job(org, status=SBOMJob.Status.PROGRESS, progress=63, step="Scanning vulnerabilities")
 
-    body = client.get(f"/history/row/{job.task_id}").content.decode()
+    body = client.get(f"/job-status/row/{job.task_id}").content.decode()
 
     assert "Scanning vulnerabilities" in body
     assert "63" in body
@@ -134,13 +134,13 @@ def test_a_job_that_finishes_returns_a_row_without_a_trigger(org_client) -> None
     client, org = org_client
     job = _job(org, status=SBOMJob.Status.PROGRESS, progress=90, step="Finalising")
 
-    assert EXPECTED_TRIGGER in client.get(f"/history/row/{job.task_id}").content.decode()
+    assert EXPECTED_TRIGGER in client.get(f"/job-status/row/{job.task_id}").content.decode()
 
     SBOMJob.objects.filter(pk=job.pk).update(
         status=SBOMJob.Status.SUCCESS, completed_at=timezone.now(), result_key="sboms/x.json"
     )
 
-    body = client.get(f"/history/row/{job.task_id}").content.decode()
+    body = client.get(f"/job-status/row/{job.task_id}").content.decode()
     assert EXPECTED_TRIGGER not in body
     assert "Completed" in body
 
@@ -150,7 +150,7 @@ def test_a_failed_row_shows_its_failure_reason(org_client) -> None:  # type: ign
     client, org = org_client
     job = _job(org, status=SBOMJob.Status.FAILED, reason="unsupported_format")
 
-    body = client.get(f"/history/row/{job.task_id}").content.decode()
+    body = client.get(f"/job-status/row/{job.task_id}").content.decode()
 
     assert "Failed" in body
     assert "unsupported_format" in body
@@ -167,14 +167,14 @@ def test_elapsed_advances_while_running_and_freezes_when_finished(org_client) ->
     job = _job(org, status=SBOMJob.Status.PROGRESS, progress=10)
     SBOMJob.objects.filter(pk=job.pk).update(created_at=timezone.now() - timedelta(seconds=90))
 
-    running = client.get(f"/history/row/{job.task_id}").content.decode()
+    running = client.get(f"/job-status/row/{job.task_id}").content.decode()
     assert "1m 3" in running  # ~1m30s and climbing
 
     completed_at = timezone.now()
     SBOMJob.objects.filter(pk=job.pk).update(status=SBOMJob.Status.SUCCESS, completed_at=completed_at)
 
-    first = client.get(f"/history/row/{job.task_id}").content.decode()
-    second = client.get(f"/history/row/{job.task_id}").content.decode()
+    first = client.get(f"/job-status/row/{job.task_id}").content.decode()
+    second = client.get(f"/job-status/row/{job.task_id}").content.decode()
     # Two reads a moment apart now agree, because the end point no longer moves.
     assert first == second
 
@@ -250,8 +250,8 @@ def test_a_cross_org_job_polls_while_an_unknown_id_does_not(org_client) -> None:
     theirs = _job(other_org, status=SBOMJob.Status.PROGRESS)
     unknown = "00000000-0000-0000-0000-000000000000"
 
-    assert client.get(f"/history/row/{theirs.task_id}").status_code == 200
-    assert client.get(f"/history/row/{unknown}").status_code == 404
+    assert client.get(f"/job-status/row/{theirs.task_id}").status_code == 200
+    assert client.get(f"/job-status/row/{unknown}").status_code == 404
 
     assert client.get(f"/results/{theirs.task_id}").status_code == 200
     assert client.get(f"/results/{unknown}").status_code == 404
@@ -272,7 +272,7 @@ def test_polling_endpoints_reject_post(org_client) -> None:  # type: ignore[no-u
     client, org = org_client
     job = _job(org, status=SBOMJob.Status.PROGRESS)
 
-    assert client.post(f"/history/row/{job.task_id}").status_code == 405
+    assert client.post(f"/job-status/row/{job.task_id}").status_code == 405
     assert client.post(f"/results/{job.task_id}/progress").status_code == 405
 
 

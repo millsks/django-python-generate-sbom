@@ -195,7 +195,7 @@ def test_the_navigation_collapses_on_narrow_viewports() -> None:
 @pytest.mark.django_db
 def test_wide_tables_scroll_inside_their_own_container() -> None:
     """The page itself must not scroll horizontally because a report table is wide."""
-    for template in ("history.html", "tabs/_versions.html", "tabs/_vulnerabilities.html", "tabs/_sbom.html"):
+    for template in ("job_status.html", "tabs/_versions.html", "tabs/_vulnerabilities.html", "tabs/_sbom.html"):
         source = (TEMPLATE_ROOTS[1] / "inventory" / "sbom" / template).read_text(encoding="utf-8")
         assert "overflow" in source or "table-responsive" in source, template
 
@@ -210,7 +210,7 @@ def test_inner_pages_keep_the_spa_title_form() -> None:
     create_org(name="Acme", admin_user=user)
     client = _client("dev3@example.com")
 
-    for path, leading in (("/upload", "Upload"), ("/history", "History"), ("/keys", "API keys")):
+    for path, leading in (("/upload", "Upload"), ("/job-status", "History"), ("/keys", "API keys")):
         html = client.get(path).content.decode()
         assert f"<title>{leading} · Supply Lens</title>" in html, path
 

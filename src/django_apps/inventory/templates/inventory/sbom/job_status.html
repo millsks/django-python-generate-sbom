@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% load render_table from django_tables2 %}
 {% load crispy_forms_tags %}
-{% comment %} Job history (converted from HistoryPage.tsx, the SPA's largest page).
+{% comment %} Job status (converted from HistoryPage.tsx, the SPA's largest page; called
+  History until Story 22.17 renamed it — the page shows running jobs as well as finished ones).
 
   Live polling is NOT here — Story 21.11 adds it to these rows.
 
@@ -18,7 +19,7 @@
 {% block content %}
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
     <div>
-      <h1 class="h3 mb-0">Job history</h1>
+      <h1 class="h3 mb-0">Job status</h1>
       {% comment %} Story 22.16: History spans every organization now that the switcher is
         gone, so the subtitle no longer names one — the Organization column and its filter say
         which tenant each job belongs to. {% endcomment %}
@@ -55,7 +56,7 @@
       {% comment %} No `page` field is carried over, so changing a filter starts at page 1
         rather than stranding the user on a page that no longer exists. {% endcomment %}
       <button type="submit" class="btn btn-outline-primary">Apply</button>
-      <a class="btn btn-link" href="{% url 'ui-history' %}">Clear</a>
+      <a class="btn btn-link" href="{% url 'ui-job-status' %}">Clear</a>
     </div>
   </form>
 

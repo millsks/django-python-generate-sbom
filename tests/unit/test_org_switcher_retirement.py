@@ -80,14 +80,14 @@ def test_no_template_still_includes_the_switcher() -> None:
 
 def test_the_shell_renders_without_it(default_org: Org) -> None:
     """The assertion above only proves the include is gone; this proves the page still works."""
-    for path in ("/", "/upload", "/history", "/keys"):
+    for path in ("/", "/upload", "/job-status", "/keys"):
         assert Client().get(path).status_code == 200, path
 
 
 def test_no_page_offers_a_way_to_switch_the_active_org(default_org: Org) -> None:
     Org.objects.create(name="Second", slug="second")
 
-    body = Client().get("/history").content.decode()
+    body = Client().get("/job-status").content.decode()
 
     assert "org-switcher" not in body
     assert "Active organization" not in body
@@ -111,7 +111,7 @@ def test_history_lists_every_organization(default_org: Org) -> None:
     mine = _job(default_org, component="mine")
     theirs = _job(other, component="theirs")
 
-    body = Client().get("/history").content.decode()
+    body = Client().get("/job-status").content.decode()
 
     assert str(mine.task_id) in body
     assert str(theirs.task_id) in body
@@ -125,7 +125,7 @@ def test_history_can_be_filtered_to_one_organization(default_org: Org) -> None:
     mine = _job(default_org, component="mine")
     theirs = _job(other, component="theirs")
 
-    body = Client().get(f"/history?org={other.pk}").content.decode()
+    body = Client().get(f"/job-status?org={other.pk}").content.decode()
 
     assert str(theirs.task_id) in body
     assert str(mine.task_id) not in body
@@ -133,7 +133,7 @@ def test_history_can_be_filtered_to_one_organization(default_org: Org) -> None:
 
 def test_an_unknown_org_filter_does_not_error(default_org: Org) -> None:
     """Story 6.4's rule: a filter value the backend cannot honour yields a page, not a 500."""
-    response = Client().get("/history?org=999999")
+    response = Client().get("/job-status?org=999999")
 
     assert response.status_code == 200
 

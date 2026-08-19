@@ -57,7 +57,7 @@ def ui(request: HttpRequest) -> dict[str, Any]:
         "is_org_admin": SimpleLazyObject(lambda: get_admin_org(request) is not None),
         "is_global_admin": True,
         # No `switchable_orgs` since Story 22.16 removed the header switcher. The org is
-        # chosen on the upload form, shown as a column on History, and travels into the SBOM
+        # chosen on the upload form, shown as a column on Job Status, and travels into the SBOM
         # as its supplier — it is provenance now, not a mode the whole UI sits in.
     }
     return context

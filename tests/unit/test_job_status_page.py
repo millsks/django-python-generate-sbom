@@ -20,9 +20,9 @@ from inventory.users.services import create_member, create_org, register_user
 
 PASSWORD = "pw12345678"
 
-HISTORY = "/history"
-DELETE = "/history/artifacts/delete"
-DELETE_ALL = "/history/artifacts/delete-all"
+HISTORY = "/job-status"
+DELETE = "/job-status/artifacts/delete"
+DELETE_ALL = "/job-status/artifacts/delete-all"
 
 
 def _client(email: str) -> Client:

@@ -1,6 +1,6 @@
 {% load static %}
 {% comment %} The four navigation destinations, in the Story 2.15 / 10.8 order that SideNav.tsx
-  established: Home first, then Upload, History, and API Keys.
+  established: Home first, then Upload, Job Status, and API Keys.
 
   Included twice by base.html — once for the md+ sidebar and once for the mobile
   offcanvas — so the two can never drift apart. Edit this partial, never the include sites.
@@ -17,10 +17,10 @@
 {% endcomment %}
 {% url 'ui-keys' as keys_url %}
 {% url 'ui-upload' as upload_url %}
-{% url 'ui-history' as history_url %}
+{% url 'ui-job-status' as job_status_url %}
 <nav class="nav flex-column nav-pills gap-1" aria-label="Main navigation">
   {% include "_nav_item.html" with url="/" label="Home" icon="nav.home" %}
   {% include "_nav_item.html" with url=upload_url label="Upload" icon="nav.upload" %}
-  {% include "_nav_item.html" with url=history_url label="History" icon="nav.history" %}
+  {% include "_nav_item.html" with url=job_status_url label="Job Status" icon="nav.job-status" %}
   {% include "_nav_item.html" with url=keys_url label="API Keys" icon="nav.keys" %}
 </nav>

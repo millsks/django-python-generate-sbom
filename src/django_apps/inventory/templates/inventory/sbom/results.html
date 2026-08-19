@@ -20,7 +20,7 @@
         {{ job.manifest.component_name }} &middot; {{ job.manifest.application_id }}
       </p>
     </div>
-    <a class="btn btn-sm btn-outline-secondary" href="{% url 'ui-history' %}">Back to history</a>
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'ui-job-status' %}">Back to job status</a>
   </div>
 
   {% if not job_is_terminal %}

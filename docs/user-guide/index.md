@@ -21,7 +21,7 @@ browser, export any of them to Excel, and download the SBOM document itself.
 | 2. Upload a manifest and start a job | [Generating an SBOM](generating-an-sbom.md) |
 | 3. Read the results | [Reading the Results](reading-the-results.md) |
 | 4. Export reports and download the SBOM | [Exporting & Downloading](exporting-and-downloading.md) |
-| 5. Review past jobs | [Job History](job-history.md) |
+| 5. Track and review jobs | [Job Status](job-status.md) |
 | 6. Automate with API keys | [API Keys](api-keys.md) |
 
 !!! info "Screenshots"

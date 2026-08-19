@@ -112,14 +112,18 @@ class UploadPageView(OrgContextMixin, FormView):  # type: ignore[type-arg]
         return context
 
 
-# --- Job history (Story 21.10) -------------------------------------------------------------
+# --- Job status (Story 21.10; renamed from History by Story 22.17) -------------------------------------------------------------
 
 #: Matches the SPA's PAGE_SIZE and the API's PageNumberPagination default.
 JOBS_PER_PAGE = 25
 
 
-class JobHistoryView(OrgContextMixin, SingleTableMixin, FilterView):
-    """Filterable, paginated job history (converted from ``HistoryPage.tsx``).
+class JobStatusView(OrgContextMixin, SingleTableMixin, FilterView):
+    """Filterable, paginated job status (converted from ``HistoryPage.tsx``).
+
+    Called "History" until Story 22.17 renamed it. The page has always shown running jobs as
+    well as finished ones — live progress polling was added in Story 21.11 — so "history" was
+    describing half of what it does.
 
     Sorting and paging are **server-side**, via the querystring, so a filtered view is
     bookmarkable and shareable. That is a deliberate trade the epic accepted: the SPA sorted
@@ -129,7 +133,7 @@ class JobHistoryView(OrgContextMixin, SingleTableMixin, FilterView):
     model = SBOMJob
     table_class = JobTable
     filterset_class = JobFilterSet
-    template_name = "inventory/sbom/history.html"
+    template_name = "inventory/sbom/job_status.html"
     paginate_by = JOBS_PER_PAGE
 
     #: Filter fields carried into the delete-all form so it acts on what is on screen.
@@ -165,7 +169,7 @@ class _ArtifactDeleteMixin(OrgContextMixin):
     """Shared redirect target for the delete actions."""
 
     def _back(self) -> HttpResponse:
-        return HttpResponseRedirect(reverse("ui-history"))
+        return HttpResponseRedirect(reverse("ui-job-status"))
 
 
 class JobArtifactsDeleteView(_ArtifactDeleteMixin, View):
@@ -182,7 +186,7 @@ class JobArtifactsDeleteView(_ArtifactDeleteMixin, View):
             messages.error(request, "Select at least one job.")
             return self._back()
 
-        # Cross-org since Story 22.16, because History is: the ids come from checkboxes on
+        # Cross-org since Story 22.16, because the page is: the ids come from checkboxes on
         # rows the caller can see, so scoping the delete to one org would silently skip rows
         # they explicitly ticked. Deletion is still confined to the ids actually submitted.
         jobs = get_all_jobs().filter(task_id__in=task_ids, result_key__isnull=False)
@@ -196,12 +200,12 @@ class JobArtifactsDeleteView(_ArtifactDeleteMixin, View):
 
 
 class JobArtifactsDeleteAllView(OrgContextMixin, View):
-    """Delete the artifacts of every job **currently listed** on History (FR-8.5).
+    """Delete the artifacts of every job **currently listed** on Job Status (FR-8.5).
 
-    Story 22.16 made History cross-org, which would have quietly turned this from "every job
+    Story 22.16 made the page cross-org, which would have quietly turned this from "every job
     in my org" into "every job in the deployment" — the same button, the same confirmation
     naming a single org, and a far larger blast radius. So it now deletes exactly what the
-    page is showing: the History filters are re-applied here from the submitted form.
+    page is showing: the page's filters are re-applied here from the submitted form.
 
     That keeps the button honest in both directions. Filter to one organization and it deletes
     that organization's artifacts; clear the filters and it really does mean all, which is what
@@ -210,20 +214,20 @@ class JobArtifactsDeleteAllView(OrgContextMixin, View):
 
     def post(self, request: HttpRequest) -> HttpResponse:
         """Purge artifacts for the filtered set, keeping every job record."""
-        # Bound against POST: the History form posts its current filter values as hidden
+        # Bound against POST: the page's form posts its current filter values as hidden
         # fields, so what is deleted is what was on screen when the button was pressed.
         filtered = JobFilterSet(request.POST, queryset=get_all_jobs()).qs
         jobs = filtered.filter(result_key__isnull=False)
         deleted = delete_artifacts_for_jobs(jobs)
         messages.success(request, f"Deleted artifacts for {deleted} job(s). The job records were kept.")
-        return HttpResponseRedirect(reverse("ui-history"))
+        return HttpResponseRedirect(reverse("ui-job-status"))
 
 
 # --- Live progress (Story 21.11) -----------------------------------------------------------
 
 
 class JobRowPartialView(OrgContextMixin, View):
-    """Re-render one history row (the polling endpoint for the table).
+    """Re-render one Job Status row (the polling endpoint for the table).
 
     Org-scoped through ``get_job``, so a cross-org or unknown task id is a 404 — identical
     responses, no existence leak (AD-2). htmx stops polling on a 404 by default, which is
@@ -273,7 +277,7 @@ def _tab_template(tab: str) -> str:
 class _JobScopedView(OrgContextMixin, View):
     """Look a job up by id, 404ing when it does not exist.
 
-    **No longer org-scoped** (Story 22.16). History lists every org's jobs now that the
+    **No longer org-scoped** (Story 22.16). Job Status lists every org's jobs now that the
     organization is provenance rather than a browsing boundary, so a row must open. Scoping
     the lookup while listing across orgs would give every other org's rows a 404 on click.
 

@@ -561,3 +561,9 @@ development_status:
   # Contained a hazard the change introduced: "delete all artifacts" would have widened from
   # one org to the whole deployment; it now follows the on-screen filter.
   22-16-retire-the-org-switcher: review
+  # ADDED 2026-08-19 by product-owner direction: "rename the history page to job status …
+  # for both the ui and for the api." ONE PO DECISION taken first: the API has no "history"
+  # naming to rename (`/api/v1/sbom/jobs/`), and `/sbom/status/{task_id}/` already owns
+  # "status" for a single job — so the API renames its DOCUMENTED name only and keeps its
+  # paths (21.24 AC #9 froze that contract). The UI renamed paths in full, no alias.
+  22-17-rename-history-to-job-status: review

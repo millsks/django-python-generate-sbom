@@ -50,7 +50,7 @@ document, and runs the analysis phases.
 !!! info "One job at a time per organization"
     To keep resource use predictable, a new job waits if another is already running for
     your organization. You can watch progress on the Results page or from
-    [Job History](job-history.md).
+    [Job Status](job-status.md).
 
 When the pipeline finishes, the Results page shows the report tabs — see
 [Reading the Results](reading-the-results.md).

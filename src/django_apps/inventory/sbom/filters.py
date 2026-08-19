@@ -22,7 +22,7 @@ FORMAT_CHOICES = ManifestUpload.Format.choices
 
 
 class JobFilterSet(django_filters.FilterSet):
-    """Status and manifest-format filters for the job history table."""
+    """Organization, status and manifest-format filters for the Job Status table."""
 
     status = django_filters.ChoiceFilter(
         choices=STATUS_CHOICES,

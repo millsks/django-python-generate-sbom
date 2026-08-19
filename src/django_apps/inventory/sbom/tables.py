@@ -51,7 +51,7 @@ STATUS_BADGES = {
 def format_duration(seconds: float | None) -> str:
     """Format a duration the way ``duration.ts`` did (Story 6.3).
 
-    Ported rather than reinvented so the History page reads identically before and after the
+    Ported rather than reinvented so the Job Status page reads identically before and after the
     conversion: an em dash when unknown, then ms / s / m+s / h+m.
 
     Args:
@@ -84,7 +84,7 @@ class JobTable(tables.Table):
         attrs={"th__input": {"id": "select-all", "aria-label": "Select all rows on this page"}},
         verbose_name="",
     )
-    # Story 22.16: with the org switcher gone, History lists every org and this column is
+    # Story 22.16: with the org switcher gone, Job Status lists every org and this column is
     # what says which one a job was filed against. It leads the data columns because that is
     # the question the switcher used to answer before you read anything else.
     org = tables.Column(accessor="org__name", verbose_name="Organization", orderable=True)

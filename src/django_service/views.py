@@ -4,7 +4,7 @@ The shell preview (Story 21.3) and the landing page (Story 21.18). Real business
 live in the app (``src/django_apps/inventory/``).
 
 The active-org switcher lived here until Story 22.16 removed it: the organization is now
-chosen on the upload form, shown as a column on History, and written into the SBOM as its
+chosen on the upload form, shown as a column on Job Status, and written into the SBOM as its
 supplier, so there is no longer a mode for the whole UI to sit in.
 """
 

@@ -26,7 +26,7 @@ def get_any_job(task_id: str) -> SBOMJob:
 
     Deliberately **not** org-scoped, and deliberately separate from :func:`get_job`, which
     stays scoped for the API. Since Story 22.16 the organization is provenance on a job rather
-    than a browsing boundary: History lists every org's jobs, so following a row through to its
+    than a browsing boundary: Job Status lists every org's jobs, so following a row through to its
     results must work for all of them.
 
     This is not a loss of isolation. Anyone could already reach any org's jobs by switching to
@@ -45,7 +45,7 @@ def get_job_by_task_id(task_id: str) -> SBOMJob:
 
 
 # UI status-filter labels → SBOMJob.status values (Story 6.1). Public because the
-# server-rendered history FilterSet (Story 21.10) applies the same mapping; two copies of it
+# server-rendered Job Status FilterSet (Story 21.10) applies the same mapping; two copies of it
 # would let the API's filter and the page's filter drift.
 STATUS_FILTERS = {
     "In Progress": [SBOMJob.Status.PENDING, SBOMJob.Status.PROGRESS],
@@ -59,7 +59,7 @@ def get_all_jobs(
     status_filter: str | None = None,
     format_filter: str | None = None,
 ) -> QuerySet[SBOMJob]:
-    """Return every org's jobs, most-recent-first — the History page's queryset (Story 22.16).
+    """Return every org's jobs, most-recent-first — the Job Status page's queryset (Story 22.16).
 
     See :func:`get_any_job` for why the pages are no longer org-scoped. The org travels with
     each row (``select_related("org")``) so the table can show which line of business a job

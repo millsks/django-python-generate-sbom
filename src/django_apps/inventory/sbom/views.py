@@ -145,7 +145,7 @@ class ManifestFormatFilterNegotiation(DefaultContentNegotiation):
     The jobs list uses ``?format=`` as a *manifest-format filter* (e.g. ``pixi_toml``),
     not a DRF renderer-format suffix. Default negotiation treats such a value as an
     unsatisfiable renderer format and raises ``404`` before the view runs — the true
-    cause of the History-page error banner. The API serves a single (JSON) renderer,
+    cause of the Job Status page's error banner. The API serves a single (JSON) renderer,
     so this always selects it and lets ``format`` reach the queryset filter.
     """
 
@@ -162,6 +162,13 @@ class ManifestFormatFilterNegotiation(DefaultContentNegotiation):
 
 @extend_schema_view(
     get=extend_schema(
+        # Story 22.17 renamed the UI page from History to Job Status. The **path stays**
+        # `/api/v1/sbom/jobs/`: Story 21.24 AC #9 froze the `/api/v1/` contract, and
+        # `/sbom/status/{task_id}/` already owns "status" for a single job, so a
+        # `/sbom/job-status/` list would sit confusingly beside it. Only the documented name
+        # moves, so the reference and the UI agree on what to call this.
+        summary="List job status",
+        tags=["Job Status"],
         parameters=[
             OpenApiParameter(
                 name="status",
@@ -181,7 +188,11 @@ class ManifestFormatFilterNegotiation(DefaultContentNegotiation):
     )
 )
 class JobsListView(ListAPIView[SBOMJob]):
-    """List the active org's jobs, most-recent-first (GET /api/v1/sbom/jobs/)."""
+    """List the caller's job status, most-recent-first (GET /api/v1/sbom/jobs/).
+
+    The UI calls this page **Job Status** (Story 22.17). The path keeps `jobs` because the
+    `/api/v1/` contract is frozen (Story 21.24 AC #9).
+    """
 
     serializer_class = JobListSerializer
     pagination_class = JobsPagination

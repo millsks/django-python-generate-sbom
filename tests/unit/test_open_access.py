@@ -94,7 +94,7 @@ def test_every_page_route_is_actually_reachable(default_org: Org) -> None:
 
     A page that 500s or 404s would satisfy the two tests above while being just as broken.
     """
-    for path in ("/", "/upload", "/history", "/keys"):
+    for path in ("/", "/upload", "/job-status", "/keys"):
         assert Client().get(path).status_code == 200, path
 
 
@@ -221,7 +221,7 @@ def test_another_orgs_job_is_listed_in_history(default_org: Org) -> None:
         org=other, manifest=upload, output_format="cyclonedx-json", status=SBOMJob.Status.SUCCESS, summary_stats={}
     )
 
-    body = Client().get("/history").content.decode()
+    body = Client().get("/job-status").content.decode()
 
     assert str(job.task_id) in body
     assert "Other" in body, "the org column should name the tenant the job was filed against"

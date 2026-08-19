@@ -20,10 +20,10 @@ from inventory.sbom.pages import (
     CombinedExportView,
     JobArtifactsDeleteAllView,
     JobArtifactsDeleteView,
-    JobHistoryView,
     JobProgressPartialView,
     JobResultsView,
     JobRowPartialView,
+    JobStatusView,
     JobTabPartialView,
     ReportExportView,
     SbomRawView,
@@ -45,14 +45,15 @@ urlpatterns = [
     # ADMIN org is not a workspace (Story 2.18), so a global admin often has no active org.
     # Story 21.9 — the primary journey: upload a manifest and start a job.
     path("upload", UploadPageView.as_view(), name="ui-upload"),
-    # Story 21.10 — job history. The two delete endpoints are separate so the org-wide one
-    # can carry its own admin gate rather than branching inside a single view.
-    path("history", JobHistoryView.as_view(), name="ui-history"),
-    path("history/artifacts/delete", JobArtifactsDeleteView.as_view(), name="ui-jobs-delete-artifacts"),
-    path("history/artifacts/delete-all", JobArtifactsDeleteAllView.as_view(), name="ui-jobs-delete-all-artifacts"),
+    # Story 21.10 — job status (called "history" until Story 22.17). The two delete endpoints
+    # are separate so the org-wide one can carry its own admin gate rather than branching
+    # inside a single view.
+    path("job-status", JobStatusView.as_view(), name="ui-job-status"),
+    path("job-status/artifacts/delete", JobArtifactsDeleteView.as_view(), name="ui-jobs-delete-artifacts"),
+    path("job-status/artifacts/delete-all", JobArtifactsDeleteAllView.as_view(), name="ui-jobs-delete-all-artifacts"),
     # Story 21.11 — live progress. ONE partial per surface and one trigger convention; a later
     # tab story must reuse these rather than adding a poller of its own.
-    path("history/row/<uuid:task_id>", JobRowPartialView.as_view(), name="ui-job-row"),
+    path("job-status/row/<uuid:task_id>", JobRowPartialView.as_view(), name="ui-job-row"),
     path("results/<uuid:task_id>", JobResultsView.as_view(), name="ui-job-results"),
     path("results/<uuid:task_id>/progress", JobProgressPartialView.as_view(), name="ui-job-progress"),
     # Story 21.12 — one tab-partial endpoint for all five tabs; 21.13-21.16 fill the bodies.

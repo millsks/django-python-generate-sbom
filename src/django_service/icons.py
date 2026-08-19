@@ -16,7 +16,7 @@ from __future__ import annotations
 NAV = {
     "home": "house-door",
     "upload": "cloud-arrow-up",
-    "history": "clock-history",
+    "job-status": "clock-history",
     "members": "people",
     "keys": "key",
     "organization": "building",

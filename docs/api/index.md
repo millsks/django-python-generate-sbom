@@ -62,6 +62,6 @@ authentication (Stories 21.24 and 22.8) and are no longer returned by anything.
 | [Authentication](authentication.md) | Why the API is open, and how an API key selects the organization |
 | [Organizations & Membership](organizations.md) | List/create/switch orgs, roster, add/create/remove members, promote/demote admins, global-admin management, leave |
 | [API Keys](api-keys.md) | List, create (plaintext shown once), and revoke org API keys |
-| [Jobs](jobs.md) | Upload manifests, submit SBOM jobs, list jobs, poll status |
+| [Jobs](jobs.md) | Upload manifests, submit SBOM jobs, list job status, poll a single job |
 | [Reports](analysis.md) | Vulnerability, license, and version-currency reports |
 | [Artifacts & Downloads](artifacts.md) | SBOM download redirect, inline SBOM document |

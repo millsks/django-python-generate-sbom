@@ -33,5 +33,5 @@ can:
 - [Find outdated dependencies](find-outdated-dependencies.md)
 - [Export a report to Excel](export-to-excel.md)
 
-Past jobs are always available under **History** (`/history`). For the full walkthrough,
+Jobs are always available under **Job Status** (`/job-status`). For the full walkthrough,
 see the [User Guide](../user-guide/index.md).

@@ -30,7 +30,7 @@ pytestmark = pytest.mark.django_db
 # --- The pages explain it rather than erroring ---------------------------------------------
 
 
-@pytest.mark.parametrize("path", ["/upload", "/history", "/keys"])
+@pytest.mark.parametrize("path", ["/upload", "/job-status", "/keys"])
 def test_org_scoped_pages_render_the_no_organizations_state(path: str, no_organizations: None) -> None:
     """200 with an explanation, not a 500 and not a redirect.
 
@@ -91,7 +91,7 @@ def test_no_api_endpoint_returns_a_server_error(no_organizations: None) -> None:
 
 def test_no_page_returns_a_server_error(no_organizations: None) -> None:
     client = Client()
-    paths = ["/", "/upload", "/history", "/keys"]
+    paths = ["/", "/upload", "/job-status", "/keys"]
 
     server_errors = [path for path in paths if client.get(path).status_code >= 500]
 

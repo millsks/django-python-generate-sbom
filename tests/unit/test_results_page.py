@@ -171,13 +171,12 @@ def test_an_unrecognised_tab_partial_is_404(org_client) -> None:  # type: ignore
 
 
 @pytest.mark.django_db
-def test_cross_org_and_unknown_results_are_byte_identical(org_client) -> None:  # type: ignore[no-untyped-def]
-    """AD-2. The SPA showed one message for both cases on purpose; so does this.
+def test_another_orgs_results_render_while_an_unknown_id_404s(org_client) -> None:  # type: ignore[no-untyped-def]
+    """Story 22.16 inverted this: the two cases are now meant to differ.
 
-    Two things are masked before comparing, and neither is a leak. The CSRF token is
-    re-salted per render. The org switcher's hidden ``next`` field echoes **the path the
-    caller just requested** — their own input, which tells them nothing they did not
-    already know. What must not differ is anything derived from whether the job exists.
+    It used to assert the two responses were byte-identical, so a caller could not learn that
+    another org's job existed. With History listing every org that secret no longer exists to
+    keep, and the rows have to open. The unknown id is the only refusal left.
     """
     client, _ = org_client
     outsider = register_user(email="outsider@example.com", password=PASSWORD)
@@ -187,22 +186,18 @@ def test_cross_org_and_unknown_results_are_byte_identical(org_client) -> None:  
     cross_org = client.get(f"/results/{theirs.task_id}")
     missing = client.get("/results/00000000-0000-0000-0000-000000000000")
 
-    def normalise(response: object) -> str:
-        body = CSRF.sub("MASKED", response.content.decode())  # type: ignore[attr-defined]
-        return re.sub(r"/results/[0-9a-f-]{36}", "/results/REQUESTED", body)
-
-    assert cross_org.status_code == missing.status_code == 404
-    assert normalise(cross_org) == normalise(missing)
+    assert cross_org.status_code == 200
+    assert missing.status_code == 404
 
 
 @pytest.mark.django_db
-def test_cross_org_tab_partials_are_also_denied(org_client) -> None:  # type: ignore[no-untyped-def]
+def test_cross_org_tab_partials_are_also_served(org_client) -> None:  # type: ignore[no-untyped-def]
     client, _ = org_client
     outsider = register_user(email="outsider@example.com", password=PASSWORD)
     other_org = create_org(name="Other", admin_user=outsider)
     theirs = _job(other_org)
 
-    assert client.get(f"/results/{theirs.task_id}/tab/overview").status_code == 404
+    assert client.get(f"/results/{theirs.task_id}/tab/overview").status_code == 200
 
 
 # --- AC #3: Overview reads only summary_stats ---------------------------------------------

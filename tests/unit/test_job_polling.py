@@ -238,29 +238,33 @@ def test_a_failed_job_shows_its_reason_on_the_results_page(org_client) -> None: 
 
 
 @pytest.mark.django_db
-def test_a_cross_org_job_is_indistinguishable_from_an_unknown_one(org_client) -> None:  # type: ignore[no-untyped-def]
-    """AD-2: 404 for both, so polling cannot be used to discover that a job exists."""
+def test_a_cross_org_job_polls_while_an_unknown_id_does_not(org_client) -> None:  # type: ignore[no-untyped-def]
+    """Story 22.16: cross-org is reachable now; an unknown id still 404s.
+
+    Inverted rather than deleted. The pages list every org's jobs since the switcher was
+    removed, so the only refusal left to assert is the one that is still real.
+    """
     client, _ = org_client
     outsider = register_user(email="outsider@example.com", password=PASSWORD)
     other_org = create_org(name="Other", admin_user=outsider)
     theirs = _job(other_org, status=SBOMJob.Status.PROGRESS)
     unknown = "00000000-0000-0000-0000-000000000000"
 
-    for url in (f"/history/row/{theirs.task_id}", f"/history/row/{unknown}"):
-        assert client.get(url).status_code == 404
+    assert client.get(f"/history/row/{theirs.task_id}").status_code == 200
+    assert client.get(f"/history/row/{unknown}").status_code == 404
 
-    for url in (f"/results/{theirs.task_id}", f"/results/{unknown}"):
-        assert client.get(url).status_code == 404
+    assert client.get(f"/results/{theirs.task_id}").status_code == 200
+    assert client.get(f"/results/{unknown}").status_code == 404
 
 
 @pytest.mark.django_db
-def test_the_progress_endpoint_is_org_scoped_too(org_client) -> None:  # type: ignore[no-untyped-def]
+def test_the_progress_endpoint_is_cross_org_too(org_client) -> None:  # type: ignore[no-untyped-def]
     client, _ = org_client
     outsider = register_user(email="outsider@example.com", password=PASSWORD)
     other_org = create_org(name="Other", admin_user=outsider)
     theirs = _job(other_org, status=SBOMJob.Status.PROGRESS)
 
-    assert client.get(f"/results/{theirs.task_id}/progress").status_code == 404
+    assert client.get(f"/results/{theirs.task_id}/progress").status_code == 200
 
 
 @pytest.mark.django_db

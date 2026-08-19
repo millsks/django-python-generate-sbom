@@ -383,7 +383,12 @@ def test_a_job_with_nothing_to_export_is_404(org_client) -> None:  # type: ignor
 
 
 @pytest.mark.django_db
-def test_exports_are_org_scoped_and_indistinguishable_from_missing(org_client) -> None:  # type: ignore[no-untyped-def]
+def test_another_orgs_export_downloads_while_an_unknown_id_404s(org_client) -> None:  # type: ignore[no-untyped-def]
+    """Story 22.16: exports follow the results page, which is cross-org now.
+
+    History lists every org and the results pages open, so refusing the download from those
+    same pages would be an inconsistency rather than a boundary.
+    """
     client, _ = org_client
     outsider = register_user(email="outsider@example.com", password=PASSWORD)
     other_org = create_org(name="Other", admin_user=outsider)
@@ -392,7 +397,8 @@ def test_exports_are_org_scoped_and_indistinguishable_from_missing(org_client) -
     cross_org = client.get(f"/results/{theirs.task_id}/export.xlsx")
     missing = client.get("/results/00000000-0000-0000-0000-000000000000/export.xlsx")
 
-    assert cross_org.status_code == missing.status_code == 404
+    assert cross_org.status_code == 200
+    assert missing.status_code == 404
 
 
 @pytest.mark.django_db

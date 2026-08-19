@@ -19,14 +19,24 @@
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
     <div>
       <h1 class="h3 mb-0">Job history</h1>
-      <p class="text-body-secondary mb-0">{{ org.name }}</p>
+      {% comment %} Story 22.16: History spans every organization now that the switcher is
+        gone, so the subtitle no longer names one — the Organization column and its filter say
+        which tenant each job belongs to. {% endcomment %}
+      <p class="text-body-secondary mb-0">Every organization</p>
     </div>
       {% comment %} Was admin-only (Story 2.17). Story 21.24 removed the app's access
         control, so this is available to anyone; the confirm dialog is now the only
-        guard against an accidental click. {% endcomment %}
+        guard against an accidental click.
+
+        Story 22.16: the current filters ride along as hidden fields, so this deletes exactly
+        what the table is showing. Without them, making History cross-org would have turned
+        this button into a deployment-wide wipe behind a confirmation naming one org. {% endcomment %}
       <form method="post" action="{% url 'ui-jobs-delete-all-artifacts' %}"
-            onsubmit="return confirm('Delete the SBOM and report files for EVERY job in {{ org.name|escapejs }}? The job records and their metadata are kept — only the downloadable files are removed. This cannot be undone.');">
+            onsubmit="return confirm('Delete the SBOM and report files for {{ delete_all_scope|escapejs }}? The job records and their metadata are kept — only the downloadable files are removed. This cannot be undone.');">
         {% csrf_token %}
+        {% for name, value in active_filters %}
+          <input type="hidden" name="{{ name }}" value="{{ value }}">
+        {% endfor %}
         <button type="submit" class="btn btn-sm btn-outline-danger">Delete all artifacts</button>
       </form>
 

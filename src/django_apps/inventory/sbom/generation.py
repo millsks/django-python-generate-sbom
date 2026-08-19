@@ -37,12 +37,21 @@ class SBOMGenerationError(Exception):
 
 @dataclass(frozen=True)
 class Provenance:
-    """The four provenance fields carried from the manifest upload (FR-3.8)."""
+    """The provenance fields carried from the manifest upload (FR-3.8, Story 22.14).
+
+    ``organization`` is the line of business the job was filed against, chosen on the upload
+    form. It is emitted as each format's **supplier** rather than as another custom property:
+    CycloneDX ``metadata.supplier`` and SPDX ``PackageSupplier`` are fields other SBOM tooling
+    already reads, whereas a ``Property(name="organization")`` would be legible only to this
+    application. It defaults to empty because SBOM generation is a hard-fail phase (FR-4.5) —
+    losing the whole document over a blank metadata field would be the worse outcome.
+    """
 
     application_id: str
     component_name: str
     repository_url: str
     source_branch: str
+    organization: str = ""
 
 
 def _purl_ecosystem(pkg: PackageSpec) -> str:
@@ -116,6 +125,10 @@ def _generate_cyclonedx(
     root.properties.add(Property(name="application:id", value=provenance.application_id))
     root.properties.add(Property(name="vcs:branch", value=provenance.source_branch))
     bom.metadata.component = root
+    if provenance.organization:
+        from cyclonedx.model.contact import OrganizationalEntity
+
+        bom.metadata.supplier = OrganizationalEntity(name=provenance.organization)
 
     license_factory = LicenseFactory()
     components = []
@@ -190,6 +203,8 @@ def _generate_spdx(
     root.set_type("application")
     root.set_externalreference("PACKAGE-MANAGER", "vcs", provenance.repository_url)
     root.set_comment(f"application:id={provenance.application_id}; vcs:branch={provenance.source_branch}")
+    if provenance.organization:
+        root.set_supplier("Organization", provenance.organization)
     packages_dict[(provenance.component_name, "NOASSERTION")] = root.get_package()
 
     relationships = []

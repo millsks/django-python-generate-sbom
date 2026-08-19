@@ -8,9 +8,12 @@ Routes are enumerated from the **urlconf**, not from a hand-written list. A hand
 list silently stops covering routes added later, which is exactly how a page ships with a
 gate nobody meant to add.
 
-What is *not* removed, and is asserted here too: org isolation (AD-2) still refuses another
-org's object, and CSRF still protects the mutating endpoints. This story removed *who you
-are*, not *what a browser may be made to do on your behalf*.
+CSRF still protects the mutating endpoints: this story removed *who you are*, not *what a
+browser may be made to do on your behalf*.
+
+Org isolation used to be asserted here too. Story 22.16 removed it **from the pages** — the
+organization is chosen per upload and shown as a History column, so the UI lists and opens
+every org's jobs. AD-2 still binds the API, where an API key genuinely pins one tenant.
 """
 
 from __future__ import annotations
@@ -158,16 +161,22 @@ def test_no_login_redirect_settings_remain() -> None:
     assert settings.REST_FRAMEWORK["DEFAULT_PERMISSION_CLASSES"] == ["rest_framework.permissions.AllowAny"]
 
 
-# --- AC #3: tenancy is not authentication, and it survives ------------------------------
+# --- AC #3: tenancy, as it stands after Story 22.16 -------------------------------------
 
 
 @pytest.mark.django_db
-def test_another_orgs_job_is_still_indistinguishable_from_a_missing_one(default_org: Org) -> None:
-    """The one place a denial is still expected.
+def test_another_orgs_job_is_reachable_but_an_unknown_id_is_not(default_org: Org) -> None:
+    """No longer a denial: Story 22.16 made the pages cross-org deliberately.
 
-    AD-2 is a tenancy invariant, not an authentication one. An anonymous caller acts as the
-    default org and must not be able to read a job belonging to another org — and must not
-    be able to tell the difference between "not yours" and "does not exist".
+    This test used to assert that another org's job 404s. It does not any more, and the
+    inversion is the point of keeping the test rather than deleting it. AD-2 still holds where
+    it means something — the **API** scopes by the org an API key pins (AD-8) — but the UI
+    never enforced it against a person: since Story 21.24 the switcher accepted any non-ADMIN
+    org from anyone, so "another org's job" was always two clicks away. With the org now
+    chosen per upload and shown as a History column, listing across orgs and refusing to open
+    the rows would be incoherent.
+
+    What must still hold is that a genuinely unknown id 404s.
     """
     other = Org.objects.create(name="Other", slug="other")
     upload = ManifestUpload.objects.create(
@@ -189,12 +198,18 @@ def test_another_orgs_job_is_still_indistinguishable_from_a_missing_one(default_
     cross_org = client.get(f"/results/{job.task_id}")
     nonexistent = client.get("/results/11111111-1111-1111-1111-111111111111")
 
-    assert cross_org.status_code == 404
-    assert nonexistent.status_code == 404
+    assert cross_org.status_code == 200, "Story 22.16: every org's results are reachable"
+    assert nonexistent.status_code == 404, "an unknown id is still a 404"
 
 
 @pytest.mark.django_db
-def test_another_orgs_job_is_absent_from_history(default_org: Org) -> None:
+def test_another_orgs_job_is_listed_in_history(default_org: Org) -> None:
+    """The other half of the same inversion (Story 22.16).
+
+    History is the only place the organization is now visible at a glance, so a job filed
+    against any org has to appear there — otherwise choosing an org on the upload form would
+    make the job vanish the moment it was submitted.
+    """
     other = Org.objects.create(name="Other", slug="other")
     upload = ManifestUpload.objects.create(
         org=other,
@@ -206,23 +221,10 @@ def test_another_orgs_job_is_absent_from_history(default_org: Org) -> None:
         org=other, manifest=upload, output_format="cyclonedx-json", status=SBOMJob.Status.SUCCESS, summary_stats={}
     )
 
-    assert str(job.task_id) not in Client().get("/history").content.decode()
+    body = Client().get("/history").content.decode()
+
+    assert str(job.task_id) in body
+    assert "Other" in body, "the org column should name the tenant the job was filed against"
 
 
 # --- CSRF is not authentication and was not removed with it -----------------------------
-
-
-@pytest.mark.django_db
-def test_the_org_switcher_still_requires_csrf(default_org: Org) -> None:
-    """Removing the login requirement must not turn a state-mutating POST into an open one."""
-    client = Client(enforce_csrf_checks=True)
-
-    response = client.post("/ui/orgs/switch/", {"slug": default_org.slug})
-
-    assert response.status_code == 403
-
-
-@pytest.mark.django_db
-def test_the_org_switcher_still_refuses_a_get(default_org: Org) -> None:
-    # A GET-reachable switch could be triggered by any link, image, or prefetcher.
-    assert Client().get("/ui/orgs/switch/").status_code == 405

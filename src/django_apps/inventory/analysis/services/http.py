@@ -36,8 +36,35 @@ PREFIX_DEV_RATE_PER_SECOND = 3
 PARSELMOUTH_RATE_PER_SECOND = 3
 
 
+#: Connect and read bounds applied to every request that does not pass its own.
+#:
+#: `requests` has no default timeout, so an accepted-but-unanswered connection blocks the
+#: calling thread forever. That is not hypothetical: it stalled the Windows worker three times
+#: on CI, at `scan_vulnerabilities`, with no further output for the life of the job.
+#:
+#: The pair matters. A bare number bounds only the *read*; a black-holed SYN needs the connect
+#: bound, and only the tuple form supplies both.
+DEFAULT_TIMEOUT: tuple[float, float] = (
+    settings.ANALYSIS_HTTP_CONNECT_TIMEOUT,
+    settings.ANALYSIS_HTTP_READ_TIMEOUT,
+)
+
+
 class CachedLimiterSession(CacheMixin, LimiterMixin, requests.Session):
-    """A ``requests`` Session with response caching (requests-cache) and rate limiting."""
+    """A ``requests`` Session with response caching, rate limiting, and a default timeout.
+
+    The timeout lives here rather than at each call site because the call sites are what went
+    wrong: three analysis modules made a dozen untimed calls between them, and a session added
+    later would have repeated it. A caller that passes its own ``timeout`` still wins.
+    """
+
+    #: Read by the tests, and by anyone asking what this session will actually wait for.
+    timeout: tuple[float, float] = DEFAULT_TIMEOUT
+
+    def request(self, method: str, url: str, **kwargs: Any) -> requests.Response:  # type: ignore[override]
+        """Send a request, supplying the default timeout unless the caller set one."""
+        kwargs.setdefault("timeout", self.timeout)
+        return super().request(method, url, **kwargs)
 
 
 def build_session(

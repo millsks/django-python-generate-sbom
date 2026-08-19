@@ -279,6 +279,14 @@ CELERY_RESULT_BACKEND = REDIS_URL
 # so the cache is shared across analysis workers (FR-5.5).
 REQUESTS_CACHE_BACKEND = env.str("REQUESTS_CACHE_BACKEND", default="memory")
 CELERY_TASK_DEFAULT_QUEUE = "pipeline"
+# Outbound analysis HTTP bounds (Story 22.15). These are the REAL protection against a hung
+# external API, not the Celery soft time limit below: `SoftTimeLimitExceeded` is delivered by
+# SIGUSR1, which Windows has no equivalent for, and the `--pool=solo` worker Windows runs
+# cannot be interrupted anyway. Without these a single unanswered connection stalls the only
+# worker thread indefinitely, and FR-6.7's per-phase degradation never gets to fire.
+ANALYSIS_HTTP_CONNECT_TIMEOUT = env.float("ANALYSIS_HTTP_CONNECT_TIMEOUT", default=5.0)
+ANALYSIS_HTTP_READ_TIMEOUT = env.float("ANALYSIS_HTTP_READ_TIMEOUT", default=30.0)
+
 CELERY_TASK_SOFT_TIME_LIMIT = env.int("CELERY_TASK_SOFT_TIME_LIMIT", default=1800)
 CELERY_TASK_TIME_LIMIT = env.int("CELERY_TASK_TIME_LIMIT", default=2100)
 

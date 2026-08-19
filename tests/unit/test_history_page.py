@@ -300,18 +300,27 @@ def test_the_confirmations_say_the_job_records_are_kept(admin_org) -> None:  # t
 
 
 @pytest.mark.django_db
-def test_another_orgs_jobs_are_invisible(admin_org) -> None:  # type: ignore[no-untyped-def]
+def test_another_orgs_jobs_are_listed_with_their_org(admin_org) -> None:  # type: ignore[no-untyped-def]
     client, _ = admin_org
     outsider = register_user(email="outsider@example.com", password=PASSWORD)
     other_org = create_org(name="Other", admin_user=outsider)
+    """Story 22.16: History spans every organization, and names which one each job is from."""
     _job(other_org, filename="theirs.txt")
 
-    assert "theirs.txt" not in client.get(HISTORY).content.decode()
+    body = client.get(HISTORY).content.decode()
+
+    assert "theirs.txt" in body
+    assert "Other" in body, "the Organization column should name the tenant"
 
 
 @pytest.mark.django_db
-def test_another_orgs_job_cannot_be_deleted_by_task_id(admin_org) -> None:  # type: ignore[no-untyped-def]
-    """AD-2: the delete is scoped by the query, so a foreign id simply matches nothing."""
+def test_another_orgs_job_can_be_deleted_by_task_id(admin_org) -> None:  # type: ignore[no-untyped-def]
+    """Story 22.16: the ids come from checkboxes on rows the caller can see.
+
+    History lists every org, so scoping this delete to one would silently skip rows the caller
+    explicitly ticked — a worse outcome than deleting what they asked for. The blast radius is
+    still exactly the submitted ids.
+    """
     client, _ = admin_org
     outsider = register_user(email="outsider@example.com", password=PASSWORD)
     other_org = create_org(name="Other", admin_user=outsider)
@@ -320,20 +329,49 @@ def test_another_orgs_job_cannot_be_deleted_by_task_id(admin_org) -> None:  # ty
     client.post(DELETE, {"task_ids": [str(theirs.task_id)]})
 
     theirs.refresh_from_db()
-    assert theirs.result_key is not None
+    assert theirs.result_key is None
 
 
 @pytest.mark.django_db
-def test_the_org_wide_delete_does_not_reach_another_org(admin_org) -> None:  # type: ignore[no-untyped-def]
-    client, _ = admin_org
+def test_the_delete_all_follows_the_org_filter(admin_org) -> None:  # type: ignore[no-untyped-def]
+    """The guard against Story 22.16 turning this button into a deployment-wide wipe.
+
+    Making History cross-org would have silently widened "delete all artifacts" from one org to
+    every org, behind a confirmation that still named a single one. It now deletes exactly what
+    the table is showing, so filtering to an org confines it to that org.
+    """
+    client, mine = admin_org
     outsider = register_user(email="outsider@example.com", password=PASSWORD)
     other_org = create_org(name="Other", admin_user=outsider)
     theirs = _job(other_org)
+    ours = _job(mine)
+
+    client.post(DELETE_ALL, {"org": str(other_org.pk)})
+
+    theirs.refresh_from_db()
+    ours.refresh_from_db()
+    assert theirs.result_key is None, "the filtered org's artifacts should go"
+    assert ours.result_key is not None, "an org outside the filter must be untouched"
+
+
+@pytest.mark.django_db
+def test_the_delete_all_without_a_filter_really_does_mean_all(admin_org) -> None:  # type: ignore[no-untyped-def]
+    """The other half: unfiltered means unfiltered, and the confirmation says so."""
+    client, mine = admin_org
+    outsider = register_user(email="outsider@example.com", password=PASSWORD)
+    other_org = create_org(name="Other", admin_user=outsider)
+    theirs = _job(other_org)
+    ours = _job(mine)
+
+    body = client.get(HISTORY).content.decode()
+    assert "EVERY job in EVERY organization" in body, "the confirmation must not name one org"
 
     client.post(DELETE_ALL)
 
     theirs.refresh_from_db()
-    assert theirs.result_key is not None
+    ours.refresh_from_db()
+    assert theirs.result_key is None
+    assert ours.result_key is None
 
 
 # --- Hardening -----------------------------------------------------------------------------

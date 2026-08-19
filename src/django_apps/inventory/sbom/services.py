@@ -323,12 +323,19 @@ def purge_expired_artifacts(now: datetime | None = None) -> int:
 
 
 def build_provenance(manifest: ManifestUpload) -> Provenance:
-    """Lift the four provenance fields off a manifest for SBOM metadata (FR-3.8)."""
+    """Lift the provenance fields off a manifest for SBOM metadata (FR-3.8, Story 22.14).
+
+    The organization comes from the manifest's own ``org``, not from the acting request:
+    ``org`` is what the upload form recorded at submission time, and the SBOM must say which
+    line of business the job was filed against even when it is regenerated or exported later
+    by someone acting elsewhere.
+    """
     return Provenance(
         application_id=manifest.application_id,
         component_name=manifest.component_name,
         repository_url=manifest.repository_url,
         source_branch=manifest.source_branch,
+        organization=manifest.org.name if manifest.org_id else "",
     )
 
 

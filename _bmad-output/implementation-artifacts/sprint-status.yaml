@@ -541,3 +541,23 @@ development_status:
   # _INVALID_CREDENTIALS) that coverage could not see, since a module-level assignment always
   # executes.
   22-13-reconcile-api-reference-with-removed-authorization: review
+  # ADDED 2026-08-19 by product-owner direction: "we no longer need the org switcher. the
+  # orgs are selected in the upload form and should be added to the sbom with the other
+  # metadata." Split into the document half (22.14) and the UI half (22.16); 22.15 is a
+  # Windows defect the work surfaced on the way.
+  22-14-organization-in-sbom-metadata: review
+  # ADDED 2026-08-19. Found by CI, not review: Story 22.4's end-to-end test failed THREE times
+  # on Windows at progress=45. `requests` has no default timeout and Celery's soft time limit
+  # needs SIGUSR1 plus an interruptible pool — neither of which Windows has — so an unanswered
+  # connection stalled the only worker thread indefinitely and FR-6.7's degradation never
+  # fired. Two other hypotheses (solo-pool chord deadlock; broken TLS trust store) were
+  # falsified first. Proven by ablation: without the fix the reproduction test hangs.
+  22-15-analysis-http-timeouts: review
+  # ADDED 2026-08-19. The UI half of the org-switcher direction. TWO PO DECISIONS were taken
+  # before any code: pages scope (org becomes metadata; History lists every org with a column
+  # and filter) and SBOM field (each format's own supplier slot). AMENDS AD-2: org isolation
+  # now binds the API, where an API key really pins a tenant, and no longer the pages — which
+  # never enforced it against a person anyway, since 21.24 let anyone switch to any org.
+  # Contained a hazard the change introduced: "delete all artifacts" would have widened from
+  # one org to the whole deployment; it now follows the on-screen filter.
+  22-16-retire-the-org-switcher: review

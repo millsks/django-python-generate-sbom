@@ -84,6 +84,10 @@ class JobTable(tables.Table):
         attrs={"th__input": {"id": "select-all", "aria-label": "Select all rows on this page"}},
         verbose_name="",
     )
+    # Story 22.16: with the org switcher gone, History lists every org and this column is
+    # what says which one a job was filed against. It leads the data columns because that is
+    # the question the switcher used to answer before you read anything else.
+    org = tables.Column(accessor="org__name", verbose_name="Organization", orderable=True)
     created_at = tables.DateTimeColumn(verbose_name="Submitted", format="Y-m-d H:i")
     manifest = tables.Column(accessor="manifest__original_filename", verbose_name="Manifest", orderable=False)
     detected_format = tables.Column(accessor="manifest__detected_format", verbose_name="Format", orderable=False)
@@ -96,7 +100,7 @@ class JobTable(tables.Table):
         # django-tables2 Meta options, not mutable dataclass defaults — same exemption the
         # project already applies to Django model Meta classes.
         model = SBOMJob
-        fields = ("select", "created_at", "manifest", "detected_format", "output_format", "status", "elapsed")
+        fields = ("select", "org", "created_at", "manifest", "detected_format", "output_format", "status", "elapsed")
         # Newest-first is the queryset's ordering; stated here too so a user clearing the sort
         # returns to it rather than to an undefined order.
         order_by = "-created_at"

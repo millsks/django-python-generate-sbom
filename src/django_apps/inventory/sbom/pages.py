@@ -39,12 +39,13 @@ from inventory.analysis.tables import (
 from inventory.common.access import OrgContextMixin
 from inventory.common.users import UserT
 from inventory.manifests.detection import ManifestParseError, UnsupportedFormatError
+from inventory.users.models import Org
 
 from .filters import JobFilterSet
 from .forms import ManifestUploadForm
 from .models import SBOMJob
 from .overview import build_metrics
-from .selectors import get_job, get_jobs, read_inline_document
+from .selectors import get_all_jobs, get_any_job, read_inline_document
 from .services import TERMINAL_STATUSES, ConcurrencyLimitError, delete_artifacts_for_jobs, submit_job
 from .tables import JobTable, SbomComponentTable
 
@@ -131,9 +132,33 @@ class JobHistoryView(OrgContextMixin, SingleTableMixin, FilterView):
     template_name = "inventory/sbom/history.html"
     paginate_by = JOBS_PER_PAGE
 
+    #: Filter fields carried into the delete-all form so it acts on what is on screen.
+    FILTER_FIELDS = ("org", "status", "format")
+
     def get_queryset(self):  # type: ignore[no-untyped-def]
-        """Only the active org's jobs (AD-2), newest first."""
-        return get_jobs(self.org)
+        """Every organization's jobs, newest first (Story 22.16)."""
+        return get_all_jobs()
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the active filters and a plain-English description of the delete-all scope.
+
+        The description is built here rather than in the template because a confirmation that
+        misdescribes what it is about to delete is worse than no confirmation — and the
+        template cannot resolve an org id to a name.
+        """
+        context: dict[str, Any] = super().get_context_data(**kwargs)
+        active = [(field, self.request.GET[field]) for field in self.FILTER_FIELDS if self.request.GET.get(field)]
+        context["active_filters"] = active
+        context["delete_all_scope"] = self._describe_scope()
+        return context
+
+    def _describe_scope(self) -> str:
+        """Name what "delete all" would actually cover, in the words on the page."""
+        org_id = self.request.GET.get("org")
+        org = Org.objects.filter(pk=org_id).first() if org_id else None
+        parts = [p for p in (self.request.GET.get("status"), self.request.GET.get("format")) if p]
+        where = f"every job in {org.name}" if org else "EVERY job in EVERY organization"
+        return f"{where} matching the current filters ({', '.join(parts)})" if parts else where
 
 
 class _ArtifactDeleteMixin(OrgContextMixin):
@@ -157,9 +182,10 @@ class JobArtifactsDeleteView(_ArtifactDeleteMixin, View):
             messages.error(request, "Select at least one job.")
             return self._back()
 
-        # Scoped to the active org, so a task id from another org simply matches nothing
-        # (AD-2) — there is no branch that could treat it differently.
-        jobs = get_jobs(self.org).filter(task_id__in=task_ids, result_key__isnull=False)
+        # Cross-org since Story 22.16, because History is: the ids come from checkboxes on
+        # rows the caller can see, so scoping the delete to one org would silently skip rows
+        # they explicitly ticked. Deletion is still confined to the ids actually submitted.
+        jobs = get_all_jobs().filter(task_id__in=task_ids, result_key__isnull=False)
         deleted = delete_artifacts_for_jobs(jobs)
 
         if deleted:
@@ -170,16 +196,24 @@ class JobArtifactsDeleteView(_ArtifactDeleteMixin, View):
 
 
 class JobArtifactsDeleteAllView(OrgContextMixin, View):
-    """Delete every artifact in the active org (FR-8.5) — **admin only**.
+    """Delete the artifacts of every job **currently listed** on History (FR-8.5).
 
-    The gate is this mixin, not the hidden button. Story 2.17 exists because an admin-only
-    action was once enforced only in the UI, and `test_a_member_cannot_post_the_org_wide_delete`
-    is what stops that recurring here.
+    Story 22.16 made History cross-org, which would have quietly turned this from "every job
+    in my org" into "every job in the deployment" — the same button, the same confirmation
+    naming a single org, and a far larger blast radius. So it now deletes exactly what the
+    page is showing: the History filters are re-applied here from the submitted form.
+
+    That keeps the button honest in both directions. Filter to one organization and it deletes
+    that organization's artifacts; clear the filters and it really does mean all, which is what
+    the confirmation then says.
     """
 
     def post(self, request: HttpRequest) -> HttpResponse:
-        """Purge artifacts org-wide, keeping every job record."""
-        jobs = get_jobs(self.org).filter(result_key__isnull=False)
+        """Purge artifacts for the filtered set, keeping every job record."""
+        # Bound against POST: the History form posts its current filter values as hidden
+        # fields, so what is deleted is what was on screen when the button was pressed.
+        filtered = JobFilterSet(request.POST, queryset=get_all_jobs()).qs
+        jobs = filtered.filter(result_key__isnull=False)
         deleted = delete_artifacts_for_jobs(jobs)
         messages.success(request, f"Deleted artifacts for {deleted} job(s). The job records were kept.")
         return HttpResponseRedirect(reverse("ui-history"))
@@ -199,7 +233,7 @@ class JobRowPartialView(OrgContextMixin, View):
     def get(self, request: HttpRequest, task_id: str) -> HttpResponse:
         """Return the row's current markup, with or without a poll trigger."""
         try:
-            job = get_job(self.org, task_id)
+            job = get_any_job(task_id)
         except SBOMJob.DoesNotExist as exc:
             raise Http404 from exc
         # Built from the same JobTable as the full table, so every cell renderer — badge,
@@ -237,17 +271,22 @@ def _tab_template(tab: str) -> str:
 
 
 class _JobScopedView(OrgContextMixin, View):
-    """Look a job up within the active org, 404ing identically for missing and cross-org.
+    """Look a job up by id, 404ing when it does not exist.
 
-    AD-2: an unauthorised request must be indistinguishable from a nonexistent one — the SPA
-    showed a single message for both ("You don't have access to these results, or they don't
-    exist"), and the server-rendered path keeps that property by having one code path.
+    **No longer org-scoped** (Story 22.16). History lists every org's jobs now that the
+    organization is provenance rather than a browsing boundary, so a row must open. Scoping
+    the lookup while listing across orgs would give every other org's rows a 404 on click.
+
+    ``OrgContextMixin`` stays for ``self.org`` — the templates still show the acting org — and
+    the DRF views keep the scoped :func:`get_job`, because an API key really does pin one
+    tenant (AD-8). The isolation this drops from the UI was already notional: since Story
+    21.24 the switcher accepted any non-ADMIN org from anyone.
     """
 
     def get_job_or_404(self, task_id: str) -> SBOMJob:
         """Return the job, or raise Http404."""
         try:
-            return get_job(self.org, task_id)
+            return get_any_job(task_id)
         except SBOMJob.DoesNotExist as exc:
             raise Http404 from exc
 

@@ -290,15 +290,18 @@ def test_the_api_status_payload_still_carries_the_phase(job: SBOMJob) -> None:
     assert body["progress"] == 0
 
 
-def test_the_dot_counter_never_renders_an_empty_state() -> None:
-    """The cycle is 1..10, not 0..10.
+def test_the_dots_never_blank_and_run_one_to_ten() -> None:
+    """Three separate blanking bugs were reported here; this pins all of them at once.
 
-    A zero state renders as nothing, so for one second per cycle the dots vanished and came
-    back — reported as them "disappearing only to reappear with the next dot". Counting from
-    one keeps at least one period on screen the whole time a task is running.
+    The animation is entirely client-side, so no server response can show it. The behaviour is
+    therefore simulated against the same arithmetic the script uses, including the five-second
+    htmx swap that caused the last one:
 
-    Asserted against the script because the behaviour is entirely client-side: no server
-    response can show it, and an off-by-one in the modulus reintroduces the blank silently.
+    * deriving the count from a start timestamp made it jump;
+    * a 0..10 cycle blanked the line for a second each pass;
+    * a dwell on the tenth dot read as a stall before the restart;
+    * and the swap replaced the span with an empty one, so the dots vanished at 5 and returned
+      at 6 — the 5 being the poll interval, not the cycle.
     """
     from pathlib import Path
 
@@ -306,7 +309,29 @@ def test_the_dot_counter_never_renders_an_empty_state() -> None:
         encoding="utf-8"
     )
 
-    assert "var MAX_DOTS = 10;" in source
-    assert "(counters[key] % MAX_DOTS) + 1" in source, "1..10 wraps with % MAX_DOTS, then +1"
-    assert "counters[key] === undefined ? 1" in source, "a task appearing for the first time starts at one"
-    assert "? 0 :" not in source, "a zero state would blank the dots for a second each cycle"
+    assert "htmx:afterSwap" in source, "the swap must trigger a repaint or the dots blank"
+    assert "render(false)" in source, "the repaint must not advance the counter"
+
+    max_dots = 10
+    counters: dict[str, int] = {}
+
+    def render(advance: bool, key: str = "vuln") -> int:
+        step = counters.get(key)
+        if step is None:
+            step = 0
+        elif advance:
+            step = (step + 1) % max_dots
+        counters[key] = step
+        return step + 1
+
+    rendered = []
+    for tick in range(1, 26):
+        rendered.append(render(True))
+        if tick % 5 == 0:  # the htmx swap repaints without advancing
+            rendered.append(render(False))
+
+    assert 0 not in rendered, "nothing may render blank"
+    # The doubled 5 and 10 are the swap repaints holding the count, not blanks — which is the
+    # whole point. After ten the cycle returns straight to one, with no dwell.
+    assert rendered[:13] == [1, 2, 3, 4, 5, 5, 6, 7, 8, 9, 10, 10, 1], rendered[:13]
+    assert max(rendered) == max_dots

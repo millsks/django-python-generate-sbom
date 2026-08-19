@@ -30,7 +30,8 @@ disagreed because the model could not express what was happening.**
 2. **Each task writes only its own row** — the three concurrent analysis tasks cannot race each other.
 3. **The bar is derived**, not reported: equal share per task, advancing only as tasks finish.
 4. **`Task: ` prefix**, `[COMPLETE]` / `[ERROR]` on finish, and no "complete" label on a running task.
-5. **Animated dots** beside a running task, cycling 1→10→1, one per second, restarting per task.
+5. **Animated dots** beside a running task, cycling 1→10→1, one per second, restarting per task — and never
+   blanking, including across the five-second htmx swap.
 6. **A failed task still advances the bar** (FR-4.5) and reads `[ERROR]`, not `[COMPLETE]`.
 7. **The compact surfaces keep working** — the Job Status table cell and the API's `current_phase`.
 8. **Gate green.**
@@ -55,7 +56,7 @@ updated safely from three workers at once.
 
 It also makes the bar honest: counting terminal rows out of eight cannot produce two tasks at 93%.
 
-### The dots went through three designs
+### The dots went through five designs
 
 1. **Derived from `started_at`** — elegant, and it read badly. A task already running when its row first
    appeared started mid-cycle, concurrent tasks each showed a different count, and client/server clock skew
@@ -63,7 +64,13 @@ It also makes the bar honest: counting terminal rows out of eight cannot produce
 2. **A counter cycling 0→10** — literally what was asked for, and wrong in practice: the zero renders as
    nothing, so once per cycle the dots vanished. Reported as *"they disappear sometimes only to reappear
    with the next dot"*.
-3. **A counter cycling 1→10** — always at least one period on screen. This is what ships.
+3. **A counter cycling 1→10** — always at least one period on screen. Fixed the blank, exposed the next one.
+4. **Repaint on `htmx:afterSwap`** — the counter survived the five-second swap, but the *markup* did not: the
+   replacement span arrives empty, so the dots vanished until the next tick. Reported as *"1 dot to 5 dots,
+   then disappear, then come back for 6 through 10"* — the 5 being the poll interval, not the cycle.
+   `render(false)` repaints without advancing.
+5. **No dwell at ten.** A one-second hold on the tenth dot was tried to make the wrap deliberate and read as
+   a stall. The cycle is a plain 1..10 and straight back to 1.
 
 The counter lives in the script, not the markup, because htmx swaps the fragment every five seconds and any
 state stored inside it would restart on each swap.

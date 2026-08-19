@@ -3,19 +3,24 @@
 This section is for people working **on** the project — contributors, maintainers,
 and anyone extending the application.
 
-- **[Architecture](architecture.md)** — the layered modular monolith, the async
-  pipeline, and the invariants that keep it consistent.
-- **[Tech Stack](tech-stack.md)** — the major frameworks and libraries, layer by
-  layer, and why each is here.
 - **[Local Development](setup.md)** — get the stack running containerless with
   `pixi run dev` on macOS or Windows (Docker Compose is the optional prod-parity
   path).
-- **[Project Layout](project-layout.md)** — where everything lives in the `src/` tree.
-- **[SBOM Pipeline](pipeline.md)** — the eight-phase Celery pipeline, phase by phase.
-- **[Data Model](data-model.md)** — the core Django models and how they relate.
+- **[Inventory App Reference](inventory-app-reference.md)** — a file-by-file tour of the
+  reusable `inventory` app: what each module does, the invariant it carries, and which of
+  its neighbours it may import.
 - **[Testing](testing.md)** — the unit/integration split and the `pixi run ci` gate.
 - **[Code Reference](code-reference.md)** — API docs generated from the Python
   docstrings.
+
+Design records — what the system *is*, rather than how to work on it — live in
+**[Architecture](../architecture/index.md)**:
+[Overview](../architecture/architecture.md),
+[Technology Stack Rationale](../architecture/technology-stack-rationale.md),
+[Tech Stack](../architecture/tech-stack.md),
+[Project Layout](../architecture/project-layout.md),
+[SBOM Pipeline](../architecture/pipeline.md), and
+[Data Model](../architecture/data-model.md).
 
 ## The 30-second overview
 
@@ -29,4 +34,4 @@ available to scripted clients through the versioned REST API.
 
 Supporting services are **PostgreSQL** (relational data), **Redis** (the Celery
 broker/result backend), and **MinIO/S3** (artifact blob storage). See
-[Architecture](architecture.md) for how these fit together.
+[Architecture](../architecture/architecture.md) for how these fit together.

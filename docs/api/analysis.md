@@ -15,9 +15,9 @@ Every report shares the same not-ready / failure behavior:
   { "error": "Report generation failed.", "code": "report_failed", "failure_reason": "…" }
   ```
 
-The full JSON shapes are generated from live serializers — see the
-[Swagger UI](/api/docs/) for exhaustive field lists. Representative shapes are
-shown below.
+The full JSON shapes are generated from live serializers — see the Swagger UI at
+`/api/docs/` on your deployment for exhaustive field lists. Representative shapes
+are shown below.
 
 ## `GET /api/v1/sbom/result/{task_id}/reports/vulnerabilities/`
 

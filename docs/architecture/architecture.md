@@ -159,7 +159,7 @@ Identity and tenancy were always **decoupled**, and tenancy is the half that sur
   on boot (idempotent, Story 2.13). The `bootstrap_admin_org` command is the
   idempotent catch-up path: it ensures the ADMIN org row is present and back-fills
   every existing superuser (covering superusers created before the hook, or before
-  migrations ran). See [Setup](setup.md).
+  migrations ran). See [Setup](../developer/setup.md).
 
 - **Global-admin management API.** `list_global_admins`,
   `grant_global_admin_by_email`, and `revoke_global_admin` back the global-admin
@@ -189,7 +189,7 @@ behind each dependency is, and reconciles two upstreams:
 
 The reconciled per-component versions feed both the in-app version report and the
 Excel export; the pure comparison logic lives in the service layer (see the
-[Code Reference](code-reference.md)).
+[Code Reference](../developer/code-reference.md)).
 
 ## Dependency direction
 

@@ -62,6 +62,6 @@ django-python-generate-sbom/          # repo root == BASE_DIR (pixi umbrella)
 - **Service functions carry the logic** — a package's `services.py` holds behavior; views
   and Celery tasks are thin callers (AD-3).
 - **Tests mirror the source tree** — `tests/unit/test_<module>.py` shadows the module it
-  covers. See [Testing](testing.md).
+  covers. See [Testing](../developer/testing.md).
 - **Python style**: PEP 8, 120-col, full type hints, Google-style docstrings; `ruff`
   formats/lints and `mypy` type-checks under strict settings.

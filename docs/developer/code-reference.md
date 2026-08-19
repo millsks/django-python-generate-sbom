@@ -6,8 +6,8 @@ the source (no Django runtime needed), so it always matches the code on this bra
 
 The reference is scoped to the **service layer** and shared abstractions — the pure,
 reusable functions that hold the system's behavior (AD-3). Views, tasks, and models
-are documented narratively in [Architecture](architecture.md), the
-[Pipeline](pipeline.md), and the [Data Model](data-model.md).
+are documented narratively in [Architecture](../architecture/architecture.md), the
+[Pipeline](../architecture/pipeline.md), and the [Data Model](../architecture/data-model.md).
 
 ## Shared abstractions (`common`)
 

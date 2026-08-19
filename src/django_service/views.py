@@ -10,6 +10,7 @@ supplier, so there is no longer a mode for the whole UI to sit in.
 
 from typing import Any
 
+from django.conf import settings
 from django.views.generic import TemplateView
 
 
@@ -69,6 +70,22 @@ LANDING_STEPS = (
 )
 
 
+def _heading_lines(name: str) -> list[str]:
+    """Split the product name for the landing heading, breaking after the ampersand.
+
+    Done here rather than by putting a ``<br>`` in the setting, because that one string is also
+    the ``<title>`` and the footer, where markup would be escaped and shown literally. Done here
+    rather than left to the browser, because the natural wrap point moves with the viewport and
+    the name reads as two halves — the framework, and what it inventories.
+
+    A name without an ampersand yields a single line, so this cannot break a future rename.
+    """
+    head, separator, tail = name.partition("&")
+    if not separator or not tail.strip():
+        return [name]
+    return [f"{head.strip()} {separator}", tail.strip()]
+
+
 class LandingPageView(TemplateView):
     """The public landing page at ``/`` (Story 12.8 → 21.18).
 
@@ -79,8 +96,9 @@ class LandingPageView(TemplateView):
     template_name = "landing.html"
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Supply the feature cards and steps."""
+        """Supply the feature cards, steps, and the heading split across two lines."""
         context = super().get_context_data(**kwargs)
+        context["product_name_lines"] = _heading_lines(settings.PRODUCT_NAME)
         context["features"] = LANDING_FEATURES
         context["steps"] = LANDING_STEPS
         return context

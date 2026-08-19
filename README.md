@@ -1,4 +1,4 @@
-# Python Inventory Supply Lens
+# FABRIC
 
 A self-hosted, open-source Django web service that accepts Python dependency
 manifests and generates production-grade Software Bills of Materials (SBOMs) in
@@ -6,11 +6,13 @@ standard formats (CycloneDX, SPDX), alongside three analysis reports:
 vulnerability findings, license obligations, and version currency — through
 both a web UI and a REST API.
 
-> The product is **Python Inventory Supply Lens** ("**Supply Lens**" for short). The
-> repository, the docs-site URL, and the badge links below still use the original
-> `django-python-generate-sbom` identifier — renaming those would break existing links
-> and discard the project's SonarCloud analysis history, so they are deliberately left
-> alone.
+> The product is **FABRIC** — *Framework for Automated Bill of Materials & Risk Inventory in Code*. The acronym is written without dots.
+>
+> The repository, the docs-site URL, the badge links below, and the distribution name
+> (`python-inventory-supply-lens`) still use earlier identifiers. Renaming those would break
+> existing links and discard the project's SonarCloud analysis history, so they are
+> deliberately left alone — the **product** name and the **distribution** name are separate
+> things, and only the product one changed.
 
 <!-- Status -->
 [![CI](https://github.com/millsks/django-python-generate-sbom/actions/workflows/ci.yml/badge.svg)](https://github.com/millsks/django-python-generate-sbom/actions/workflows/ci.yml)

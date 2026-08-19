@@ -241,8 +241,12 @@ DJANGO_TABLES2_TEMPLATE = "django_tables2/bootstrap5.html"
 # single source, never a literal in a template. Two forms because the header brand and a
 # per-page <title> suffix want the short one while documents and the landing page want
 # the full one. Exposed to templates by django_service.context_processors.ui.
-PRODUCT_NAME = "Python Inventory Supply Lens"
-PRODUCT_NAME_SHORT = "Supply Lens"
+#
+# The short form is the acronym the long form spells out, so the two are not
+# interchangeable phrasings of one name — the header shows both, stacked, because "FABRIC"
+# alone tells a first-time reader nothing. Written without dots, deliberately.
+PRODUCT_NAME = "Framework for Automated Bill of Materials & Risk Inventory in Code"
+PRODUCT_NAME_SHORT = "FABRIC"
 
 # Footer + header chrome values, mirroring the SPA's config.ts so the server-rendered
 # shell reproduces it (Story 12.3 footer, Story 11.8 header links, Story 11.20 API docs

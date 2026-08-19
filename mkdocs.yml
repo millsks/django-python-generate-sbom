@@ -5,8 +5,8 @@
 # `site_url`, `repo_url`, and `repo_name` carry the EXTERNAL identity (layer L5) and are
 # deliberately unchanged — renaming them would break published links and discard the
 # project's SonarCloud history. Do not "fix" the inconsistency.
-site_name: Python Inventory Supply Lens
-site_description: Python Inventory Supply Lens — generate and analyze CycloneDX SBOMs for Python projects, with vulnerability, license, and version-currency reports.
+site_name: FABRIC
+site_description: FABRIC (Framework for Automated Bill of Materials & Risk Inventory in Code) — generate and analyze CycloneDX SBOMs for Python projects, with vulnerability, license, and version-currency reports.
 site_url: https://millsks.github.io/django-python-generate-sbom/
 repo_url: https://github.com/millsks/django-python-generate-sbom
 repo_name: millsks/django-python-generate-sbom

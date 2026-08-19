@@ -111,9 +111,9 @@ def test_the_landing_title_uses_the_full_name_and_the_brand_uses_the_short_form(
     """Story 21.3's two-form rule, applied where it is most visible."""
     html = Client().get(HOME).content.decode()
 
-    assert "<title>Python Inventory Supply Lens</title>" in html
+    assert "<title>Framework for Automated Bill of Materials &amp; Risk Inventory in Code</title>" in html
     # The header brand stays short.
-    assert ">Supply Lens</span>" in html
+    assert ">FABRIC</span>" in html
 
 
 @pytest.mark.django_db
@@ -212,7 +212,7 @@ def test_inner_pages_keep_the_spa_title_form() -> None:
 
     for path, leading in (("/upload", "Upload"), ("/job-status", "Job status"), ("/keys", "API keys")):
         html = client.get(path).content.decode()
-        assert f"<title>{leading} · Supply Lens</title>" in html, path
+        assert f"<title>{leading} · FABRIC</title>" in html, path
 
 
 @pytest.mark.django_db
@@ -231,3 +231,45 @@ def test_the_external_links_are_settings_driven_with_the_spa_defaults() -> None:
 # The `*`-route fallback that this module used to pin lives in test_spa_retirement.py now:
 # Story 21.19 deleted the SPA catch-all, so an unknown path 404s rather than rendering the
 # landing page. The replacement is `test_an_unknown_path_now_404s`.
+
+
+# --- The heading, broken where the name reads as two halves (Story 22.23) --------------------
+
+
+@pytest.mark.django_db
+def test_the_heading_breaks_after_the_ampersand() -> None:
+    """The name reads as two halves — the framework, and what it inventories.
+
+    Split by the view rather than by putting a `<br>` in the setting, because that one string
+    is also the `<title>` and the footer, where markup would be escaped and shown literally.
+    And rather than left to the browser, because the natural wrap point moves with the
+    viewport.
+    """
+    import re
+
+    html = Client().get("/").content.decode()
+    heading = re.search(r"<h1[^>]*>(.*?)</h1>", html, re.DOTALL)
+
+    assert heading is not None
+    assert "Framework for Automated Bill of Materials &amp;<br>" in re.sub(r"\s*<br>\s*", "<br>", heading.group(1))
+    assert "Risk Inventory in Code" in heading.group(1)
+
+
+def test_a_name_without_an_ampersand_yields_one_line() -> None:
+    """A future rename must not be able to produce an empty second line."""
+    from django_service.views import _heading_lines
+
+    assert _heading_lines("Something Plain") == ["Something Plain"]
+    assert _heading_lines("Trailing &") == ["Trailing &"]
+
+
+@pytest.mark.django_db
+def test_the_heading_is_not_display_sized() -> None:
+    """`display-5` pushed everything below the name off the first screen once it got long."""
+    import re
+
+    html = Client().get("/").content.decode()
+    heading = re.search(r"<h1([^>]*)>", html)
+
+    assert heading is not None
+    assert "display-" not in heading.group(1), "the product name should not use display sizing"

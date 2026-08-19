@@ -104,21 +104,30 @@ def test_nav_is_rendered_twice_so_desktop_and_mobile_cannot_drift() -> None:
 @pytest.mark.django_db
 def test_both_product_name_forms_come_from_the_single_definition() -> None:
     html = _nav_html(Client())
-    assert "Python Inventory Supply Lens" in html  # footer, full form
-    assert "Supply Lens" in html  # header brand, short form
+    # The full name contains "&", which the template escapes.
+    assert "Framework for Automated Bill of Materials &amp; Risk Inventory in Code" in html
+    assert "FABRIC" in html  # header brand, short form
     # The SPA's old name must not survive anywhere in the shell.
     assert "Generate SBOM" not in html
 
 
 def test_no_template_hardcodes_the_product_name() -> None:
-    # AC #4: the name is defined once, in settings, and reaches templates through the
-    # context processor. A literal in markup is the thing this forbids.
-    offenders = [
-        path.name
-        for path in TEMPLATE_ROOT.rglob("*.html")
-        if "Python Inventory Supply Lens" in path.read_text(encoding="utf-8")
-        or "Supply Lens" in path.read_text(encoding="utf-8")
-    ]
+    """AC #4: the name is defined once, in settings, and reaches templates through the
+    context processor. A literal in *markup* is the thing this forbids.
+
+    `{% comment %}` blocks are stripped before checking: they never reach the rendered page,
+    and a rule that also banned them would push design notes out of the file they explain.
+    `{# ... #}` is deliberately NOT stripped — Django's lexer has no DOTALL, so a multi-line
+    one leaks into the HTML, which is the house trap this codebase has already been bitten by.
+    """
+    import re
+
+    offenders = []
+    for path in TEMPLATE_ROOT.rglob("*.html"):
+        markup = re.sub(r"{%\s*comment\s*%}.*?{%\s*endcomment\s*%}", "", path.read_text(encoding="utf-8"), flags=re.S)
+        if "Framework for Automated Bill of Materials" in markup or "FABRIC" in markup:
+            offenders.append(path.name)
+
     assert not offenders, f"templates hardcoding the product name: {offenders}"
 
 
@@ -227,3 +236,33 @@ def test_the_icon_sprite_is_a_subset_not_the_full_icon_set() -> None:
     sprite = (TEMPLATE_ROOT.parent / "static" / "images" / "icons.svg").read_text(encoding="utf-8")
     symbols = sprite.count("<symbol ")
     assert 0 < symbols < 60, f"sprite carries {symbols} symbols — expected a small subset"
+
+
+# --- The brand: an acronym over the words it stands for (Story 22.23) ----------------------
+
+
+@pytest.mark.django_db
+def test_the_header_shows_the_acronym_alone() -> None:
+    """The bar carries the acronym only; the landing page is where the name is spelled out.
+
+    The expansion was tried here, stacked beneath it, and crowded the bar without earning the
+    space. Asserted on the rendered brand specifically: both forms appear elsewhere on the page
+    — the title uses the short one, the footer the long one — so checking the whole document
+    would pass whatever the brand contained.
+    """
+    import re
+
+    html = _nav_html(Client())
+    brand = re.search(r'<a class="navbar-brand.*?</a>', html, re.DOTALL)
+
+    assert brand is not None, "the header brand is missing"
+    assert "FABRIC" in brand.group(0)
+    assert "Framework for Automated" not in brand.group(0), "the bar should not carry the expansion"
+
+
+def test_the_acronym_is_written_without_dots() -> None:
+    """A deliberate choice, and the kind that gets "corrected" by someone tidying up."""
+    from django.conf import settings
+
+    assert settings.PRODUCT_NAME_SHORT == "FABRIC"
+    assert "." not in settings.PRODUCT_NAME_SHORT

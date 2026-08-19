@@ -1,6 +1,6 @@
 # User Guide
 
-This guide walks through using **Python Inventory Supply Lens** end to end — from
+This guide walks through using **FABRIC** end to end — from
 choosing an organization to generating a Software Bill of Materials (SBOM) and reading
 each report.
 

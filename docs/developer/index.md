@@ -19,7 +19,7 @@ and anyone extending the application.
 
 ## The 30-second overview
 
-**Python Inventory Supply Lens** is a **Django + DRF** application with a
+**FABRIC** is a **Django + DRF** application with a
 **server-rendered UI** and a **Celery** worker fleet, all managed as one project by a
 **pixi** umbrella toolchain — one language, one environment, one runner. A user uploads a
 Python dependency manifest; an asynchronous pipeline resolves the dependency tree,

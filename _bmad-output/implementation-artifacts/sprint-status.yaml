@@ -606,3 +606,12 @@ development_status:
   # evidence rather than reference. Added test_documentation_accuracy.py so it fails the gate
   # next time instead of rotting silently.
   22-22-documentation-refresh: review
+  # ADDED 2026-08-19 by product-owner direction: rename the product to FABRIC (Framework for
+  # Automated Bill of Materials & Risk Inventory in Code), acronym written WITHOUT dots. Two
+  # settings lines carried it — Story 21.3's "name is defined once, never a literal in a
+  # template" rule is what made that possible. Top bar = acronym alone (the expansion was
+  # tried there and crowded the chrome); landing page spells it out at h2 with a break after
+  # the ampersand, computed in the view so the same string still serves <title> and footer.
+  # The DISTRIBUTION name (python-inventory-supply-lens) and the repo name deliberately do
+  # NOT change — Story 21.22 separated those identities.
+  22-23-rename-the-product-to-fabric: review

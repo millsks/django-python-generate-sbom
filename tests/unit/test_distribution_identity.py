@@ -122,7 +122,7 @@ def test_the_repo_and_docs_urls_are_unchanged() -> None:
 
 def test_the_product_name_is_not_the_distribution_name() -> None:
     """Three names, three jobs: product copy, distribution, external identity."""
-    assert settings.PRODUCT_NAME == "Python Inventory Supply Lens"
+    assert settings.PRODUCT_NAME == "Framework for Automated Bill of Materials & Risk Inventory in Code"
     assert settings.PRODUCT_NAME != DISTRIBUTION
     assert EXTERNAL_IDENTITY not in settings.PRODUCT_NAME
 

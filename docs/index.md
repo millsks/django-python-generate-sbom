@@ -1,4 +1,6 @@
-# Python Inventory Supply Lens
+# FABRIC
+
+*Framework for Automated Bill of Materials & Risk Inventory in Code*
 
 Generate and analyze **CycloneDX SBOMs** for Python projects. Upload a manifest
 (`requirements.txt`, `pyproject.toml`, or a lockfile), and the app resolves the

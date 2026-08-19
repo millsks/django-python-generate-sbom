@@ -7,7 +7,8 @@ PENDING via ``create_job``. DRF views never write status otherwise.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from contextlib import AbstractContextManager, contextmanager
 from datetime import datetime, timedelta
 from typing import Any, cast
 
@@ -200,14 +201,24 @@ def update_job_status(
     task_id: str,
     status: str,
     *,
-    progress: int = 0,
-    current_step: str = "",
+    progress: int | None = None,
+    current_step: str | None = None,
     failure_reason: str | None = None,
 ) -> None:
-    """Update a job's status/progress. The sole status writer for task code (AD-12)."""
-    SBOMJob.objects.filter(task_id=task_id).update(
-        status=status, progress=progress, current_step=current_step, failure_reason=failure_reason
-    )
+    """Update a job's status. The sole status writer for task code (AD-12).
+
+    ``progress`` and ``current_step`` default to **None meaning "leave alone"**, not to ``0``
+    and ``""`` meaning "reset". Every caller is a failure path that passes only a reason, and
+    the old defaults quietly wiped both — so a job that failed at 62% on version currency
+    displayed as 0% with no phase, discarding the one piece of information someone reading a
+    failed job actually wants.
+    """
+    fields: dict[str, object] = {"status": status, "failure_reason": failure_reason}
+    if progress is not None:
+        fields["progress"] = progress
+    if current_step is not None:
+        fields["current_step"] = current_step
+    SBOMJob.objects.filter(task_id=task_id).update(**fields)
 
 
 def seed_job_tasks(job: SBOMJob) -> None:
@@ -217,10 +228,35 @@ def seed_job_tasks(job: SBOMJob) -> None:
     pipeline from the moment a job is submitted — what is coming, not only what has happened.
     A watcher can see there are eight steps before any of them start.
     """
-    JobTask.objects.bulk_create(
-        [JobTask(job=job, key=task.key, ordinal=task.ordinal) for task in PIPELINE_TASKS],
-        ignore_conflicts=True,
-    )
+    with _reporting_is_best_effort("seed", str(job.task_id)):
+        JobTask.objects.bulk_create(
+            [JobTask(job=job, key=task.key, ordinal=task.ordinal) for task in PIPELINE_TASKS],
+            ignore_conflicts=True,
+        )
+
+
+def _reporting_is_best_effort(operation: str, task_id: str) -> AbstractContextManager[None]:
+    """Never let progress reporting abort the work it is reporting on (Story 22.20).
+
+    Learned the hard way. ``start_job_task`` is called from ``_phase_guard`` *before* its
+    ``try``, so anything it raised propagated out of the context manager's entry and skipped
+    every failure path the guard exists to provide: the phase died, the job was never marked
+    FAILED, and it sat at PENDING showing "Queued" with nothing to explain it. A developer who
+    pulled migration ``0004`` without running it hit exactly that.
+
+    Telemetry is not the work. A reporting failure degrades the display and is logged loudly;
+    it must not cost the job.
+    """
+    return _swallow_reporting_error(operation, task_id)
+
+
+@contextmanager
+def _swallow_reporting_error(operation: str, task_id: str) -> Iterator[None]:
+    """Log and continue. Deliberately broad: any reporting failure beats a lost job."""
+    try:
+        yield
+    except Exception:
+        logger.error("job_progress_report_failed", operation=operation, task_id=str(task_id), exc_info=True)
 
 
 def _upsert_task(task_id: str, key: str, **fields: object) -> None:
@@ -273,12 +309,13 @@ def start_job_task(task_id: str, key: str) -> None:
     Each task writes only its **own** row, so the three concurrent analysis tasks cannot race
     each other — the reason this is a table rather than a field on the job.
 
-    ``started_at`` is what the animated dots are computed from in the browser: the client
-    derives the count from elapsed seconds rather than keeping a counter, so an htmx swap every
-    five seconds cannot reset the animation.
+    ``started_at`` records when the task began. The browser animates the dots from its own
+    counter rather than from this stamp — deriving them from elapsed time made them jump — but
+    the stamp is what tells an operator how long a task has been going.
     """
-    _upsert_task(task_id, key, state=JobTask.State.RUNNING, started_at=timezone.now(), finished_at=None, detail="")
-    _sync_job_progress(task_id, current_step=task_label(key))
+    with _reporting_is_best_effort("start", task_id):
+        _upsert_task(task_id, key, state=JobTask.State.RUNNING, started_at=timezone.now(), finished_at=None, detail="")
+        _sync_job_progress(task_id, current_step=task_label(key))
 
 
 def finish_job_task(task_id: str, key: str, *, failed: bool = False, detail: str = "") -> None:
@@ -287,14 +324,15 @@ def finish_job_task(task_id: str, key: str, *, failed: bool = False, detail: str
     An errored task still counts as finished: FR-4.5 keeps the job running when an analysis
     task fails, so a bar that stalled on it would misreport a job that is still working.
     """
-    _upsert_task(
-        task_id,
-        key,
-        state=JobTask.State.ERROR if failed else JobTask.State.COMPLETE,
-        finished_at=timezone.now(),
-        detail=detail[:200],
-    )
-    _sync_job_progress(task_id)
+    with _reporting_is_best_effort("finish", task_id):
+        _upsert_task(
+            task_id,
+            key,
+            state=JobTask.State.ERROR if failed else JobTask.State.COMPLETE,
+            finished_at=timezone.now(),
+            detail=detail[:200],
+        )
+        _sync_job_progress(task_id)
 
 
 def record_generation(task_id: str, result_key: str, package_count: int) -> None:

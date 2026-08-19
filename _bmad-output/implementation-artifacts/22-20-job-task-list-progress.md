@@ -85,6 +85,13 @@ state stored inside it would restart on each swap.
   it would have left every row reading "Queued".
 - **Labels are escaped.** "Detect & parse manifest" renders `&amp;`; a raw comparison passes on seven labels
   and fails on the eighth.
+- **Reporting ran outside the guard's `try`.** `start_job_task` is called from `_phase_guard` *before* it,
+  so anything it raised skipped every failure path the guard exists to provide — the phase died, the job was
+  never marked FAILED, and it sat at PENDING showing "Queued". Reachable by anyone who pulls migration
+  `0004` without running it. All three reporting calls are now best-effort and logged.
+- **`update_job_status` defaulted `progress=0, current_step=""`**, and every caller is a failure path passing
+  only a reason — so a job that failed at 62% on version currency displayed as 0% with no phase. The
+  defaults are now `None` meaning "leave alone".
 
 ## Dev Agent Record
 

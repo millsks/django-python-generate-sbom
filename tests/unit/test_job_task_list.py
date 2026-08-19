@@ -335,3 +335,88 @@ def test_the_dots_never_blank_and_run_one_to_ten() -> None:
     # whole point. After ten the cycle returns straight to one, with no dwell.
     assert rendered[:13] == [1, 2, 3, 4, 5, 5, 6, 7, 8, 9, 10, 10, 1], rendered[:13]
     assert max(rendered) == max_dots
+
+
+# --- Reporting must never cost the job ------------------------------------------------------
+
+
+def test_a_reporting_failure_does_not_abort_the_phase(job: SBOMJob) -> None:
+    """The bug a developer hit by pulling migration 0004 without running it.
+
+    `start_job_task` is called from `_phase_guard` **before** its `try`, so anything it raised
+    propagated out of the context manager's entry and skipped every failure path the guard
+    exists to provide. The phase died, the job was never marked FAILED, and it sat at PENDING
+    showing "Queued" — a silent stall with nothing to explain it.
+
+    Telemetry is not the work.
+    """
+    from unittest.mock import patch
+
+    from django.db import OperationalError
+
+    from inventory.tasks.sbom_pipeline import detect_and_parse_manifest
+
+    with patch(
+        "inventory.sbom.services._upsert_task",
+        side_effect=OperationalError("no such table: inventory_jobtask"),
+    ):
+        result = detect_and_parse_manifest.apply(args=(str(job.task_id),)).get()
+
+    assert result["task_id"] == str(job.task_id), "the phase must still do its work"
+
+
+def test_a_reporting_failure_is_logged_rather_than_swallowed(job: SBOMJob) -> None:
+    """Broad exception handling earns its keep only if it says something happened."""
+    from unittest.mock import patch
+
+    from django.db import OperationalError
+
+    with (
+        patch("inventory.sbom.services._upsert_task", side_effect=OperationalError("boom")),
+        patch("inventory.sbom.services.logger") as log,
+    ):
+        start_job_task(str(job.task_id), "detect")
+
+    assert log.error.called
+    assert log.error.call_args[0][0] == "job_progress_report_failed"
+
+
+def test_seeding_failure_does_not_block_job_creation(default_org: Org) -> None:
+    """A job that cannot be *displayed* is far better than a job that cannot be *submitted*."""
+    from unittest.mock import patch
+
+    from django.db import OperationalError
+
+    upload = ManifestUpload.objects.create(
+        org=default_org,
+        file="manifest-uploads/t/f.txt",
+        detected_format=ManifestUpload.Format.REQUIREMENTS,
+        original_filename="requirements.txt",
+    )
+
+    with patch("inventory.sbom.services.JobTask.objects.bulk_create", side_effect=OperationalError("boom")):
+        created = create_job(default_org, upload, None, "cyclonedx-json")
+
+    assert created.pk is not None
+
+
+def test_a_failed_job_keeps_the_progress_it_reached(job: SBOMJob) -> None:
+    """`update_job_status`'s old defaults reset progress to 0 and blanked the phase.
+
+    Every caller is a failure path passing only a reason, so a job that died at 62% on version
+    currency rendered as 0% with no phase — discarding exactly what someone reading a failed
+    job wants to know: how far it got and what it was doing.
+    """
+    from inventory.sbom.services import update_job_status
+
+    finish_job_task(str(job.task_id), "detect")
+    start_job_task(str(job.task_id), "resolve")
+    reached = _reload(job).progress
+
+    update_job_status(str(job.task_id), SBOMJob.Status.FAILED, failure_reason="resolution_failed")
+
+    updated = _reload(job)
+    assert updated.status == SBOMJob.Status.FAILED
+    assert updated.failure_reason == "resolution_failed"
+    assert updated.progress == reached, "a failed job should still show how far it got"
+    assert updated.current_step == "Resolve dependencies", "and what it was doing when it died"

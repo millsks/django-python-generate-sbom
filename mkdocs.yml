@@ -86,6 +86,22 @@ markdown_extensions:
         - .
       check_paths: true
 
+# Link validation (mkdocs >= 1.6). `pixi run docs-build` runs `--strict`, which turns every
+# WARNING into a build failure — so promoting these three from their INFO defaults is what
+# makes a dangling `#anchor`, a link to a page that does not exist, or an absolute `/path`
+# fail the gate instead of scrolling past in the build log.
+#
+# `anchors` in particular was silent before: a link to a heading that had been renamed
+# reported at INFO and shipped broken.
+#
+# `nav.omitted_files` is deliberately left at its default — `docs/index.md` is the site home
+# page and is intentionally absent from the nav below.
+validation:
+  links:
+    absolute_links: warn
+    unrecognized_links: warn
+    anchors: warn
+
 nav:
   - User Guide:
       - user-guide/index.md
@@ -103,6 +119,9 @@ nav:
       - Find outdated dependencies: how-to/find-outdated-dependencies.md
       - Export a report to Excel: how-to/export-to-excel.md
       - Create and use an API key: how-to/manage-api-keys.md
+  - Architecture:
+      - architecture/index.md
+      - Technology Stack Rationale: architecture/technology-stack-rationale.md
   - Developer:
       - developer/index.md
       - Architecture: developer/architecture.md

@@ -10,13 +10,16 @@ interactive contract, use the generated OpenAPI docs.
 The backend serves a live, auto-generated schema and UI (Story 11.9) that
 always match the running code:
 
-| Resource | Path |
+| Resource | Path on your deployment |
 | --- | --- |
-| Swagger UI | [`/api/docs/`](/api/docs/) |
-| ReDoc | [`/api/redoc/`](/api/redoc/) |
-| OpenAPI 3 schema (JSON) | [`/api/schema/`](/api/schema/) |
+| Swagger UI | `/api/docs/` |
+| ReDoc | `/api/redoc/` |
+| OpenAPI 3 schema (JSON) | `/api/schema/` |
 
-These are enabled by the `API_DOCS_ENABLED` setting (on by default in
+Those are paths on the **running application**, not on this documentation site — open
+them against your own instance (for a default local run, `http://localhost:8000/api/docs/`).
+
+They are enabled by the `API_DOCS_ENABLED` setting (on by default in
 development, off by default in production). This hand-written reference stays
 useful as a narrative overview; the OpenAPI docs are the machine-verified
 source of truth.

@@ -646,3 +646,12 @@ development_status:
   # and found five more instances on its first run. NOTE: a2c627e also removed the landing
   # heading's line break requested in 22.23; left removed, flagged to the product owner.
   22-27-tests-must-not-pin-configuration: review
+  # ADDED 2026-08-19, reported by the product owner with a 404: SBOM downloads redirected to
+  # /media/... and config/urls.py never routed it. FileSystemStorage has no presigning, so the
+  # containerless path is the only one where Django is asked to serve the blob at all — in
+  # containers MinIO does. Third defect of this exact shape after 22.15 and 22.18: every layer
+  # individually correct, only the combination broken, and only on the path this epic protects.
+  22-28-serve-media-in-containerless-dev: review
+  # Whole-record deletion + the page-scoped SBOM download were authored OUTSIDE this session,
+  # found uncommitted in the tree and committed at the product owner's request (commit 0611f74).
+  # AMENDS FR-8.1 for the UI path — recorded as AD-21.

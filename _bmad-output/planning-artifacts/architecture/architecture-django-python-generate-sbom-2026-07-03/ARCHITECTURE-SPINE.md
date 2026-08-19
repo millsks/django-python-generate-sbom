@@ -212,6 +212,32 @@ tests/               # at the repo ROOT, not under src/ — unit/ and integratio
   - The container tasks stay behind the `docker-` prefix, which is what keeps them visibly opt-in. A step that needs a container belongs there, never in the `ci` chain.
   - **Decision on the Compose path (Story 22.5): KEPT, de-emphasised, and explicitly qualified.** `docs/developer/setup.md` presents the containerless flow as the supported local path and states that Compose is unavailable to developers whose organization blocks Docker and Podman. Retiring it was rejected because it is the only local way to exercise PostgreSQL, Redis, and S3-compatible storage against the real backing services before a deployment — the people who *can* run it are the ones who need it.
 
+### AD-19 — Org isolation binds the API; the pages are cross-org [AMENDS AD-2 — Story 22.16, 2026-08-19]
+
+- **Binds:** `inventory/sbom/selectors.py`, every page view, `inventory/users/auth.py`
+- **Prevents:** a programmatic caller reading another tenant's jobs, while not pretending the UI enforces a boundary it does not
+- **Rule:** `.for_org()` still scopes every **API** query — an API key genuinely pins one tenant (AD-8), so `get_jobs` / `get_job` stay scoped. The **pages** use `get_all_jobs` / `get_any_job` and list every organization.
+  - This is not a reduction in real isolation. Story 21.24 removed authentication, after which `set_active_org_by_slug` accepted **any** non-ADMIN org from **anyone** — so another org's work was always two clicks away through the switcher. Listing it makes the existing reality visible instead of implying a boundary that was never enforced against a person.
+  - The organization is now **provenance**: chosen on the upload form, shown as a Job Status column with its own filter, and written into the generated SBOM as its `supplier` (Story 22.14). It is not a mode the interface sits in; the header switcher is gone (Story 22.16).
+  - **When OIDC lands (Epics 17-18), this is the decision to revisit first.** Restoring a real principal restores the possibility of a per-person boundary, and the page selectors are the seam.
+
+### AD-20 — Pipeline progress is derived from per-task rows, never reported per phase [Story 22.20, 2026-08-19]
+
+- **Binds:** `inventory/sbom/pipeline_tasks.py`, `JobTask`, `inventory/tasks/sbom_pipeline.py::_phase_guard`
+- **Prevents:** a progress display that disagrees with itself
+- **Rule:** every pipeline task owns a `JobTask` row and writes **only its own**; `SBOMJob.progress` is computed from how many rows are terminal, an equal share each.
+  - Hand-picked per-phase percentages were tried twice and failed twice. They drifted until two different phases both reported 93%, and a single `current_step` string could never name more than one of the three analysis tasks, which run concurrently in a chord (AD-4).
+  - `_phase_guard` owns the start and finish writes so a phase cannot forget one. Reporting is **best-effort**: a failure to write a task row is logged and swallowed, because telemetry must never abort the work it describes.
+  - `SBOMJob.current_step` survives as a one-line summary for the Job Status cell and the API's `current_phase`, which Story 21.24 AC #9 froze.
+
+### AD-21 — Whole-record deletion is a UI action; the API purges artifacts only [AMENDS FR-8.1 — 2026-08-19]
+
+- **Binds:** `inventory/sbom/services.py` (`delete_job_record` vs `delete_job_artifacts`), Job Status's delete buttons
+- **Prevents:** the two very different deletions being confused for each other
+- **Rule:** FR-8.1 said job records are retained forever and only blobs are purged. That still describes the **API** and the manual sweep (Story 22.6). Job Status's buttons now delete the **record** — job, tasks, reports, manifest, and every blob they own.
+  - The two live in separate services and separate test modules on purpose. One is reversible in the sense that history survives; the other is the single place in the application where job history is destroyed.
+  - The delete-all button acts on **whatever the table is currently showing** (Story 22.16), and its confirmation names that scope. Making the pages cross-org without this would have widened it from one organization to the whole deployment behind a confirmation naming a single org.
+
 ---
 
 ## Dependency Direction

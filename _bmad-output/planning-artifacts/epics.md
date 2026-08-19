@@ -7364,3 +7364,91 @@ returned error on endpoints that **cannot return it**.
    only when the deployment has no organization at all.
 4. **A test ties the docs to the code**, asserting the retired codes appear nowhere in `src/` and that no API
    page mentions them without saying they are retired.
+
+---
+
+**Stories 22.14-22.28 were added after the epic began**, almost all of them from the product owner using the
+running application. That is worth stating plainly: they are not scope creep but the epic doing its job —
+Epic 22 exists to make the containerless path trustworthy, and most of these were found by someone actually
+running it.
+
+### Story 22.14: Carry the Organization Into the SBOM Metadata
+
+The organization chosen on the upload form went no further than the job row. It is now emitted as each
+format's own **supplier** — CycloneDX `metadata.supplier`, SPDX `PackageSupplier` — rather than a custom
+property only this application could read. Taken from the manifest's own org, so a regenerated document still
+names the tenant the job was filed against.
+
+### Story 22.15: Give Every Outbound Analysis Call a Timeout
+
+`requests` has no default timeout, and Celery's soft time limit needs `SIGUSR1` and an interruptible pool —
+neither of which Windows has. One unreachable API stalled the only worker thread indefinitely and FR-6.7's
+per-phase degradation never fired. Found by CI, after two other hypotheses were falsified.
+
+### Story 22.16: Retire the Org Switcher; the Organization Is Provenance
+
+The switcher put the whole UI into a mode, and since Story 21.24 accepted any organization from anyone.
+The org is now chosen per upload, shown as a Job Status column with a filter, and written into the SBOM.
+**Amends AD-2** — see AD-19.
+
+### Story 22.17: Rename the History Page to Job Status
+
+It has shown running jobs since Story 21.11 added live polling, so "history" described half of what it does.
+The UI renamed its paths; the API kept its own, because Story 21.24 AC #9 froze that contract and
+`/sbom/status/{id}/` already means the status of a single job.
+
+### Story 22.18: Drain the Test Worker's Pipe
+
+The real-worker test failed on Windows three times. The worker was started with `stdout=PIPE` and nothing
+read it, so once the pipe buffer filled the process blocked forever — mid-task, silently. Windows buffers are
+far smaller, which is why only Windows hit it.
+
+### Story 22.19 / 22.20: Progress as a Task List
+
+Two attempts at making a single status line describe the pipeline failed for the same reason: the three
+analysis tasks run concurrently, so one string can never name more than one. A `JobTask` row per task fixed
+both that and the drifting percentages. **See AD-20.**
+
+### Story 22.21: Swap the Tab Strip With the Tab It Shows
+
+htmx targeted `#tab-content` alone, so the tab strip kept the `active` class the server first rendered — the
+clicked tab's content loaded under a highlighted "Overview".
+
+### Story 22.22: Refresh the Documentation
+
+Deleted the organization how-to outright, rewrote the organizations page, and marked the two Epic 21 audit
+pages as frozen acceptance evidence rather than rotting reference. Added `test_documentation_accuracy.py`.
+
+### Story 22.23 / 22.27: Rename the Product, and Stop Tests Pinning It
+
+Renamed to **FABRIC**, then **PyFABRIC**. The second rename failed the suite, which was the real defect:
+five tests pinned the name's literal value, undoing Story 21.3's rule that the name is configuration. They
+now assert properties. The same story fixed a Windows-only path comparison.
+
+### Story 22.24: Finished Rows Carry No htmx Attributes
+
+`row_attrs` defaulted the polling attributes to `""` rather than omitting them, and htmx reads an empty
+`hx-get` as "GET the current URL" — so clicking a finished row loaded the whole page into its own table.
+
+### Story 22.25: Sorting a Tab Keeps the Tab
+
+django-tables2 builds sort links from the current request's query string, and the tab fragment's URL has
+none — so sorting navigated to a results page with no tab selected.
+
+### Story 22.26: Application, Component, and Manifest Review
+
+Job Status now names the application and component, and the manifest is readable rather than write-only.
+Rendered into an escaped `<pre>` rather than served as a file, because a manifest is whatever someone
+uploaded.
+
+### Story 22.28: Serve Media on the Containerless Dev Server
+
+`FileSystemStorage` has no presigning, so the SBOM download redirected to `/media/…` — a path the URLconf
+never routed. Every download 404'd locally while working perfectly in containers, where MinIO serves the
+blob. The third defect of that exact shape in this epic, after 22.15 and 22.18.
+
+### Whole-record deletion (amends FR-8.1)
+
+Job Status's delete buttons now remove the record — job, tasks, reports, manifest, and every blob they own —
+rather than purging artifacts and keeping history. The API and the manual sweep still purge artifacts only.
+**See AD-21.**

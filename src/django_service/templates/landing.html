@@ -22,7 +22,7 @@
         Broken after the ampersand by the view rather than left to the browser: the natural
         wrap point moves with the viewport, and the name reads as two halves. {% endcomment %}
       <h1 class="h2 fw-bold">
-        {% for line in product_name_lines %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% endfor %}
+        {{ product_name }}
       </h1>
       <p class="fs-4 text-body-secondary">
         Generate Software Bills of Materials from Python dependency manifests.

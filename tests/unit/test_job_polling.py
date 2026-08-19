@@ -300,3 +300,63 @@ def test_the_trigger_is_produced_in_exactly_one_place() -> None:
     app = Path(__file__).resolve().parents[2] / "src" / "django_apps" / "inventory"
     producers = [path.name for path in app.rglob("*.py") if "hx-trigger" in path.read_text(encoding="utf-8")]
     assert producers == ["tables.py"], producers
+
+
+# --- A finished row must carry no htmx attributes at all (Story 22.24) ----------------------
+
+
+@pytest.mark.django_db
+def test_a_finished_row_has_no_htmx_attributes_at_all(org_client) -> None:  # type: ignore[no-untyped-def]
+    """Empty is not the same as absent, and htmx treats the difference as an instruction.
+
+    `poll_attrs` returns `{}` for a terminal job, but the row rendered
+    `hx-get="" hx-trigger="" hx-swap=""` — the attributes were present and blank. An empty
+    `hx-get` means "GET the current URL", and a `<tr>`'s default trigger is a click, so
+    clicking a finished row fetched `/job-status` and swapped the entire page into the row.
+
+    Asserted as "no `hx-` at all" rather than "no `hx-get`", because the same mistake in any
+    one of the three produces the same class of surprise.
+    """
+    import re
+
+    client, org = org_client
+    job = _job(org, status=SBOMJob.Status.SUCCESS)
+
+    html = client.get(f"/job-status/row/{job.task_id}").content.decode()
+    row = re.search(r"<tr[^>]*>", html)
+
+    assert row is not None
+    assert "hx-" not in row.group(0), f"a finished row should issue no requests: {row.group(0)}"
+
+
+@pytest.mark.django_db
+def test_a_running_row_still_carries_the_full_trigger(org_client) -> None:  # type: ignore[no-untyped-def]
+    """The other half: omitting them when terminal must not omit them when running."""
+    import re
+
+    client, org = org_client
+    job = _job(org, status=SBOMJob.Status.PROGRESS)
+
+    html = client.get(f"/job-status/row/{job.task_id}").content.decode()
+    row = re.search(r"<tr[^>]*>", html)
+
+    assert row is not None
+    for attribute in ("hx-get=", "hx-trigger=", "hx-swap="):
+        assert attribute in row.group(0), f"{attribute} missing from a running row"
+    assert 'hx-get=""' not in row.group(0), "an empty hx-get means 'GET the current URL'"
+
+
+@pytest.mark.django_db
+def test_no_row_on_the_page_carries_an_empty_htmx_attribute(org_client) -> None:  # type: ignore[no-untyped-def]
+    """The full table, not just one partial — the bug was visible only on the rendered page."""
+    import re
+
+    client, org = org_client
+    _job(org, status=SBOMJob.Status.SUCCESS)
+    _job(org, status=SBOMJob.Status.PROGRESS)
+
+    html = client.get("/job-status").content.decode()
+
+    offenders = [row for row in re.findall(r"<tr[^>]*>", html) if re.search(r'hx-[a-z-]+=""', row)]
+
+    assert not offenders, f"rows with blank htmx attributes: {offenders}"

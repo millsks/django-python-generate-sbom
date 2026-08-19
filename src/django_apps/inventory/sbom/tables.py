@@ -110,10 +110,15 @@ class JobTable(tables.Table):
         # Only non-terminal rows carry a trigger, which is the single biggest load
         # difference between this and a naive implementation: a page of finished jobs
         # issues zero requests.
+        # `.get(attr)` — NOT `.get(attr, "")`. django-tables2 omits an attribute whose value
+        # is None and renders one whose value is "" as a blank attribute, and htmx reads the
+        # difference as an instruction: an empty `hx-get` means "GET the current URL", and a
+        # `<tr>`'s default trigger is a click. Finished rows carried `hx-get=""`, so clicking
+        # one fetched /job-status and swapped the whole page into the row (Story 22.24).
         row_attrs = {  # noqa: RUF012  # tables2 Meta option
             "id": lambda record: f"job-row-{record.task_id}",
             **{
-                name: (lambda attr: lambda record: poll_attrs(record).get(attr, ""))(name)
+                name: (lambda attr: lambda record: poll_attrs(record).get(attr))(name)
                 for name in ("hx-get", "hx-trigger", "hx-swap")
             },
         }

@@ -615,3 +615,11 @@ development_status:
   # The DISTRIBUTION name (python-inventory-supply-lens) and the repo name deliberately do
   # NOT change — Story 21.22 separated those identities.
   22-23-rename-the-product-to-fabric: review
+  # ADDED 2026-08-19, reported by the product owner: clicking a finished Job Status row
+  # loaded the whole page into its own table. `row_attrs` defaulted the polling attributes to
+  # "" instead of omitting them; django-tables2 renders a blank attribute where it omits a
+  # None, and htmx reads an empty `hx-get` as "GET the current URL" — with a <tr>'s default
+  # trigger being a click. `poll_attrs` was already correct (it returns {}); only the default
+  # undid it. General lesson: for attribute-driven libraries, `attr=""` is a statement, not a
+  # blank.
+  22-24-finished-rows-carry-no-htmx-attributes: review

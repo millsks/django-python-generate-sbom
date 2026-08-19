@@ -386,3 +386,87 @@ def test_the_tab_fragment_carries_the_whole_strip(org_client) -> None:  # type: 
     assert 'id="tab-panel"' in fragment
     for slug, _label in RESULT_TABS:
         assert f"/tab/{slug}" in fragment, slug
+
+
+# --- Sorting from inside a swapped-in tab (Story 22.25) ---------------------------------------
+
+
+def _job_with_version_report(org: Org) -> SBOMJob:
+    """A job whose Version Currency tab actually has a sortable table.
+
+    The report body lives in storage, not on the row — the model carries only its key (AD-6).
+    """
+    import json
+
+    from django.core.files.base import ContentFile
+    from django.core.files.storage import default_storage
+
+    from inventory.analysis.models import AnalysisReport
+
+    job = _job(org)
+    key = f"reports/{job.task_id}-version.json"
+    default_storage.save(
+        key,
+        ContentFile(
+            json.dumps(
+                {
+                    "packages": [
+                        {"name": "numpy", "installed": "1.26.0", "latest": "2.0.0", "currency": "behind-1"},
+                        {"name": "requests", "installed": "2.32.3", "latest": "2.32.3", "currency": "current"},
+                    ],
+                    "summary": {"current": 1, "behind-1": 1, "behind-2+": 0, "unknown": 0},
+                }
+            )
+        ),
+    )
+    AnalysisReport.objects.create(job=job, report_type=AnalysisReport.ReportType.VERSION, artifact_key=key)
+    return job
+
+
+@pytest.mark.django_db
+def test_sort_links_inside_a_tab_fragment_keep_the_tab(org_client) -> None:  # type: ignore[no-untyped-def]
+    """Sorting a tab's table used to drop you back on Overview.
+
+    The tab fragment is fetched at `/results/<id>/tab/<slug>`, which carries **no query
+    string**, so django-tables2's `{% querystring %}` had nothing to preserve and produced bare
+    `?sort=name` links. A sort is a full page navigation, so following one landed on
+    `/results/<id>?sort=name` — no `tab`, therefore Overview.
+
+    Asserted on the fragment, because the full page gets this right on its own: there
+    `request.GET` already contains `tab`, which is why the bug was invisible from the server's
+    point of view until a tab had been clicked.
+    """
+    import re
+
+    client, org = org_client
+    job = _job_with_version_report(org)
+
+    fragment = client.get(f"/results/{job.task_id}/tab/versions").content.decode()
+    sort_links = re.findall(r'<th[^>]*>\s*<a href="([^"]+)"', fragment)
+
+    assert sort_links, "the versions tab should render a sortable table"
+    for link in sort_links:
+        assert "tab=" in link, f"sort link drops the tab — {link}"
+
+
+@pytest.mark.django_db
+def test_following_a_sort_link_from_a_fragment_stays_on_that_tab(org_client) -> None:  # type: ignore[no-untyped-def]
+    """The end-to-end claim, walked the way a person does it.
+
+    Fetch the fragment, take a sort link exactly as rendered, follow it, and check which tab
+    comes back. Asserting the link's shape alone would not catch one that is well-formed and
+    still resolves to the wrong place.
+    """
+    import re
+    from html import unescape
+
+    client, org = org_client
+    job = _job_with_version_report(org)
+
+    fragment = client.get(f"/results/{job.task_id}/tab/versions").content.decode()
+    link = unescape(re.findall(r'<th[^>]*>\s*<a href="([^"]+)"', fragment)[0])
+
+    page = client.get(f"/results/{job.task_id}{link}").content.decode()
+    active = re.findall(r'<a class="nav-link active"[^>]*hx-push-url="\?tab=([a-z]+)"', page)
+
+    assert active == ["versions"], f"following {link} landed on {active}"

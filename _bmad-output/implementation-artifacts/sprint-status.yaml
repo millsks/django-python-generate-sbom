@@ -623,3 +623,11 @@ development_status:
   # undid it. General lesson: for attribute-driven libraries, `attr=""` is a statement, not a
   # blank.
   22-24-finished-rows-carry-no-htmx-attributes: review
+  # ADDED 2026-08-19, reported by the product owner: sorting a results-tab column threw you
+  # back to Overview. django-tables2 builds sort links by preserving the CURRENT request's
+  # query string, and the tab fragment is fetched at /results/<id>/tab/<slug> which has none —
+  # so links came out as a bare `?sort=name`, and following one (a full page navigation)
+  # landed with no `tab` selected. The sort was applied the whole time, to a tab nobody was
+  # looking at. Fixed in the view rather than the template so the links are right however the
+  # fragment is requested.
+  22-25-sorting-a-tab-keeps-the-tab: review

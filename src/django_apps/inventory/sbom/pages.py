@@ -337,6 +337,21 @@ class JobTabPartialView(_JobScopedView):
         if tab not in dict(RESULT_TABS):
             raise Http404
         job = self.get_job_or_404(task_id)
+        # Story 22.25: this fragment is fetched at `/results/<id>/tab/<slug>`, which carries no
+        # query string. django-tables2 builds every sort link by preserving the current
+        # request's query string, so it had nothing to preserve and emitted a bare
+        # `?sort=name`. Following one is a full page navigation, so it landed on the results
+        # page with no `tab` and rendered Overview — sorting a tab threw you out of it.
+        #
+        # Declared here rather than added to the `hx-get` URL in the template so the links are
+        # right however this view is reached: a caller that forgets the parameter would
+        # otherwise get subtly broken markup back.
+        #
+        # The `type: ignore` is django-stubs typing `request.GET` as immutable. Replacing it
+        # with a mutable copy is the documented Django idiom.
+        params = request.GET.copy()
+        params["tab"] = tab
+        request.GET = params  # type: ignore[assignment]
         context: dict[str, Any] = {
             "job": job,
             "active_tab": tab,

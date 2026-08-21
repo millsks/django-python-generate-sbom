@@ -5,7 +5,100 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.3] - 2026-07-08
+## [0.9.4] - 2026-08-19
+
+### ⚙️ Miscellaneous Tasks
+
+- **bmad**: Plan Epic 21 — server-rendered Django UI and the reusable `inventory` app
+- **bmad**: Add Story 21.24 — remove the authentication requirement
+- Rename the distribution identity to python-inventory-supply-lens (Story 21.22)
+- **windows**: Run the full suite and coverage gate on win-64 (Story 22.3)
+
+### ⭐ Features
+
+- **layout**: Restructure the repository to a src/ layout (Story 21.1)
+- **inventory**: Collapse four apps into `inventory`, host owns `User` (Story 21.2)
+- **ui**: Add the server-rendered UI foundation (Story 21.3)
+- **access**: Enforce route protection and org context server-side (Story 21.4)
+- **auth**: Convert login, registration, and logout to server-rendered pages (Story 21.5)
+- **orgs**: Convert organisation and member management to server-rendered pages (Story 21.6)
+- **keys**: Convert API key management to a server-rendered page (Story 21.7)
+- **platform**: Convert global-admin management to a server-rendered page (Story 21.8)
+- **sbom**: Convert manifest upload and job submission to a server-rendered page (Story 21.9)
+- **sbom**: Convert the job history to a filterable server-rendered table (Story 21.10)
+- **sbom**: Add live job progress via htmx polling (Story 21.11)
+- **sbom**: Build the results shell and Overview tab (Story 21.12)
+- **sbom**: Fill in the SBOM viewer tab (Story 21.13)
+- **analysis**: Fill in the Vulnerabilities tab (Story 21.14)
+- **analysis**: Fill in the Licenses tab (Story 21.15)
+- **analysis**: Fill in the Version Currency tab (Story 21.16)
+- **export**: Replace the client-side Excel export with openpyxl (Story 21.17)
+- **ui**: Convert the landing page and carry over the visual identity (Story 21.18)
+- **build**: Retire the React SPA and the Node toolchain (Story 21.19)
+- **auth**: Remove the authentication requirement (Story 21.24)
+- **sbom**: Purge expired artifacts on request, not on a schedule (Story 22.6)
+- **dev**: Make .env.example the containerless template (Story 22.1)
+- **dev**: Prove the local pipeline end to end and fix SQLite contention (Story 22.4)
+- **orgs**: Seed organizations from a committed list (Story 22.10)
+- **sbom**: Make the organization provenance, not a UI mode (Stories 22.14-22.16)
+- **ui**: Name the running phase on the progress bar (Story 22.19)
+- **ui**: Report job progress as a task list (Story 22.20)
+- **ui**: Rename the product to FABRIC (Story 22.23)
+- **ui**: Show the application on Job Status and let the manifest be read (Story 22.26)
+- **ui**: Update product name to reflect Python framework branding
+- **sbom**: Delete whole job records, and download the SBOM through the page
+
+### 🐛 Bug Fixes
+
+- **test**: Name the encoding on every text read (Windows cp1252)
+- **celery**: Register the Beat maintenance tasks (Story 22.2)
+- **windows**: Declare pywin32 so the Celery worker can start (Story 22.7)
+- **test**: Make the real-worker test genuinely offline (Story 22.4)
+- **auth**: Make the admin surfaces work anonymously (Story 22.8)
+- **test**: Make the real-worker test offline by construction, and diagnosable
+- **test**: Drain the worker's pipe so it cannot block on its own logs (Story 22.18)
+- **ui**: Let every analysis phase name itself on the progress bar (Story 22.19)
+- **ui**: Stop the progress dots blanking on every poll (Story 22.20)
+- **sbom**: Never let progress reporting cost the job it reports on (Story 22.20)
+- **ui**: Swap the results tab strip along with the tab it shows (Story 22.21)
+- **ui**: Stop a finished job row loading the page into itself (Story 22.24)
+- **ui**: Keep the tab when sorting a results table (Story 22.25)
+- **dev**: Serve media on the containerless dev server (Story 22.28)
+
+### 📚 Documentation
+
+- **architecture**: Reconcile the spine with what Epic 21 built (Story 21.20)
+- Reconcile the docs with the server-rendered UI and rename the product copy (Story 21.21)
+- Fix the start-and-run path after the auth removal
+- **bmad**: Add Epic 22 — harden containerless local development
+- **bmad**: Context Story 22.2 for development
+- **bmad**: Record Story 22.3 completion
+- Add a tech-stack survey and example manifests
+- **dev**: State and enforce the no-container contract (Story 22.5)
+- **bmad**: Record Stories 22.8-22.12 in the epic document
+- **api**: Reconcile the API reference with the removed authorization
+- **bmad**: Backfill the story files for 22.5-22.13
+- Refresh the documentation for Epic 22 (Story 22.22)
+- Document the upload form's Organization field (Story 22.22)
+- **bmad**: Bring the spec up to date with what Epic 22 shipped
+- **bmad**: Create SPEC.md with bmad-spec (supersedes the no-spec decision)
+- **developer**: Add a file-by-file reference for the inventory app
+- **architecture**: Add stack rationale, fix broken links, gate them in CI
+- Move the design pages into an architecture section, with redirects
+
+### 🚜 Refactor
+
+- **ui**: Remove the inert membership and global-admin surfaces (Story 22.9)
+- **ui**: Remove the Organization surface (Story 22.11)
+- **ui**: Rename the History page to Job Status (Story 22.17)
+
+### 🧪 Testing
+
+- Audit test parity after the SPA removal (Story 21.23)
+- **audit**: Close the three post-refactor suite findings (Story 22.12)
+- Stop pinning the product name, and fix a Windows-only path comparison (Story 22.27)
+
+## [0.9.3] - 2026-07-21
 
 ### ⚙️ Miscellaneous Tasks
 
@@ -14,6 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **bmad**: Close Epic 20 — cross-platform local dev done
 - **bmad**: Re-close Epic 20 — Story 20.8 done after merge
 - Add example environment configuration file
+- **release**: Update CHANGELOG.md for v0.9.3
 
 ### ⭐ Features
 
